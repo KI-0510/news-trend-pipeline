@@ -42,7 +42,7 @@ def http_get(url, params=None, headers=None, timeout=10, max_retry=3):
             time.sleep(1.2 * (2 ** i) + random.random())
 
 def prefer_link(item):
-    return item.get("originallink") or item.get("link") or
+    return item.get("originallink") or item.get("link") or ""
 
 def fetch_naver_news(query, display=30, pages=2):
     items =[]
