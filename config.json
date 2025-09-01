@@ -1,0 +1,14 @@
+{
+  "queries": ["AI"],
+  "top_n_keywords": 30,
+  "language": "ko",
+  "dry_run": true,
+  "per_query_display": 10,
+  "pages": 1,
+  "stopwords": ["기자", "사진", "영상", "단독", "속보"],
+  "llm": {
+    "provider": "gemini",
+    "model": "gemini-1.5-flash",
+    "max_output_tokens": 1024
+  }
+}
