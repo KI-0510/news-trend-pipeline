@@ -22,5 +22,5 @@ def main():
             sys.exit(1)
     print(f"[INFO] Check A OK | 파일: {meta_path} | 건수: {len(items)}")
 
-if name == "main":
+if __name__ == "__main__":
     main()
