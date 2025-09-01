@@ -37,16 +37,32 @@ jobs:
           source .venv/bin/activate
           python src/module_a.py
 
-      - name: Check A - Validate Output
+#      - name: Check A - Validate Output
+#        run: |
+#          source .venv/bin/activate
+#          ls data/
+#          python src/check_a.py
+
+#      - name: Upload Artifacts
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: module-a
+#           path: |
+#             data/news_clean_*.json
+#             data/news_meta_*.json
+
+     - name: Check A - Validate Output
         run: |
-          source .venv/bin/activate
+          if [ ! -f "data/news_clean_*.json" ] || [ ! -f "data/news_meta_*.json" ]; then
+            echo "필수 파일이 생성되지 않았습니다."
+            exit 1
+          fi
           ls data/
           python src/check_a.py
 
       - name: Upload Artifacts
-         uses: actions/upload-artifact@v4
-         with:
-           name: module-a
-           path: |
-             data/news_clean_*.json
-             data/news_meta_*.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-a
+          path: |
+            \$(find data -type f \$ -name "news_clean_*.json" -o -name "news_meta_*.json" \$)
