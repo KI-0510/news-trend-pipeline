@@ -52,7 +52,7 @@ jobs:
         shell: /usr/bin/bash -e
 
       - name: Upload Artifacts
-        if: always()  # 파일이 없어도 아티팩트 업로드를 시도
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: module-a
