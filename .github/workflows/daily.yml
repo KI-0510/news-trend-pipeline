@@ -43,10 +43,10 @@ jobs:
           python src/check_a.py
 
       # (선택) 아티팩트 업로드
-      # - name: Upload Artifacts
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: module-a
-      #     path: |
-      #       data/news_clean_*.json
-      #       data/news_meta_*.json
+      - name: Upload Artifacts
+         uses: actions/upload-artifact@v4
+         with:
+           name: module-a
+           path: |
+             data/news_clean_*.json
+             data/news_meta_*.json
