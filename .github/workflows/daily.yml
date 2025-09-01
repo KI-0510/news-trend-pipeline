@@ -37,14 +37,28 @@ jobs:
           source .venv/bin/activate
           python src/module_a.py
 
+
       - name: Check A - Validate Output
         run: |
-          if [ ! -f "data/news_clean_*.json" ] || [ ! -f "data/news_meta_*.json" ]; then
+          # 파일 존재 여부 확인
+          if ! ls data/news_clean_*.json 1> /dev/null 2>&1 || ! ls data/news_meta_*.json 1> /dev/null 2>&1; then
             echo "필수 파일이 생성되지 않았습니다."
             exit 1
           fi
+
+          # 파일 목록 출력
           ls data/
+
+          # 검증 스크립트 실행
           python src/check_a.py
+        shell: /usr/bin/bash -e {0}
+        env:
+          pythonLocation: /opt/hostedtoolcache/Python/3.11.13/x64
+          PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.13/x64/lib/pkgconfig
+          Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.13/x64
+          Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.13/x64
+          Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.13/x64
+          LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.13/x64/lib
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
