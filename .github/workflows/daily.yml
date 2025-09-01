@@ -1,0 +1,42 @@
+name: Daily Pipeline (Install-Only Smoke)
+on:
+  schedule:
+    - cron: "0 22 * * *"  # UTC 22시 = KST 오전 7시
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "드라이 런(설정 전달용, 현재 단계는 설치만)"
+        required: true
+        default: "true"
+jobs:
+  install_smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          
+      - name: Install deps
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install requests beautifulsoup4
+          pip install scikit-learn krwordrank soynlp tomotopy networkx google-generativeai
+          
+        - name: Verify secrets exist
+          env:
+            NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+            NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+            GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          run: |
+            if [ -z "$NAVER_CLIENT_ID" ] || [ -z "$NAVER_CLIENT_SECRET" ] || [ -z "$GEMINI_API_KEY" ]; then
+              echo "[ERROR] Secrets missing"; exit 1;
+                                              else
+                                                echo "[INFO] Secrets loaded OK";
+                                              fi
+      - name: Echo success
+        run: |
+          echo "[INFO] Install-Only smoke test passed ✅"
+          
