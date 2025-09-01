@@ -29,6 +29,12 @@ def naver_headers():
     }
 
 def http_get(url, params=None, headers=None, timeout=10, max_retry=3):
+    if r.status_code == 429:
+        wait = 30 + i * 15
+            print(f"[WARN] 429 Too Many Requests, wait {wait}s")
+        time.sleep(wait)
+    continue
+
     for i in range(max_retry):
         try:
             r = requests.get(url, params=params, headers=headers, timeout=timeout)
@@ -60,7 +66,7 @@ def fetch_naver_news(query, display=30, pages=2):
         if not batch:
             break
         for it in batch:
-            it["query"] = query
+            it["_query"] = query
         items.extend(batch)
         time.sleep(0.3)
     return items
@@ -105,9 +111,12 @@ def main():
     t0 = time.time()
     cfg = load_config()
     queries = cfg.get("queries") or ["AI"]
-    dry_run = bool(cfg.get("dry_run", True))
-    display = int(cfg.get("per_query_display", 10 if dry_run else 50))
-    pages = int(cfg.get("pages", 1 if dry_run else 2))
+    dry_run = os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true"
+    display = int(cfg.get("per_query_display", 10))
+    pages = int(cfg.get("pages", 1))
+    if not dry_run:
+        display = max(display, 30)  # 평시 최소치 예시
+        pages = max(pages, 2)
     print(f"[INFO] queries={queries} dry_run={dry_run} display={display} pages={pages}")
 
     all_items =[]
