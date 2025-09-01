@@ -7,7 +7,7 @@ on:
     inputs:
       dry_run:
         description: "드라이 런"
-        required: true
+        required:true
         default: "true"
 
 jobs:
@@ -40,12 +40,13 @@ jobs:
       - name: Check A - Validate Output
         run: |
           source .venv/bin/activate
+          ls data/
           python src/check_a.py
 
-#      - name: Upload Artifacts
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: module-a
-#           path: |
-#             data/news_clean_*.json
-#             data/news_meta_*.json
+      - name: Upload Artifacts
+         uses: actions/upload-artifact@v4
+         with:
+           name: module-a
+           path: |
+             data/news_clean_*.json
+             data/news_meta_*.json
