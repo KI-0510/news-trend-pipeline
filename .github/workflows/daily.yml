@@ -7,7 +7,7 @@ on:
     inputs:
       dry_run:
         description: "드라이 런"
-        required:true
+        required: true
         default: "true"
 
 jobs:
