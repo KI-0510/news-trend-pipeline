@@ -1,5 +1,6 @@
-import os, json, time, random, re, glob
-import requests from bs4 import BeautifulSoup  
+import os, json, time, random, re, globw
+import requests
+from bs4 import BeautifulSoup
 
 
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
