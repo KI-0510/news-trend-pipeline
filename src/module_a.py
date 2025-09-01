@@ -29,15 +29,14 @@ def naver_headers():
     }
 
 def http_get(url, params=None, headers=None, timeout=10, max_retry=3):
-    if r.status_code == 429:
-        wait = 30 + i * 15
-            print(f"[WARN] 429 Too Many Requests, wait {wait}s")
-        time.sleep(wait)
-    continue
-
     for i in range(max_retry):
         try:
             r = requests.get(url, params=params, headers=headers, timeout=timeout)
+            if r.status_code == 429:
+                wait = 30 + i * 15
+                print(f"[WARN] 429 Too Many Requests, wait {wait}s")
+                time.sleep(wait)
+                continue  # 재시도
             if r.status_code >= 500:
                 raise requests.HTTPError(f"5xx {r.status_code}")
             r.raise_for_status()
@@ -48,7 +47,7 @@ def http_get(url, params=None, headers=None, timeout=10, max_retry=3):
             time.sleep(1.2 * (2 ** i) + random.random())
 
 def prefer_link(item):
-    return item.get("originallink") or item.get("link") or ""
+    return item.get("originallink") or item.get("link") or
 
 def fetch_naver_news(query, display=30, pages=2):
     items =[]
@@ -111,7 +110,7 @@ def main():
     t0 = time.time()
     cfg = load_config()
     queries = cfg.get("queries") or ["AI"]
-    dry_run = os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true"
+    dry_run = bool(os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true")
     display = int(cfg.get("per_query_display", 10))
     pages = int(cfg.get("pages", 1))
     if not dry_run:
