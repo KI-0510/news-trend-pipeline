@@ -16,11 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ✅ Python 환경 설정
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # ✅ 의존성 설치 및 가상환경 활성화
       - name: Install dependencies
         run: |
           python -m venv .venv
@@ -29,16 +31,20 @@ jobs:
           pip install requests beautifulsoup4
         shell: bash
 
+      # ✅ 이후 단계에서 가상환경 유지
       - name: Module A - Fetch & Preprocess
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
+          source .venv/bin/activate
           python src/module_a.py
+        shell: bash
 
       - name: Check A - Validate Output
         run: |
+          source .venv/bin/activate
           # 파일 존재 여부 확인
           if ! ls data/news_clean_*.json 1> /dev/null 2>&1 || ! ls data/news_meta_*.json 1> /dev/null 2>&1; then
             echo "필수 파일이 생성되지 않았습니다."
@@ -53,7 +59,7 @@ jobs:
         shell: /usr/bin/bash -e
 
       - name: Upload Artifacts
-        if: success()  # ✅ 성공 시에만 업로드
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: module-a
