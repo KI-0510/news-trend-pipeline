@@ -1,4 +1,4 @@
-import os, json, time, random, re, globw
+import os, json, time, random, re, glob
 import requests
 from bs4 import BeautifulSoup
 
