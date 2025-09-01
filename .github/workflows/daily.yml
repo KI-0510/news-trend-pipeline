@@ -7,7 +7,7 @@ on:
     inputs:
       dry_run:
         description: "드라이 런"
-        required: true
+        required:true
         default: "true"
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
           source .venv/bin/activate
           python src/module_a.py
 
-     - name: Check A - Validate Output
+      - name: Check A - Validate Output
         run: |
           if [ ! -f "data/news_clean_*.json" ] || [ ! -f "data/news_meta_*.json" ]; then
             echo "필수 파일이 생성되지 않았습니다."
@@ -51,4 +51,5 @@ jobs:
         with:
           name: module-a
           path: |
-            \$(find data -type f \$ -name "news_clean_*.json" -o -name "news_meta_*.json" \$)
+            data/news_clean_*.json
+            data/news_meta_*.json
