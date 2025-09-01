@@ -16,6 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ✅ 의존성 설치 단계 분리
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -27,6 +28,7 @@ jobs:
           source .venv/bin/activate
           pip install --upgrade pip
           pip install requests beautifulsoup4
+        shell: bash  # 가상환경 활성화 유지
 
       - name: Module A - Fetch & Preprocess
         env:
@@ -52,7 +54,7 @@ jobs:
         shell: /usr/bin/bash -e
 
       - name: Upload Artifacts
-        if: success()
+        if: success()  # ✅ 성공 시에만 업로드
         uses: actions/upload-artifact@v4
         with:
           name: module-a
