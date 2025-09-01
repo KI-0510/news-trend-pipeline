@@ -31,7 +31,7 @@ jobs:
           pip install requests beautifulsoup4
         shell: bash
 
-      # ✅ 이후 단계에서 가상환경 유지
+      # ✅ Module A - Fetch & Preprocess
       - name: Module A - Fetch & Preprocess
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
@@ -42,6 +42,7 @@ jobs:
           python src/module_a.py
         shell: bash
 
+      # ✅ Check A - Validate Output
       - name: Check A - Validate Output
         run: |
           source .venv/bin/activate
@@ -56,8 +57,9 @@ jobs:
 
           # 검증 스크립트 실행
           python src/check_a.py
-        shell: /usr/bin/bash -e
+        shell: bash
 
+      # ✅ 아티팩트 업로드
       - name: Upload Artifacts
         if: success()
         uses: actions/upload-artifact@v4
