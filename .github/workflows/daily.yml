@@ -34,15 +34,25 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          source .venv/bin/activate
           python src/module_a.py
 
-      - name: Check A
+      - name: Check A - Validate Output
         run: |
-          source .venv/bin/activate
+          # 파일 존재 여부 확인
+          if ! ls data/news_clean_*.json 1> /dev/null 2>&1 || ! ls data/news_meta_*.json 1> /dev/null 2>&1; then
+            echo "필수 파일이 생성되지 않았습니다."
+            exit 1
+          fi
+
+          # 파일 목록 출력
+          ls data/
+
+          # 검증 스크립트 실행
           python src/check_a.py
-          
+        shell: /usr/bin/bash -e
+
       - name: Upload Artifacts
+        if: always()  # 파일이 없어도 아티팩트 업로드를 시도
         uses: actions/upload-artifact@v4
         with:
           name: module-a
