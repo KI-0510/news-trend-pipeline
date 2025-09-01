@@ -1,4 +1,6 @@
-import json, glob, sys
+import json
+import glob
+import sys
 
 def latest(path_glob):
     paths = sorted(glob.glob(path_glob))
@@ -14,12 +16,12 @@ def main():
     if not isinstance(items, list) or len(items) == 0:
         print("[ERROR] 메타 리스트 비었음")
         sys.exit(1)
-    sample = items[0]
     required = ["url", "title"]
-    for k in required:
-        if k not in sample:
-            print(f"[ERROR] 필드 누락: {k}")
-            sys.exit(1)
+    for idx, item in enumerate(items):
+        for k in required:
+            if k not in item:
+                print(f"[ERROR] 필드 누락: {k} (index={idx})")
+                sys.exit(1)
     print(f"[INFO] Check A OK | 파일: {meta_path} | 건수: {len(items)}")
 
 if __name__ == "__main__":
