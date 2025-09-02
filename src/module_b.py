@@ -41,12 +41,12 @@ def latest(globpat: str):
     return files[-1] if files else None
 
 def load_config():
-    """설정 파일을 로드합니다. 없을 경우 기본값을 반환합니다."""
     try:
         with open("config.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"top_n_keywords": 30, "stopwords": []}
+        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 2}
+
 
 def clean_text(t: str) -> str:
     """텍스트 정규화: 태그 제거, 유니코드 정규화, 이모티콘/반복 문자 처리"""
@@ -132,7 +132,7 @@ def postprocess_keywords(docs, keywords, min_docfreq=1):
     # 문서 빈도 계산
     df = defaultdict(int)
     for d in docs:
-        tokens = set(re.findall(r"[가-힣A-Za-z0-9가-액컁컉컊컋컌컍컎컏]가-힣|[A-Za-z0-9]+", d))  # 한글 초성 포함
+        tokens = set(re.findall(r"[가-힣]+|[A-Za-z0-9_]+", d))
         for t in tokens:
             df[t] += 1
     
