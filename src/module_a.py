@@ -71,13 +71,13 @@ def fetch_naver_news(query, display=30, pages=2):
     return items
 
 def dedup_by_url(items):
-    seen, out = set(), []
+    seen, out = set(),[]
     for it in items:
         url = prefer_link(it)
+        if "_query" not in it or it["_query"] is None:
+            it["_query"] = "unknown"
         if url and url not in seen:
             seen.add(url)
-            if "_query" not in it or it["_query"] is None:
-                it["_query"] = "unknown"
             out.append(it)
     return out
 
