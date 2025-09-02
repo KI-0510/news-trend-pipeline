@@ -4,6 +4,8 @@ import glob
 import re
 import unicodedata
 import time
+import string
+from collections import defaultdict
 from soynlp.normalizer import normalize, repeat_normalize, emoticon_normalize
 from krwordrank.word import KRWordRank
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -13,6 +15,25 @@ from sklearn.metrics.pairwise import cosine_similarity
 def strip_korean_particle(word: str) -> str:
     """단어 끝의 흔한 조사를 1회 제거합니다."""
     return re.sub(r"(은|는|이|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)\$", "", word)
+
+# [추가] 키워드 정규화 함수
+def normalize_keyword(w: str) -> str:
+    """따옴표/양쪽 공백/양끝 기호 제거, 영문 소문자화, 의심 토큰 필터링"""
+    if not w:
+        return ""
+    
+    # 양끝 따옴표/기호 제거
+    w = re.sub(r"^[\$\\'\\\"‘’“”\`\$\$]+|[\$\\'\\\"‘’“”\`\$\$]+\$", "", w.strip())
+    w = w.strip(string.punctuation + "·…")
+    
+    # 공백 압축
+    w = re.sub(r"\s+", " ", w)
+    
+    # 영문은 소문자 (알파벳/숫자/일부 기호 포함 시)
+    if re.fullmatch(r"[A-Za-z0-9 \-_/]+", w):
+        w = w.lower()
+    
+    return w
 
 def latest(globpat: str):
     """주어진 패턴에 맞는 최신 파일을 반환합니다."""
@@ -34,7 +55,7 @@ def clean_text(t: str) -> str:
     t = re.sub(r"<.+?>", " ", t) # HTML 태그 제거
     t = unicodedata.normalize("NFKC", t) # 유니코드 정규화(전/반각 등)
     t = normalize(t) # soynlp 기본 정규화
-    t = emoticon_normalize(t, num_repeats=2) # 이모티콘 축약 (예: ㅋㅋㅋㅋ → ㅋㅋ)
+    t = emoticon_normalize(t, num_repeats=2) # 이모티콘 축약 (예: ㅋㅋㅋ → ㅋㅋ)
     t = repeat_normalize(t, num_repeats=2) # 반복 문자 축약
     return t.strip()
 
@@ -105,6 +126,39 @@ def extract_keywords_krwordrank(docs, topk=30, stopwords=None):
         results.append({"keyword": w_norm, "score": float(score)})
     return results
 
+# [추가] 키워드 후처리 함수
+def postprocess_keywords(docs, keywords, min_docfreq=2):
+    """문서 빈도 필터링, 토큰 정규화, 중복 병합"""
+    # 문서 빈도 계산
+    df = defaultdict(int)
+    for d in docs:
+        tokens = set(re.findall(r"[가-힣A-Za-z0-9]+", d))
+        for t in tokens:
+            df[t] += 1
+    
+    merged = {}
+    for k in keywords:
+        w = normalize_keyword(k["keyword"])
+        
+        # 기본 필터
+        if not w or len(w) < 2:
+            continue
+        if re.fullmatch(r"[0-9\W_]+", w):
+            continue
+        
+        # 문서 빈도 필터 (정확 일치 + 부분 일치)
+        exact_df = df.get(w, 0)
+        approx_df = max((df[t] for t in df if w in t or t in w), default=0)
+        if max(exact_df, approx_df) < min_docfreq:
+            continue
+        
+        # 병합 (정규화 형태 기준 최대 점수 유지)
+        if w not in merged or merged[w]["score"] < k["score"]:
+            merged[w] = {"keyword": w, "score": float(k["score"])}
+    
+    # 점수 내림차순 정렬
+    return sorted(merged.values(), key=lambda x: x["score"], reverse=True)
+
 def build_tfidf(docs):
     """TF-IDF 벡터라이저 생성"""
     vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
@@ -139,6 +193,9 @@ def main():
 
     # KRWordRank 키워드 추출 (자동 튜닝 적용)
     keywords = extract_keywords_krwordrank(docs, topk=topk, stopwords=stopwords)
+    
+    # [추가] 키워드 후처리
+    keywords = postprocess_keywords(docs, keywords, min_docfreq=2)
 
     # TF-IDF(추후 유사도/클러스터링에 활용)
     _vec, _X = build_tfidf(docs)
