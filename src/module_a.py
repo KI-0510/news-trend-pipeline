@@ -50,7 +50,7 @@ def prefer_link(item):
     return item.get("originallink") or item.get("link") or ""
 
 def fetch_naver_news(query, display=30, pages=2):
-    items =[]
+    items = []
     for p in range(pages):
         start = 1 + p * display
         params = {
@@ -65,17 +65,19 @@ def fetch_naver_news(query, display=30, pages=2):
         if not batch:
             break
         for it in batch:
-            it["_query"] = query
+            it["_query"] = query if query is not None else "unknown"
         items.extend(batch)
         time.sleep(0.3)
     return items
 
 def dedup_by_url(items):
-    seen, out = set(),[]
+    seen, out = set(), []
     for it in items:
         url = prefer_link(it)
         if url and url not in seen:
             seen.add(url)
+            if "_query" not in it or it["_query"] is None:
+                it["_query"] = "unknown"
             out.append(it)
     return out
 
@@ -109,7 +111,7 @@ def clean_html(s):
 def main():
     t0 = time.time()
     cfg = load_config()
-    queries = cfg.get("queries") or ["AI"]
+    queries = cfg.get("queries")
     dry_run = bool(os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true")
     display = int(cfg.get("per_query_display", 10))
     pages = int(cfg.get("pages", 1))
