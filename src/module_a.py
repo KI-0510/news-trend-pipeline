@@ -92,7 +92,7 @@ def expand_with_og(url):
     }
     try:
         r = http_get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_retry=2)
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "lxml")
         def og(name):
             tag = soup.find("meta", property=name)
             return tag["content"].strip() if tag and tag.has_attr("content") else None
@@ -114,21 +114,34 @@ def clean_html(s):
 def main():
     t0 = time.time()
     cfg = load_config()
-    queries = cfg.get("queries", ["unknown"])
-    dry_run = bool(os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true")
+    
+    # dry_run: 환경 변수가 우선시되며, 없을 경우 cfg 값 사용. 기본값은 True
+    dry_run = (os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true")
+    
+    # queries: 반드시 비어있지 않은 리스트여야 함. 기본값은 ["AI"]
+    q_raw = cfg.get("queries", ["unknown"])
+    queries = q_raw if isinstance(q_raw, list) and q_raw else ["unknown"]
+    
+    # display: 1~100 사이로 제한. 기본값 10
     display = int(cfg.get("per_query_display", 10))
+    display = max(1, min(display, 100))
+    
+    # pages: 최소 1, dry_run=False일 경우 최소 2
     pages = int(cfg.get("pages", 1))
+    pages = max(1, pages)
     if not dry_run:
-        display = max(display, 30)  # 평시 최소치 예시
-        pages = max(pages, 2)
+        pages = max(2, pages)
+    
     print(f"[INFO] queries={queries} dry_run={dry_run} display={display} pages={pages}")
-
+    print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
+    
     all_items =[]
     for q in queries:
         batch = fetch_naver_news(q, display=display, pages=pages)
+        print(f"[INFO] query={q} | fetched={len(batch)}")
         all_items.extend(batch)
     clean_items = dedup_by_url(all_items)
-
+    
     meta_list =[]
     for it in clean_items:
         url = prefer_link(it)
