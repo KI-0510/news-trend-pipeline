@@ -29,6 +29,7 @@ jobs:
           source .venv/bin/activate
           pip install --upgrade pip
           pip install requests beautifulsoup4 lxml
+          pip install scikit-learn krwordrank soynlp networkx
         shell: bash
 
       # ✅ Module A - Fetch & Preprocess
