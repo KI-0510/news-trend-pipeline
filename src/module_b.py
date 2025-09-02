@@ -85,7 +85,7 @@ def extract_keywords_krwordrank(docs, topk=30, stopwords=None):
     else:
         min_count, max_iter = 5, 12
     
-    kwr = KRWordRank(min_count=min_count, max_length=10, beta=0.85, verbose=False)
+    kwr = KRWordRank(min_count=min_count, max_length=10)
     keywords, _, _ = kwr.extract(docs, max_iter=max_iter)
     
     results = []
@@ -97,7 +97,7 @@ def extract_keywords_krwordrank(docs, topk=30, stopwords=None):
         if w in stopwords:
             continue
         # 숫자/기호만 있는 단어 필터링
-        if re.fullmatch(r"[0-9\W_]", w):
+        if re.fullmatch(r"^[0-9\W_]+\$", w):
             continue
         results.append({"keyword": w, "score": float(score)})
     return results
