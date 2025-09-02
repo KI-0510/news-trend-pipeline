@@ -4,6 +4,7 @@ import time
 import random
 import re
 import glob
+import html
 import requests
 from bs4 import BeautifulSoup
 
@@ -104,9 +105,10 @@ def expand_with_og(url):
     return meta
 
 def clean_html(s):
-    if not s:
-        return s
-    return re.sub(r"<.+?>", " ", s).strip()
+    if not s: return s
+        s = re.sub(r"<.+?>", " ", s)
+        s = html.unescape(s)
+    return s.strip()
 
 def main():
     t0 = time.time()
