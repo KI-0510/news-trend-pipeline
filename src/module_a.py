@@ -136,7 +136,7 @@ def main():
         meta["title"] = clean_html(it.get("title"))
         meta["description"] = clean_html(it.get("description"))
         meta["pubDate_raw"] = it.get("pubDate")
-        meta["query"] = it.get("_query")
+        meta["_query"] = it.get("_query")
         meta_list.append(meta)
         time.sleep(0.15)
 
