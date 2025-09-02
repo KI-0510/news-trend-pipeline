@@ -5,7 +5,7 @@
   "dry_run": true,
   "per_query_display": 10,
   "pages": 1,
-  "stopwords": ["기자", "사진", "영상", "단독", "속보"],
+  "stopwords": ["기자", "사진", "영상", "단독", "속보", "네이버", "뉴스", "연합뉴스", "일보", "경제"],
   "llm": {
     "provider": "gemini",
     "model": "gemini-1.5-flash",
