@@ -99,10 +99,10 @@ def extract_keywords_krwordrank(docs, topk=30, stopwords=None):
     n = len(docs)
 
     # 문서 수에 따른 파라미터 스케일 조정
-    if n < 50:
+    if n < 20:
+        min_count, max_iter = 1, 5
+    elif n < 50:
         min_count, max_iter = 2, 8
-    elif n < 200:
-        min_count, max_iter = 3, 10
     else:
         min_count, max_iter = 5, 12
 
@@ -127,12 +127,12 @@ def extract_keywords_krwordrank(docs, topk=30, stopwords=None):
     return results
 
 # [추가] 키워드 후처리 함수
-def postprocess_keywords(docs, keywords, min_docfreq=2):
+def postprocess_keywords(docs, keywords, min_docfreq=1):
     """문서 빈도 필터링, 토큰 정규화, 중복 병합"""
     # 문서 빈도 계산
     df = defaultdict(int)
     for d in docs:
-        tokens = set(re.findall(r"[가-힣A-Za-z0-9]+", d))
+        tokens = set(re.findall(r"[가-힣A-Za-z0-9가-액컁컉컊컋컌컍컎컏]가-힣|[A-Za-z0-9]+", d))  # 한글 초성 포함
         for t in tokens:
             df[t] += 1
     
@@ -141,7 +141,7 @@ def postprocess_keywords(docs, keywords, min_docfreq=2):
         w = normalize_keyword(k["keyword"])
         
         # 기본 필터
-        if not w or len(w) < 2:
+        if not w or len(w) < 1:     # 2 → 1로 변경 (단, 의미 없는 토큰은 계속 필터링)
             continue
         if re.fullmatch(r"[0-9\W_]+", w):
             continue
@@ -168,7 +168,7 @@ def build_tfidf(docs):
 def main():
     t0 = time.time()
     cfg = load_config()
-    topk = int(cfg.get("top_n_keywords", 30))
+    topk = int(cfg.get("top_n_keywords", 50))  # 30 → 50
     stopwords = cfg.get("stopwords", [])
 
     meta_path = latest("data/news_meta_*.json")
