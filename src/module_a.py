@@ -118,7 +118,7 @@ def main():
     # dry_run: 환경 변수가 우선시되며, 없을 경우 cfg 값 사용. 기본값은 True
     dry_run = (os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true")
     
-    # queries: 반드시 비어있지 않은 리스트여야 함. 기본값은 ["AI"]
+    # queries: 반드시 비어있지 않은 리스트여야 함. 기본값은 ["unknown"]
     q_raw = cfg.get("queries", ["unknown"])
     queries = q_raw if isinstance(q_raw, list) and q_raw else ["unknown"]
     
@@ -133,12 +133,11 @@ def main():
         pages = max(2, pages)
     
     print(f"[INFO] queries={queries} dry_run={dry_run} display={display} pages={pages}")
-    print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
     
     all_items =[]
     for q in queries:
         batch = fetch_naver_news(q, display=display, pages=pages)
-        print(f"[INFO] query={q} | fetched={len(batch)}")
+        print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
         all_items.extend(batch)
     clean_items = dedup_by_url(all_items)
     
