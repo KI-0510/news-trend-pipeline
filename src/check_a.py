@@ -1,6 +1,7 @@
 import json
 import glob
 import sys
+from typing import NoReturn  # NoReturn 추가 임포트
 
 def latest(path_glob: str) -> str | None:
     """주어진 패턴에 맞는 최신 파일 경로를 반환합니다."""
