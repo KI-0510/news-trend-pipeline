@@ -54,6 +54,7 @@ def fetch_naver_news(query, display=30, pages=2):
     items = []
     for p in range(pages):
         start = 1 + p * display
+        if start > 1000: break
         params = {
             "query": query,
             "display": display,
@@ -137,8 +138,8 @@ def main():
     all_items =[]
     for q in queries:
         batch = fetch_naver_news(q, display=display, pages=pages)
-        print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
         all_items.extend(batch)
+        print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
     clean_items = dedup_by_url(all_items)
     
     meta_list =[]
