@@ -13,209 +13,209 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 # [추가] 조사 제거 함수
 def strip_korean_particle(word: str) -> str:
-"""단어 끝의 흔한 조사를 1회 제거합니다."""
-return re.sub(r"(은|는|이|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)\$", "", word)
+    """단어 끝의 흔한 조사를 1회 제거합니다."""
+    return re.sub(r"(은|는|이|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)\b", "", word)
 
 # [추가] 용언 어미 제거 함수
 def strip_verb_ending(word: str) -> str:
-"""흔한 동사/형용사 어말 처리 간단 컷(한 번만)"""
-return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음)\$", "", word)
+    """흔한 동사/형용사 어말 처리 간단 컷(한 번만)"""
+    return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음)\b", "", word)
 
 # [추가] 키워드 정규화 함수
 def normalize_keyword(w: str) -> str:
-"""따옴표/양쪽 공백/양끝 기호 제거, 영문 소문자화, 의심 토큰 필터링"""
-if not w:
-    return ""
-
-# 양끝 따옴표/기호 제거
-w = re.sub(r"^[\$\\'\\\"‘’“”\`\$\$]+|[\$\\'\\\"‘’“”\`\$\$]+\$", "", w.strip())
-w = w.strip(string.punctuation + "·…")
-
-# 공백 압축
-w = re.sub(r"\s+", " ", w)
-
-# 영문은 소문자 (알파벳/숫자/일부 기호 포함 시)
-if re.fullmatch(r"[A-Za-z0-9 \-_/]+", w):
-    w = w.lower()
-
-return w
+    """따옴표/양쪽 공백/양끝 기호 제거, 영문 소문자화, 의심 토큰 필터링"""
+    if not w:
+        return ""
+    
+    # 양끝 따옴표/기호 제거
+    w = re.sub(r"^[\$\\'\\\"‘’“”\`\$\$]+|[\$\\'\\\"‘’“”\`\$\$]+\$", "", w.strip())
+    w = w.strip(string.punctuation + "·…")
+    
+    # 공백 압축
+    w = re.sub(r"\s+", " ", w)
+    
+    # 영문은 소문자 (알파벳/숫자/일부 기호 포함 시)
+    if re.fullmatch(r"[A-Za-z0-9 \-_/]+", w):
+        w = w.lower()
+    
+    return w
 
 def latest(globpat: str):
-"""주어진 패턴에 맞는 최신 파일을 반환합니다."""
-files = sorted(glob.glob(globpat))
-return files[-1] if files else None
+    """주어진 패턴에 맞는 최신 파일을 반환합니다."""
+    files = sorted(glob.glob(globpat))
+    return files[-1] if files else None
 
 def load_config():
-try:
-    with open("config.json", "r", encoding="utf-8") as f:
-        return json.load(f)
-except FileNotFoundError:
-    return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 2}
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 2}
 
 def clean_text(t: str) -> str:
-"""텍스트 정규화: 태그 제거, 유니코드 정규화, 이모티콘/반복 문자 처리"""
-if not t:
-    return ""
-t = re.sub(r"<.+?>", " ", t) # HTML 태그 제거
-t = unicodedata.normalize("NFKC", t) # 유니코드 정규화(전/반각 등)
-t = normalize(t) # soynlp 기본 정규화
-t = emoticon_normalize(t, num_repeats=2) # 이모티콘 축약 (예: ㅋㅋㅋ → ㅋㅋ)
-t = repeat_normalize(t, num_repeats=2) # 반복 문자 축약
-return t.strip()
+    """텍스트 정규화: 태그 제거, 유니코드 정규화, 이모티콘/반복 문자 처리"""
+    if not t:
+        return ""
+    t = re.sub(r"<.+?>", " ", t) # HTML 태그 제거
+    t = unicodedata.normalize("NFKC", t) # 유니코드 정규화(전/반각 등)
+    t = normalize(t) # soynlp 기본 정규화
+    t = emoticon_normalize(t, num_repeats=2) # 이모티콘 축약 (예: ㅋㅋㅋ → ㅋㅋ)
+    t = repeat_normalize(t, num_repeats=2) # 반복 문자 축약
+    return t.strip()
 
 def dedup_docs_by_cosine(docs, threshold=0.90):
-"""코사인 유사도 기반 문서 중복 제거"""
-if len(docs) <= 1:
-    return docs
-
-vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
-X = vec.fit_transform(docs)
-sim = cosine_similarity(X, dense_output=False)
-
-keep = []
-removed = set()
-
-for i in range(len(docs)):
-    if i in removed:
-        continue
-    keep.append(i)
-    # i와 매우 유사한 문서(제거) 식별
-    for j in range(i + 1, len(docs)):
-        if sim[i, j] >= threshold:
-            removed.add(j)
-
-return [docs[i] for i in keep]
+    """코사인 유사도 기반 문서 중복 제거"""
+    if len(docs) <= 1:
+        return docs
+    
+    vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+    X = vec.fit_transform(docs)
+    sim = cosine_similarity(X, dense_output=False)
+    
+    keep = []
+    removed = set()
+    
+    for i in range(len(docs)):
+        if i in removed:
+            continue
+        keep.append(i)
+        # i와 매우 유사한 문서(제거) 식별
+        for j in range(i + 1, len(docs)):
+            if sim[i, j] >= threshold:
+                removed.add(j)
+    
+    return [docs[i] for i in keep]
 
 def build_docs(meta_items):
-"""메타데이터에서 문서 생성"""
-docs = []
-for it in meta_items:
-    title = clean_text(it.get("title") or it.get("title_og"))
-    desc = clean_text(it.get("description") or it.get("description_og"))
-    doc = (title + " " + desc).strip()
-    if doc:
-        docs.append(doc)
-return docs
+    """메타데이터에서 문서 생성"""
+    docs = []
+    for it in meta_items:
+        title = clean_text(it.get("title") or it.get("title_og"))
+        desc = clean_text(it.get("description") or it.get("description_og"))
+        doc = (title + " " + desc).strip()
+        if doc:
+            docs.append(doc)
+    return docs
 
 def extract_keywords_krwordrank(docs, topk=30, stopwords=None):
-"""데이터 양에 따라 KRWordRank 파라미터 자동 조정"""
-stopwords = set(stopwords or [])
-n = len(docs)
-
-# 문서 수에 따른 파라미터 스케일 조정
-if n < 20:
-    min_count, max_iter = 1, 5
-elif n < 50:
-    min_count, max_iter = 2, 8
-else:
-    min_count, max_iter = 5, 12
-
-kwr = KRWordRank(min_count=min_count, max_length=10)
-keywords, _, _ = kwr.extract(docs, max_iter=max_iter)
-
-results = []
-for w, score in sorted(keywords.items(), key=lambda x: x[1], reverse=True):
-    if len(results) >= topk:
-        break
+    """데이터 양에 따라 KRWordRank 파라미터 자동 조정"""
+    stopwords = set(stopwords or [])
+    n = len(docs)
     
-    # [수정] 조사/용언 어미 제거 및 키워드 필터링
-    w_norm = normalize_keyword(w)  # 첫 번째 정규화
-    w_norm = strip_korean_particle(w_norm)  # 조사 제거
-    w_norm = strip_verb_ending(w_norm)  # 용언 어미 제거
+    # 문서 수에 따른 파라미터 스케일 조정
+    if n < 20:
+        min_count, max_iter = 1, 5
+    elif n < 50:
+        min_count, max_iter = 2, 8
+    else:
+        min_count, max_iter = 5, 12
     
-    if len(w_norm) < 2:
-        continue
-    if w_norm in stopwords:
-        continue
-    # 숫자/기호만 있는 단어 필터링
-    if re.fullmatch(r"[0-9\W_]+", w_norm):
-        continue
-    results.append({"keyword": w_norm, "score": float(score)})
-return results
+    kwr = KRWordRank(min_count=min_count, max_length=10)
+    keywords, _, _ = kwr.extract(docs, max_iter=max_iter)
+    
+    results = []
+    for w, score in sorted(keywords.items(), key=lambda x: x[1], reverse=True):
+        if len(results) >= topk:
+            break
+        
+        # [수정] 조사/용언 어미 제거 및 키워드 필터링
+        w_norm = normalize_keyword(w)  # 첫 번째 정규화
+        w_norm = strip_korean_particle(w_norm)  # 조사 제거
+        w_norm = strip_verb_ending(w_norm)  # 용언 어미 제거
+        
+        if len(w_norm) < 2:
+            continue
+        if w_norm in stopwords:
+            continue
+        # 숫자/기호만 있는 단어 필터링
+        if re.fullmatch(r"[0-9\W_]+", w_norm):
+            continue
+        results.append({"keyword": w_norm, "score": float(score)})
+    return results
 
 # [추가] 키워드 후처리 함수
 def postprocess_keywords(docs, keywords, min_docfreq=1):
-"""문서 빈도 필터링, 토큰 정규화, 중복 병합"""
-# 문서 빈도 계산
-df = defaultdict(int)
-for d in docs:
-    tokens = set(re.findall(r"[가-힣]+|[A-Za-z0-9_]+", d))
-    for t in tokens:
-        df[t] += 1
-
-merged = {}
-for k in keywords:
-    w = normalize_keyword(k["keyword"])
+    """문서 빈도 필터링, 토큰 정규화, 중복 병합"""
+    # 문서 빈도 계산
+    df = defaultdict(int)
+    for d in docs:
+        tokens = set(re.findall(r"[가-힣]+|[A-Za-z0-9_]+", d))
+        for t in tokens:
+            df[t] += 1
     
-    # 기본 필터
-    if not w or len(w) < 1:     # 2 → 1로 변경 (단, 의미 없는 토큰은 계속 필터링)
-        continue
-    if re.fullmatch(r"[0-9\W_]+", w):
-        continue
+    merged = {}
+    for k in keywords:
+        w = normalize_keyword(k["keyword"])
+        
+        # 기본 필터
+        if not w or len(w) < 1:     # 2 → 1로 변경 (단, 의미 없는 토큰은 계속 필터링)
+            continue
+        if re.fullmatch(r"[0-9\W_]+", w):
+            continue
+        
+        # 문서 빈도 필터 (정확 일치 + 부분 일치)
+        exact_df = df.get(w, 0)
+        approx_df = max((df[t] for t in df if w in t or t in w), default=0)
+        if max(exact_df, approx_df) < min_docfreq:
+            continue
+        
+        # 병합 (정규화 형태 기준 최대 점수 유지)
+        if w not in merged or merged[w]["score"] < k["score"]:
+            merged[w] = {"keyword": w, "score": float(k["score"])}
     
-    # 문서 빈도 필터 (정확 일치 + 부분 일치)
-    exact_df = df.get(w, 0)
-    approx_df = max((df[t] for t in df if w in t or t in w), default=0)
-    if max(exact_df, approx_df) < min_docfreq:
-        continue
-    
-    # 병합 (정규화 형태 기준 최대 점수 유지)
-    if w not in merged or merged[w]["score"] < k["score"]:
-        merged[w] = {"keyword": w, "score": float(k["score"])}
-
-# 점수 내림차순 정렬
-return sorted(merged.values(), key=lambda x: x["score"], reverse=True)
+    # 점수 내림차순 정렬
+    return sorted(merged.values(), key=lambda x: x["score"], reverse=True)
 
 def build_tfidf(docs):
-"""TF-IDF 벡터라이저 생성"""
-vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
-X = vec.fit_transform(docs)
-return vec, X
+    """TF-IDF 벡터라이저 생성"""
+    vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+    X = vec.fit_transform(docs)
+    return vec, X
 
 def main():
-t0 = time.time()
-cfg = load_config()
-topk = int(cfg.get("top_n_keywords", 50)) # 30 → 50
-stopwords = cfg.get("stopwords", [])
-
-meta_path = latest("data/news_meta_*.json")
-if not meta_path:
-    print("[ERROR] data/news_meta_*.json 없음. 모듈 A부터 실행 필요")
-    raise SystemExit(1)
-
-with open(meta_path, "r", encoding="utf-8") as f:
-    meta_items = json.load(f)
-
-# 문서 생성 → URL 기반 중복 제거(모듈 A) 이미 적용된 상태
-docs = build_docs(meta_items)
-if not docs:
-    print("[ERROR] 문서가 비어 있음")
-    raise SystemExit(1)
-
-# 코사인 유사도 기반 중복 제거 추가 (콘텐츠 유사도 기준)
-pre_n = len(docs)  # [추가] 중복 제거 전 문서 수
-docs = dedup_docs_by_cosine(docs, threshold=0.90)
-post_n = len(docs)  # [추가] 중복 제거 후 문서 수
-print(f"[INFO] 문서 중복 제거: {pre_n} -> {post_n}")  # [수정] 가독성 향상
-
-# KRWordRank 키워드 추출 (자동 튜닝 적용)
-keywords = extract_keywords_krwordrank(docs, topk=topk, stopwords=stopwords)
-
-# [수정] 키워드 후처리 (min_docfreq=2 적용)
-keywords = postprocess_keywords(docs, keywords, min_docfreq=2)
-
-# TF-IDF(추후 유사도/클러스터링에 활용)
-_vec, _X = build_tfidf(docs)
-
-os.makedirs("outputs", exist_ok=True)
-out_path = "outputs/keywords.json"
-with open(out_path, "w", encoding="utf-8") as f:
-    json.dump({
-        "stats": {"num_docs": len(docs)},
-        "keywords": keywords
-    }, f, ensure_ascii=False, indent=2)
-
-print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(keywords)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
+    t0 = time.time()
+    cfg = load_config()
+    topk = int(cfg.get("top_n_keywords", 50)) # 30 → 50
+    stopwords = cfg.get("stopwords", [])
+    
+    meta_path = latest("data/news_meta_*.json")
+    if not meta_path:
+        print("[ERROR] data/news_meta_*.json 없음. 모듈 A부터 실행 필요")
+        raise SystemExit(1)
+    
+    with open(meta_path, "r", encoding="utf-8") as f:
+        meta_items = json.load(f)
+    
+    # 문서 생성 → URL 기반 중복 제거(모듈 A) 이미 적용된 상태
+    docs = build_docs(meta_items)
+    if not docs:
+        print("[ERROR] 문서가 비어 있음")
+        raise SystemExit(1)
+    
+    # 코사인 유사도 기반 중복 제거 추가 (콘텐츠 유사도 기준)
+    pre_n = len(docs)  # [추가] 중복 제거 전 문서 수
+    docs = dedup_docs_by_cosine(docs, threshold=0.90)
+    post_n = len(docs)  # [추가] 중복 제거 후 문서 수
+    print(f"[INFO] 문서 중복 제거: {pre_n} -> {post_n}")  # [수정] 가독성 향상
+    
+    # KRWordRank 키워드 추출 (자동 튜닝 적용)
+    keywords = extract_keywords_krwordrank(docs, topk=topk, stopwords=stopwords)
+    
+    # [수정] 키워드 후처리 (min_docfreq=2 적용)
+    keywords = postprocess_keywords(docs, keywords, min_docfreq=2)
+    
+    # TF-IDF(추후 유사도/클러스터링에 활용)
+    _vec, _X = build_tfidf(docs)
+    
+    os.makedirs("outputs", exist_ok=True)
+    out_path = "outputs/keywords.json"
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "stats": {"num_docs": len(docs)},
+            "keywords": keywords
+        }, f, ensure_ascii=False, indent=2)
+    
+    print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(keywords)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
 
 if __name__ == "__main__":
-main()
+    main()  # 이 줄이 올바른 위치에서 호출되도록 수정됨
