@@ -111,7 +111,7 @@ def clean_html(s):
 def main():
     t0 = time.time()
     cfg = load_config()
-    queries = cfg.get("queries")
+    queries = cfg.get("queries", ["unknown"])
     dry_run = bool(os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true")
     display = int(cfg.get("per_query_display", 10))
     pages = int(cfg.get("pages", 1))
