@@ -65,7 +65,7 @@ def fetch_naver_news(query, display=30, pages=2):
         if not batch:
             break
         for it in batch:
-            it["_query"] = query if query is not None else "unknown"
+            it["_query"] = query if query else "unknown"
         items.extend(batch)
         time.sleep(0.3)
     return items
@@ -74,7 +74,7 @@ def dedup_by_url(items):
     seen, out = set(),[]
     for it in items:
         url = prefer_link(it)
-        if "_query" not in it or it["_query"] is None:
+        if "_query" not in it or it["_query"]:
             it["_query"] = "unknown"
         if url and url not in seen:
             seen.add(url)
