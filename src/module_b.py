@@ -201,8 +201,8 @@ def main():
     # KRWordRank 키워드 추출 (자동 튜닝 적용)
     keywords = extract_keywords_krwordrank(docs, topk=topk, stopwords=stopwords)
     
-    # [수정] 키워드 후처리 (min_docfreq=3 적용)
-    keywords = postprocess_keywords(docs, keywords, min_docfreq=3)    # min_docfreq=2라서 일반어가 남을 수 있음, 3으로 올려 일반적 기능어를 더 거름.
+    # [수정] 키워드 후처리 (min_docfreq=2 적용)
+    keywords = postprocess_keywords(docs, keywords, min_docfreq=2)    # min_docfreq=2라서 일반어가 남을 수 있음, 3으로 올려 일반적 기능어를 더 거름.
     
     # TF-IDF(추후 유사도/클러스터링에 활용)
     _vec, _X = build_tfidf(docs)
