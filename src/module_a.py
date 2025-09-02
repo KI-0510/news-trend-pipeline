@@ -105,9 +105,10 @@ def expand_with_og(url):
     return meta
 
 def clean_html(s):
-    if not s: return s
-        s = re.sub(r"<.+?>", " ", s)
-        s = html.unescape(s)
+    if not s:
+        return s
+    s = re.sub(r"<.+?>", " ", s)
+    s = html.unescape(s)
     return s.strip()
 
 def main():
