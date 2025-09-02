@@ -59,9 +59,29 @@ jobs:
           # 검증 스크립트 실행
           python src/check_a.py
         shell: bash
+        
+      # ✅ Module B 실행 및 검증 단계
+      - name: Module B - Keywords
+        run: |
+          source .venv/bin/activate
+          python src/module_b.py
+        shell: bash
+      
+      - name: Check B - Validate Keywords
+        run: |
+          source .venv/bin/activate
+          python src/check_b.py
+        shell: bash
+      
+      # (정책 허용 시) 키워드 결과도 함께 업로드
+      # - uses: actions/upload-artifact@v4
+      #   with:
+      #     name: module-b
+      #     path: outputs/keywords.json
+
 
       # ✅ 아티팩트 업로드
-      - name: Upload Artifacts
+      - name: Upload Module A Artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -69,3 +89,11 @@ jobs:
           path: |
             data/news_clean_*.json
             data/news_meta_*.json
+      
+      - name: Upload Module B Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-b
+          path: outputs/keywords.json
+          
