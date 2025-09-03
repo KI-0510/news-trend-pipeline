@@ -229,9 +229,9 @@ def main():
             try:
                 with open("config.json", "r", encoding="utf-8") as f:
                     cfg_all = json.load(f)
-                max_tokens = int(cfg_all.get("llm", {}).get("max_output_tokens", 1536))
+                max_tokens = int(cfg_all.get("llm", {}).get("max_output_tokens", 2048))
             except Exception:
-                max_tokens = 1536
+                max_tokens = 2048
             
             insight_text = gemini_insight(
                 api_key=api_key,
