@@ -106,7 +106,22 @@ jobs:
           python src/check_c.py
         shell: bash
         
-      # ✅ Module C Commit & Push outputs
+      # ✅ Module D 실행 및 검증 단계
+      - name: Module D - Biz Opportunities
+        env:
+          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+        run: |
+          source .venv/bin/activate
+          python src/module_d.py
+        shell: bash
+      
+      - name: Check D - Validate Biz Opportunities
+        run: |
+          source .venv/bin/activate
+          python src/check_d.py
+        shell: bash     
+      
+      # ✅ Output Commit & Push outputs
       - name: Commit & Push outputs
         run: |
           set -e
@@ -116,6 +131,7 @@ jobs:
           cp outputs/trend_timeseries.json outputs/daily/$ts/ ||true
           cp outputs/trend_insights.json outputs/daily/$ts/ ||true
           cp outputs/keywords.json outputs/daily/$ts/ || true
+          cp outputs/biz_opportunities.json outputs/daily/$ts/ || true
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
