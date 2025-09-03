@@ -106,7 +106,7 @@ jobs:
           python src/check_c.py
         shell: bash
         
-      # ✅ Module C 실행 및 검증 단계
+      # ✅ Module C Commit & Push outputs
       - name: Commit & Push outputs
         run: |
           set -e
