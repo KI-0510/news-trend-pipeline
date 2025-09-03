@@ -32,7 +32,17 @@ def main():
         "priority_score",
     ]
 
-    for idx, it in enumerate(ideas[:5], 1):  # 앞쪽 5건만 샘플 검증
+    # 샘플/빈 제목 감지
+    bad =[]
+    for idx, it in enumerate(ideas, 1):
+        title = (it.get("idea") or "").strip()
+        if not title or "샘플" in title:
+            bad.append(idx)
+    if bad:
+        print(f"[WARN] 샘플/빈 제목 감지: index={bad[:5]}")
+
+    # 필드 누락 체크 (앞쪽 5건만 샘플 검증)
+    for idx, it in enumerate(ideas[:5], 1):
         for k in required:
             if k not in it:
                 fail(f"필드 누락: {k} (index={idx})")
