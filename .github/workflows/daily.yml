@@ -115,7 +115,8 @@ jobs:
           cp outputs/topics.json outputs/daily/$ts/ ||true
           cp outputs/trend_timeseries.json outputs/daily/$ts/ ||true
           cp outputs/trend_insights.json outputs/daily/$ts/ ||true
-      
+          cp outputs/keywords.json outputs/daily/$ts/ || true
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
       
