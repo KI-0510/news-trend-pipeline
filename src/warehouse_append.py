@@ -1,0 +1,87 @@
+import os
+import json
+import glob
+import re
+import sys
+from datetime import datetime
+
+def latest(globpat):
+    files = sorted(glob.glob(globpat))
+    return files[-1] if files else None
+
+def to_date(s: str) -> str:
+    if not s:
+        return datetime.today().strftime("%Y-%m-%d")
+    m = re.search(r"(\d{4}).?(\d{2}).?(\d{2})", s)
+    if not m:
+        return datetime.today().strftime("%Y-%m-%d")
+    y, mm, dd = m.group(1), m.group(2), m.group(3)
+    return f"{y}-{mm}-{dd}"
+
+def ensure_dir(p):
+    os.makedirs(p, exist_ok=True)
+
+def load_existing_urls(path):
+    urls = set()
+    if not os.path.exists(path):
+        return urls
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                u = obj.get("url")
+                if u:
+                    urls.add(u)
+            except Exception:
+                continue
+    return urls
+
+def main():
+    meta_path = latest("data/news_meta_*.json")
+    if not meta_path:
+        print("[ERROR] meta 파일이 없습니다. Module A부터 실행하세요.")
+        sys.exit(1)
+    
+    with open(meta_path, "r", encoding="utf-8") as f:
+        items = json.load(f)
+    
+    ensure_dir("data/warehouse")
+    
+    appended, skipped = 0, 0
+    
+    for it in items:
+        url = (it.get("url") or "").strip()
+        if not url:
+            skipped += 1
+            continue
+        
+        published = to_date(it.get("published_time") or it.get("pubDate_raw"))
+        row = {
+            "url": url,
+            "title": it.get("title"),
+            "site_name": it.get("site_name"),
+            "_query": it.get("_query") or it.get("query"),
+            "published": published,
+            "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        }
+        
+        out_path = f"data/warehouse/{published}.jsonl"
+        existing = load_existing_urls(out_path)
+        
+        if url in existing:
+            skipped += 1
+            continue
+        
+        with open(out_path, "a", encoding="utf-8") as wf:
+            wf.write(json.dumps(row, ensure_ascii=False) + "\n")
+        
+        appended += 1
+    
+    print(f"[INFO] warehouse append | appended={appended} skipped={skipped}")
+
+if __name__ == "__main__":
+    main()
+  
