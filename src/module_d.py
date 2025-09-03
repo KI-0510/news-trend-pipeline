@@ -78,7 +78,7 @@ def build_prompt(context):
     )
 
 
-def call_gemini(api_key, prompt, max_tokens=1536, temperature=0.6):
+def call_gemini(api_key, prompt, max_tokens=2048, temperature=0.6):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
     resp = model.generate_content(
@@ -153,7 +153,7 @@ def main():
     else:
         context = compact_context()
         prompt = build_prompt(context)
-        text = call_gemini(api_key, prompt, max_tokens=1536, temperature=0.6)
+        text = call_gemini(api_key, prompt, max_tokens=2048, temperature=0.6)
         ideas = safe_parse_json(text) or[]
 
         if not ideas:
@@ -164,7 +164,7 @@ def main():
                 "다음 텍스트에서 JSON 배열([ ... ])만 정확한 JSON으로 정리해서 반환해줘. 설명 없이 JSON만.\n"
                 f"{text[:4000]}"
             )
-            text2 = call_gemini(api_key, fix_prompt, max_tokens=1024, temperature=0.0)
+            text2 = call_gemini(api_key, fix_prompt, max_tokens=2048, temperature=0.0)
             ideas = safe_parse_json(text2) or[]
 
     ideas = postprocess_ideas(ideas)
