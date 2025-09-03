@@ -33,6 +33,15 @@ jobs:
           pip install tomotopy google-generativeai
         shell: bash
 
+      # ✅ 설치 단계에 패키지/폰트 추가(이미 있다면 중복 설치 OK)
+      - name: Install viz deps
+        run: |
+          source .venv/bin/activate
+          pip install matplotlib seaborn markdown
+          sudo apt-get update
+          sudo apt-get install -y fonts-nanum
+        shell: bash
+
       # ✅ Module A - Fetch & Preprocess
       - name: Module A - Fetch & Preprocess
         env:
@@ -119,7 +128,20 @@ jobs:
         run: |
           source .venv/bin/activate
           python src/check_d.py
-        shell: bash     
+        shell: bash
+
+      # ✅ Module E 실행 및 검증 단계
+      - name: Module E - Build Report
+        run: |
+          source .venv/bin/activate
+          python src/module_e.py
+        shell: bash
+      
+      - name: Check E - Validate Report
+        run: |
+          source .venv/bin/activate
+          python src/check_e.py
+        shell: bash
       
       # ✅ Output Commit & Push outputs
       - name: Commit & Push outputs
@@ -132,6 +154,9 @@ jobs:
           cp outputs/trend_insights.json outputs/daily/$ts/ ||true
           cp outputs/keywords.json outputs/daily/$ts/ || true
           cp outputs/biz_opportunities.json outputs/daily/$ts/ || true
+          cp outputs/report.md outputs/daily/\$ts/ || true
+          cp outputs/report.html outputs/daily/\$ts/ || true
+          cp outputs/fig/*.png outputs/daily/\$ts/fig/ || true
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
