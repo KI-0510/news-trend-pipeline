@@ -183,22 +183,33 @@ def build_prompt_array(ctx):
     )
 
 
-def build_prompt_one(ctx):
+def build_prompt_one(ctx, used_titles=None, used_targets=None):
     schema_hint = {
         "idea": "아이디어 한 줄 제목",
-        "problem": "해결하려는 문제(2~3문장)",
-        "target_customer": "핵심 타깃",
-        "value_prop": "핵심 가치제안(차별점)",
-        "solution": ["주요 기능/흐름 bullet"],
-        "poc_plan": ["3~6주 PoC 과제 bullet"],
-        "risks": ["리스크/규제 bullet"],
-        "roadmap_3m": ["3개월 로드맵 bullet"],
-        "metrics": ["KPI bullet"],
+        "problem": "해결하려는 문제(2-3문장, 280자 이내)",
+        "target_customer": "핵심 타깃(산업/직군/조직 규모)",
+        "value_prop": "핵심 가치제안(차별점, 200자 이내)",
+        "solution": ["핵심 기능 bullet 4개 이내"],
+        "poc_plan": ["3-6주 PoC 과제 bullet 3-5개"],
+        "risks": ["리스크/규제 bullet 3-5개"],
+        "roadmap_3m": ["3개월 로드맵 bullet 3-5개"],
+        "metrics": ["KPI 3-5개"],
         "priority_score": 3.5
     }
+
+    used_titles = sorted(list(used_titles or[]))[:10]
+    used_targets = sorted(list(used_targets or[]))[:10]
+
+    guard = {
+        "used_titles": used_titles,
+        "used_targets": used_targets
+    }
+
     return (
-        "다음 맥락을 바탕으로 신사업 아이디어 1개만 JSON 객체로 반환해. 코드펜스/설명 금지, JSON만.\n"
+        "아래 맥락을 바탕으로 신사업 아이디어 1개만 JSON 객체로 반환해. 코드펜스/설명 금지, JSON만.\n"
+        "- 이미 생성된 아이디어(제목/타깃)와 겹치지 않게 새로운 타깃/도메인/채널/BM 선택.\n"
         f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
+        f"중복 회피 힌트: {json.dumps(guard, ensure_ascii=False)}\n"
         f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
         "출력: JSON 객체"
     )
@@ -226,24 +237,39 @@ def main():
 
         # 2) 폴백: 단건 아이디어 5회 생성(중복 제거)
         if not ideas or len(ideas) < 3:
-            uniq_titles = set()
-            for _ in range(6):  # 최대 6회 시도해서 3~5개 확보
-                try:
-                    one_text = call_gemini_one(api_key, build_prompt_one(ctx), max_tokens=768, temperature=0.5)
-                    obj = None
-                    # 단건은 객체 형태이므로 직접 파싱 시도
-                    cleaned = strip_code_fence(one_text)
-                    # 객체만 골라보기
-                    m = re.search(r"(\{.*\})", cleaned, re.S)
-                    if m:
-                        obj = json.loads(m.group(1))
-                    if isinstance(obj, dict):
-                        title = (obj.get("idea") or "").strip().lower()
-                        if title and title not in uniq_titles:
-                            ideas.append(obj)
-                            uniq_titles.add(title)
-                    if len(ideas) >= 5:
-                        break
+            uniq_titles, uniq_targets = set(), set()
+        
+            # 기존 아이디어에서 선점된 타이틀/타깃 수집
+            for it in ideas:
+                t = (it.get("idea") or "").strip().lower()
+                c = (it.get("target_customer") or "").strip().lower()
+                if t:
+                    uniq_titles.add(t)
+                if c:
+                    uniq_targets.add(c)
+        
+            for _ in range(10):
+                one_text = call_gemini_one(
+                    api_key,
+                    build_prompt_one(ctx, uniq_titles, uniq_targets),
+                    max_tokens=820,
+                    temperature=0.5
+                )
+                cleaned = strip_code_fence(one_text)
+                m = re.search(r"(\{.*\})", cleaned, re.S)
+                if not m:
+                    continue
+                obj = json.loads(m.group(1))
+                if isinstance(obj, dict):
+                    title = (obj.get("idea") or "").strip().lower()
+                    cust = (obj.get("target_customer") or "").strip().lower()
+                    if title and title not in uniq_titles and cust not in uniq_targets:
+                        ideas.append(obj)
+                        uniq_titles.add(title)
+                        if cust:
+                            uniq_targets.add(cust)
+                if len(ideas) >= 5:
+                    break
                 except Exception:
                     continue
     else:
