@@ -19,7 +19,7 @@
   ],
   "llm": {
     "provider": "gemini",
-    "model": "gemini-1.5-pro",
+    "model": "gemini-1.5-flash",
     "max_output_tokens": 2048
   }
 }
