@@ -1,6 +1,9 @@
 {
   "queries": [
-    "디스플레이", "Display", "AI", "애플", "Apple", "LG", "삼성", "OLED", "MicroLED", "QLED", "MiniLED", "AR/VR 디스플레이", "자동차용 디스플레이",
+    "디스플레이", "Display", "AI"
+  ],
+  "queries_temp": [
+    "애플", "Apple", "LG", "삼성", "OLED", "MicroLED", "QLED", "MiniLED", "AR/VR 디스플레이", "자동차용 디스플레이",
     "EPD", "광학부품", "광학계", "포토레지스트", "마스크", "PI 필름", "ITO", "TFT 공정", "장비(증착/식각/포토/검사)", "후공정", "패키징", "세정"
   ],
   "top_n_keywords": 30,
