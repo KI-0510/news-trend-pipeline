@@ -82,27 +82,28 @@ def lda_topics(docs, k=6, topn=8, min_cf=2, iters=150):
     mdl = tp.LDAModel(k=k, alpha=0.1, eta=0.01, min_cf=min_cf)
     for d in docs:
         mdl.add_doc(simple_tokenize_ko(d))
-    
-    if mdl.num_docs == 0:
-        return {"topics": [], "doc_topics": []}
-    
+
+    # 수정: mdl.num_docs → len(mdl.docs)
+    if len(mdl.docs) == 0:
+        return {"topics": [], "doc_topics":[]}
+
     mdl.burn_in = 50
     for _ in range(iters):
         mdl.train(10)
-    
-    topics = []
+
+    topics =[]
     for ti in range(mdl.k):
         words = mdl.get_topic_words(ti, top_n=topn)
         topics.append({
             "topic_id": ti,
             "top_words": [{"word": w, "prob": float(p)} for w, p in words]
         })
-    
-    doc_topics = []
-    for di in range(mdl.num_docs):
+
+    doc_topics =[]
+    for di in range(len(mdl.docs)):  # 수정: mdl.num_docs → len(mdl.docs)
         dist = mdl.docs[di].get_topics(top_n=3)
         doc_topics.append([{"topic_id": tid, "prob": float(prob)} for tid, prob in dist])
-    
+
     return {"topics": topics, "doc_topics": doc_topics}
 
 
