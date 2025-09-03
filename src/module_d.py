@@ -270,8 +270,6 @@ def main():
                             uniq_targets.add(cust)
                 if len(ideas) >= 5:
                     break
-                except Exception:
-                    continue
     else:
         print("[WARN] GEMINI_API_KEY 비정상 → DRY 아이디어 3개 생성")
         ideas = [
