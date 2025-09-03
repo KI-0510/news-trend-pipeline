@@ -109,7 +109,7 @@ jobs:
       # ✅ Module D 실행 및 검증 단계
       - name: Module D - Biz Opportunities
         env:
-          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           source .venv/bin/activate
           python src/module_d.py
