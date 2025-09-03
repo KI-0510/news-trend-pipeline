@@ -116,7 +116,7 @@ def compact_context():
 
 def call_gemini_array(api_key, prompt, max_tokens=2048, temperature=0.5):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-pro")
+    model = genai.GenerativeModel("gemini-1.5-flash")
     resp = model.generate_content(
         prompt,
         generation_config={
@@ -132,7 +132,7 @@ def call_gemini_array(api_key, prompt, max_tokens=2048, temperature=0.5):
 def call_gemini_one(api_key, prompt_one, max_tokens=768, temperature=0.5):
     # 아이디어 1개씩 생성(폴백용)
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-pro")
+    model = genai.GenerativeModel("gemini-1.5-flash")
     resp = model.generate_content(
         prompt_one,
         generation_config={
