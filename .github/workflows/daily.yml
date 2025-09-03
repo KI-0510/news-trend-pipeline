@@ -105,6 +105,27 @@ jobs:
           source .venv/bin/activate
           python src/check_c.py
         shell: bash
+        
+      # ✅ Module C 실행 및 검증 단계
+      - name: Commit & Push outputs
+        run: |
+          set -e
+          ts=\$(date -u +'%Y%m%dT%H%M%SZ')
+          mkdir -p outputs/daily/\$ts
+          cp outputs/topics.json outputs/daily/\$ts/ || true
+          cp outputs/trend_timeseries.json outputs/daily/\$ts/ || true
+          cp outputs/trend_insights.json outputs/daily/\$ts/ || true
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add outputs/daily
+          git commit -m "chore: outputs \$ts" || echo "no changes"
+          
+          # 최신 커밋 반영 후 푸시(경합 완화)
+          git pull --rebase --autostash origin \${{ github.ref_name }} || true
+          git push origin HEAD:\${{ github.ref_name }} || true
+        shell: bash
 
       
       # ✅ 아티팩트 업로드 (현재 주석 처리 상태)
