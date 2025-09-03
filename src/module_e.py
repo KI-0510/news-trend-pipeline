@@ -50,9 +50,34 @@ def build_docs_from_meta(meta_items):
 
 # ---------- 시각화 ----------
 def ensure_fonts():
+    import os
     import matplotlib
-    matplotlib.rc("font", family="NanumGothic")
+    from matplotlib import font_manager
+
+    # 우선 NanumGothic 설치 경로 직접 지정
+    candidates = [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    font_path = next((p for p in candidates if os.path.exists(p)), None)
+
+    if font_path:
+        font_manager.fontManager.addfont(font_path)
+        matplotlib.rcParams["font.family"] = font_manager.FontProperties(fname=font_path).get_name()
+    else:
+        # 폰트가 없어도 영어/숫자는 보이게 기본 산세리프로
+        matplotlib.rcParams["font.family"] = "DejaVu Sans"
+
     matplotlib.rcParams["axes.unicode_minus"] = False
+
+    # 폰트 캐시 초기화(환경 바뀔 때 한 번씩)
+    try:
+        from matplotlib import font_manager as fm
+        fm._rebuild()
+    except Exception:
+        pass
+
 
 def plot_top_keywords(keywords, out_path="outputs/fig/top_keywords.png", topn=15):
     import os
@@ -163,7 +188,7 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     plt.savefig(out_path, dpi=150)
     plt.close()
 
-def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png", topn=50, min_cooccur=2, max_edges=200, label_top=20):
+def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png", topn=50, min_cooccur=2, max_edges=200, label_top=15):
     import os
     import math
     import matplotlib.pyplot as plt
@@ -235,7 +260,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors, alpha=0.9, linewidths=0.5, edgecolors="#333")
     top_nodes = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:label_top]]
     labels = {n: n for n in top_nodes}
-    nx.draw_networkx_labels(G, pos, labels=labels, font_size=9)
+    nx.draw_networkx_labels(G, pos, labels=labels, font_size=8)
     plt.title("Keyword Co-occurrence Network")
     plt.axis("off")
     plt.tight_layout()
@@ -244,7 +269,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
 
 # ---------- 리포트 생성 ----------
-def build_markdown(keywords, topics, ts, insights, opps, fig_dir="outputs/fig", out_md="outputs/report.md"):
+def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="outputs/report.md"):
     klist = keywords.get("keywords", [])[:15]
     tlist = topics.get("topics", [])
     daily = ts.get("daily", [])
@@ -300,8 +325,14 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="outputs/fig", 
     if ideas:
         lines.append("| Idea | Target | Value Prop | Score |")
         lines.append("|---|---|---|---:|")
+
         for it in ideas:
-            lines.append(f"| {it.get('idea','')} | {it.get('target_customer','')} | {it.get('value_prop','')[:60]}... | {it.get('priority_score','')} |")
+            vp = (it.get('value_prop','') or '').replace('\n',' ').strip()
+            # 완전 원문 사용:
+            # vp_disp = vp
+            # 또는 길이 제한을 180자로 완화:
+            vp_disp = (vp[:180] + "…") if len(vp) > 180 else vp
+            lines.append(f"| {it.get('idea','')} | {it.get('target_customer','')} | {vp_disp} | {it.get('priority_score','')} |")
     else:
         lines.append("- (아이디어 없음)")
 
