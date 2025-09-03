@@ -14,12 +14,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 # [추가] 조사 제거 함수
 def strip_korean_particle(word: str) -> str:
     """단어 끝의 흔한 조사를 1회 제거합니다."""
-    return re.sub(r"(은|는|이|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)\b", "", word)
+    return re.sub(r"(은|는|이|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)\$", "", word)
 
 # [추가] 용언 어미 제거 함수
 def strip_verb_ending(word: str) -> str:
     """흔한 동사/형용사 어말 처리 간단 컷(한 번만)"""
-    return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음)\b", "", word)
+    return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음)\$", "", word)
 
 # [추가] 키워드 정규화 함수
 def normalize_keyword(w: str) -> str:
@@ -28,7 +28,7 @@ def normalize_keyword(w: str) -> str:
         return ""
     
     # 양끝 따옴표/기호 제거
-    w = re.sub(r"^[\$\\'\\\"‘’“”\`\$\$]+|[\$\\'\\\"‘’“”\`\$\$]+\$", "", w.strip())
+    w = re.sub(r"^[\'\"‘’“”]+|[\'\"‘’“”]+$", "", w.strip())
     w = w.strip(string.punctuation + "·…")
     
     # 공백 압축
