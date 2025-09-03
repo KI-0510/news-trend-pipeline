@@ -1,5 +1,5 @@
 {
-  "queries": ["AI", "경제", "주가", "소비자"],
+  "queries": ["디스플레이", "Display", "AI", "애플", "Apple", "LG", "삼성"],
   "top_n_keywords": 30,
   "language": "ko",
   "dry_run": true,
