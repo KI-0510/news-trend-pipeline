@@ -114,7 +114,7 @@ def compact_context():
 
 # ---------- Gemini 호출 ----------
 
-def call_gemini_array(api_key, prompt, max_tokens=2048, temperature=0.6):
+def call_gemini_array(api_key, prompt, max_tokens=2048, temperature=0.5):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
     resp = model.generate_content(
@@ -129,7 +129,7 @@ def call_gemini_array(api_key, prompt, max_tokens=2048, temperature=0.6):
     return (getattr(resp, "text", None) or "").strip()
 
 
-def call_gemini_one(api_key, prompt_one, max_tokens=768, temperature=0.6):
+def call_gemini_one(api_key, prompt_one, max_tokens=768, temperature=0.5):
     # 아이디어 1개씩 생성(폴백용)
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
@@ -148,24 +148,38 @@ def call_gemini_one(api_key, prompt_one, max_tokens=768, temperature=0.6):
 def build_prompt_array(ctx):
     schema_hint = {
         "idea": "아이디어 한 줄 제목",
-        "problem": "해결하려는 문제(2~3문장)",
-        "target_customer": "핵심 타깃",
-        "value_prop": "핵심 가치제안(차별점)",
-        "solution": ["주요 기능/흐름 bullet"],
-        "poc_plan": ["3~6주 PoC 과제 bullet"],
-        "risks": ["리스크/규제 bullet"],
-        "roadmap_3m": ["3개월 로드맵 bullet"],
-        "metrics": ["KPI bullet"],
+        "problem": "해결하려는 문제(2-3문장, 280자 이내)",
+        "target_customer": "핵심 타깃(산업/직군/조직 규모 명확히)",
+        "value_prop": "핵심 가치제안(차별점, 200자 이내)",
+        "solution": ["핵심 기능 bullet 4개 이내"],
+        "poc_plan": ["3-6주 PoC 과제 bullet 3-5개"],
+        "risks": ["리스크/규제 bullet 3-5개"],
+        "roadmap_3m": ["3개월 로드맵 bullet 3-5개"],
+        "metrics": ["KPI 3-5개"],
         "priority_score": 3.5
     }
+
+    # 도메인 힌트가 있을 경우 다양화 가이드
+    try:
+        cfg = json.load(open("config.json", "r", encoding="utf-8"))
+        domain_hints = cfg.get("domain_hints", [])
+    except Exception:
+        domain_hints =[]
+
+    domain_text = (
+        f"(가능하면 서로 다른 도메인 반영: {', '.join(domain_hints)})"
+        if domain_hints
+        else "(서로 다른 타깃/도메인으로 다양화)"
+    )
+
     return (
-        "다음 맥락(토픽, 키워드, 시계열, 요약)을 바탕으로 한국 시장에 맞춘 신사업 아이디어 5개를 생성해.\n"
-        "- 반드시 JSON 배열만 반환하고, 코드펜스나 설명은 넣지 말 것.\n"
-        "- 각 아이디어는 아래 스키마를 따를 것.\n"
-        "- 서로 다른 타깃/채널/BM으로 다양화할 것.\n"
+        "아래 맥락(토픽, 키워드, 시계열, 요약)을 바탕으로 한국 시장에 맞춘 신사업 아이디어를 정확히 5개 생성해.\n"
+        "- 반드시 JSON 배열([])만 반환. 코드펜스/설명 금지.\n"
+        "- 서로 다른 타깃/도메인/채널/BM으로 다양화. " + domain_text + "\n"
+        "- 각 필드는 스키마와 길이 제한을 지킬 것(과도한 장문 금지).\n"
         f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
         f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
-        "출력: 아이디어 5개 객체로 이뤄진 JSON 배열([ ])"
+        "출력: 아이디어 5개 객체로 이뤄진 JSON 배열([])"
     )
 
 
@@ -201,7 +215,7 @@ def main():
     if api_key and len(api_key) > 20:
         # 1) 배열 한 번에 생성 시도
         try:
-            text = call_gemini_array(api_key, build_prompt_array(ctx), max_tokens=1536, temperature=0.6)
+            text = call_gemini_array(api_key, build_prompt_array(ctx), max_tokens=1536, temperature=0.5)
             arr = extract_json_array(text)
             if arr and isinstance(arr, list):
                 ideas = arr
@@ -215,7 +229,7 @@ def main():
             uniq_titles = set()
             for _ in range(6):  # 최대 6회 시도해서 3~5개 확보
                 try:
-                    one_text = call_gemini_one(api_key, build_prompt_one(ctx), max_tokens=768, temperature=0.6)
+                    one_text = call_gemini_one(api_key, build_prompt_one(ctx), max_tokens=768, temperature=0.5)
                     obj = None
                     # 단건은 객체 형태이므로 직접 파싱 시도
                     cleaned = strip_code_fence(one_text)
