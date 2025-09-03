@@ -1,5 +1,5 @@
 {
-  "queries": ["AI", "경제", "대통령"],
+  "queries": ["AI", "경제", "주가", "소비자"],
   "top_n_keywords": 30,
   "language": "ko",
   "dry_run": true,
