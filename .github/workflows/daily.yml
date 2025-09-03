@@ -65,7 +65,7 @@ jobs:
       - name: Warehouse Append
         run: |
           source .venv/bin/activate
-          python src/warehouse\_append.py
+          python src/warehouse_append.py
         shell: bash
 
       - name: Commit & Push Warehouse
@@ -91,20 +91,36 @@ jobs:
           python src/check_b.py
         shell: bash
       
-      # ✅ 아티팩트 업로드
-      - name: Upload Module A Artifacts
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: module-a
-          path: |
-            data/news_clean_*.json
-            data/news_meta_*.json
+      # ✅ Module C 실행 및 검증 단계
+      - name: Module C - Topics/Timeseries/Insight
+        env:
+          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+        run: |
+          source .venv/bin/activate
+          python src/module_c.py
+        shell: bash
+
+      - name: Check C - Validate Insights
+        run: |
+          source .venv/bin/activate
+          python src/check_c.py
+        shell: bash
+
       
-      - name: Upload Module B Artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: module-b
-          path: outputs/keywords.json
+      # ✅ 아티팩트 업로드 (현재 주석 처리 상태)
+#      - name: Upload Module A Artifacts
+#        if: success()
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: module-a
+#          path: |
+#            data/news_clean_*.json
+#            data/news_meta_*.json
+      
+ #     - name: Upload Module B Artifact
+ #       if: success()
+ #       uses: actions/upload-artifact@v4
+ #       with:
+ #         name: module-b
+ #         path: outputs/keywords.json
           
