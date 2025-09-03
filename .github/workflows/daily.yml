@@ -154,9 +154,9 @@ jobs:
           cp outputs/trend_insights.json outputs/daily/$ts/ ||true
           cp outputs/keywords.json outputs/daily/$ts/ || true
           cp outputs/biz_opportunities.json outputs/daily/$ts/ || true
-          cp outputs/report.md outputs/daily/\$ts/ || true
-          cp outputs/report.html outputs/daily/\$ts/ || true
-          cp outputs/fig/*.png outputs/daily/\$ts/fig/ || true
+          cp outputs/report.md outputs/daily/$ts/ || true
+          cp outputs/report.html outputs/daily/$ts/ || true
+          cp outputs/fig/*.png outputs/daily/$ts/fig/ || true
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
