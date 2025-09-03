@@ -142,21 +142,44 @@ def timeseries_by_date(dates):
     return {"daily": daily}
 
 
-def gemini_insight(api_key: str, model: str, context: dict, max_tokens=1024):
+def gemini_insight(api_key: str, model: str, context: dict, max_tokens=2048, temperature=0.6):
     genai.configure(api_key=api_key)
     gmodel = genai.GenerativeModel(model)
     
+    # 1차 요청 프롬프트(구조 유지, 길이는 여유)
     prompt = (
-        "다음은 한국어 뉴스에서 추출한 토픽과 날짜별 기사 수 요약입니다.\n"
+        "아래는 한국어 뉴스에서 추출한 토픽과 날짜별 기사 수 요약입니다.\n"
         "요청:\n"
-        "1) 상위 토픽을 3\~5개 주제로 묶어 핵심 맥락 설명(2\~3문장)\n"
+        "1) 상위 토픽을 3~5개 주제로 묶어 핵심 맥락 설명(2~3문장)\n"
         "2) 최근 변화/스파이크가 있으면 2문장으로 짚기\n"
         "3) 실무 인사이트 3가지 bullet(구체적 액션)\n"
+        "주의: 문장 중간에 끊지 말고 완결된 문장으로 끝내세요.\n"
         f"데이터: {json.dumps(context, ensure_ascii=False)}"
     )
     
-    resp = gmodel.generate_content(prompt)
-    return (resp.text or "")[:max_tokens]
+    resp = gmodel.generate_content(
+        prompt,
+        generation_config={
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": 0.9,
+        }
+    )
+    
+    text = (getattr(resp, "text", None) or "").strip()
+    
+    # 문장 완결성 검사: 마침표/물음표/느낌표/종결문자 없이 끝나면 후속 요청 한 번 더
+    if text and not re.search(r"[\.!?]\$|[다요음]\s*\$", text):
+        cont = gmodel.generate_content(
+            "방금 작성한 응답의 마지막 문장부터 이어서 3~5문장으로 마무리해줘. 반복은 피하고 결론을 명확히.",
+            generation_config={"max_output_tokens": 384, "temperature": temperature}
+        )
+        cont_text = (getattr(cont, "text", None) or "").strip()
+    
+        if cont_text:
+            text = text + ("\n" if not text.endswith("\n") else "") + cont_text
+    
+    return text
 
 
 def main():
@@ -170,7 +193,7 @@ def main():
         print("[ERROR] 사용할 문서가 없습니다.")
         raise SystemExit(1)
     
-    k = 6  # 5\~8 권장
+    k = 6  # 5~8 권장
     lda = lda_topics(docs, k=k, topn=8, min_cf=2, iters=150)
     ts = timeseries_by_date(dates)
     
@@ -184,16 +207,47 @@ def main():
     
     insight_text = "DRY RUN: 키 미설정으로 요약 생략."
     api_key = os.getenv("GEMINI_API_KEY", "")
+    
     if api_key and len(api_key.strip()) > 20:
         try:
-            context = {"topics": lda.get("topics", [])[:6], "timeseries": ts.get("daily", [])}
-            insight_text = gemini_insight(api_key, "gemini-1.5-flash", context, max_tokens=1024)
+            # 컨텍스트를 더 가볍게: 토픽 5개, 각 토픽 상위 6~8개 단어만, 시계열 최근 30개 지점
+            raw_topics = lda.get("topics", [])[:5]
+            compact_topics = []
+            
+            for t in raw_topics:
+                words = t.get("top_words", [])[:8]
+                compact_topics.append({
+                    "topic_id": t.get("topic_id"),
+                    "top_words": [w["word"] for w in words]
+                })
+            
+            compact_ts = ts.get("daily", [])[-30:]
+            
+            context = {"topics": compact_topics, "timeseries": compact_ts}
+            
+            # config.json의 llm.max_output_tokens 있으면 반영
+            try:
+                with open("config.json", "r", encoding="utf-8") as f:
+                    cfg_all = json.load(f)
+                max_tokens = int(cfg_all.get("llm", {}).get("max_output_tokens", 1536))
+            except Exception:
+                max_tokens = 1536
+            
+            insight_text = gemini_insight(
+                api_key=api_key,
+                model="gemini-1.5-flash",
+                context=context,
+                max_tokens=max_tokens,
+                temperature=0.6
+            )
+            
         except Exception as e:
             print(f"[WARN] Gemini 요약 실패: {e}")
             insight_text = "요약 생성 실패(로그 참조)."
     else:
         print("[WARN] GEMINI_API_KEY 비어있거나 비정상 길이 — 요약 생략")
-    
+        
+        
     insights = {
         "summary": insight_text,
         "top_topics": lda.get("topics", [])[:5],
