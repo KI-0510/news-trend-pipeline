@@ -54,29 +54,34 @@ def ensure_fonts():
     import matplotlib
     from matplotlib import font_manager
 
-    # 우선 NanumGothic 설치 경로 직접 지정
     candidates = [
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     ]
     font_path = next((p for p in candidates if os.path.exists(p)), None)
-
+    
     if font_path:
         font_manager.fontManager.addfont(font_path)
-        matplotlib.rcParams["font.family"] = font_manager.FontProperties(fname=font_path).get_name()
+        font_name = font_manager.FontProperties(fname=font_path).get_name()
     else:
-        # 폰트가 없어도 영어/숫자는 보이게 기본 산세리프로
-        matplotlib.rcParams["font.family"] = "DejaVu Sans"
-
+        # 폰트 파일 경로를 못 찾았을 때의 안전값
+        font_name = "NanumGothic"
+    
+    # rcParams에 확실히 반영
+    matplotlib.rcParams["font.family"] = font_name
+    matplotlib.rcParams["font.sans-serif"] = [font_name, "NanumGothic", "Noto Sans CJK KR", "Malgun Gothic", "AppleGothic", "DejaVu Sans"]
     matplotlib.rcParams["axes.unicode_minus"] = False
-
-    # 폰트 캐시 초기화(환경 바뀔 때 한 번씩)
+    
+    # 캐시 재생성(환경 바뀐 경우)
     try:
         from matplotlib import font_manager as fm
         fm._rebuild()
     except Exception:
         pass
+    
+    return font_name
 
 
 def plot_top_keywords(keywords, out_path="outputs/fig/top_keywords.png", topn=15):
@@ -188,37 +193,48 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     plt.savefig(out_path, dpi=150)
     plt.close()
 
+
 def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png", topn=50, min_cooccur=2, max_edges=200, label_top=15):
-    import os
-    import math
+    import os, math
     import matplotlib.pyplot as plt
     import seaborn as sns
     import networkx as nx
-    ensure_fonts()
+
+    # 폰트 적용(함수가 TrueFont를 rcParams에 설정하고, 이름을 반환)
+    font_name = ensure_fonts()  # ← 폰트명 받아오기
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
+    # 상위 키워드 집합
     kw = [k["keyword"].lower() for k in keywords.get("keywords", [])[:topn]]
     vocab = set(kw)
+
+    # 데이터 부족 처리
     if not docs or not vocab:
-        plt.figure(figsize=(8,5))
-        plt.text(0.5,0.5,"키워드 네트워크 생성 불가(데이터 부족)", ha="center")
+        plt.figure(figsize=(8, 5))
+        plt.text(0.5, 0.5, "키워드 네트워크 생성 불가(데이터 부족)", ha="center", va="center")
         plt.axis("off")
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return {"nodes": 0, "edges": 0}
 
-    token_docs = [simple_tokenize_ko(d) for d in docs]
+    # 문서 토큰화
+    def _tok(x: str):
+        return re.findall(r"[가-힣A-Za-z0-9]+", x or "")
+
+    token_docs = [[t.lower() for t in set(_tok(d)) if len(t) >= 2] for d in docs]
+
+    # 동시출현/빈도 계산
     from collections import Counter
     co = Counter()
     freq = Counter()
-
     for toks in token_docs:
-        toks_set = [t for t in set(toks) if t in vocab]
-        for w in toks_set:
+        toks_in = [t for t in toks if t in vocab]
+        for w in toks_in:
             freq[w] += 1
-        for i in range(len(toks_set)):
-            for j in range(i + 1, len(toks_set)):
-                a, b = sorted((toks_set[i], toks_set[j]))
+        for i in range(len(toks_in)):
+            for j in range(i + 1, len(toks_in)):
+                a, b = sorted((toks_in[i], toks_in[j]))
                 co[(a, b)] += 1
 
     edges = [(a, b, c) for (a, b), c in co.items() if c >= min_cooccur]
@@ -226,22 +242,24 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
 
     G = nx.Graph()
     for w, f in freq.items():
-        G.add_node(w, freq=f)
+        if f > 0:
+            G.add_node(w, freq=f)
     for a, b, c in edges:
         G.add_edge(a, b, weight=c)
 
     if G.number_of_nodes() == 0 or G.number_of_edges() == 0:
-        plt.figure(figsize=(8,5))
-        plt.text(0.5,0.5,"키워드 네트워크 생성 불가(엣지 없음)", ha="center")
+        plt.figure(figsize=(8, 5))
+        plt.text(0.5, 0.5, "키워드 네트워크 생성 불가(엣지 없음)", ha="center", va="center")
         plt.axis("off")
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return {"nodes": 0, "edges": 0}
 
+    # 커뮤니티 색상
     try:
-        communities = list(nx.algorithms.community.greedy_modularity_communities(G))
-        comm_map ={}
-        for ci, com in enumerate(communities):
+        comms = list(nx.algorithms.community.greedy_modularity_communities(G))
+        comm_map = {}
+        for ci, com in enumerate(comms):
             for n in com:
                 comm_map[n] = ci
         num_comm = max(comm_map.values()) + 1 if comm_map else 1
@@ -249,24 +267,38 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
         comm_map = {n: 0 for n in G.nodes()}
         num_comm = 1
 
-    pos = nx.spring_layout(G, seed=42, k=0.6)
+    # 레이아웃
+    pos = nx.spring_layout(G, seed=42, k=0.8)
+
+    # 스타일
     palette = sns.color_palette("tab10", n_colors=max(10, num_comm))
     node_sizes = [300 + 50 * math.sqrt(G.nodes[n].get("freq", 1)) for n in G.nodes()]
     node_colors = [palette[comm_map.get(n, 0)] for n in G.nodes()]
     edge_widths = [0.5 + 0.6 * G[u][v]["weight"] for u, v in G.edges()]
 
-    plt.figure(figsize=(10,7))
+    plt.figure(figsize=(10, 7))
     nx.draw_networkx_edges(G, pos, alpha=0.25, width=edge_widths, edge_color="#666")
-    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors, alpha=0.9, linewidths=0.5, edgecolors="#333")
+    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors,
+                           alpha=0.9, linewidths=0.5, edgecolors="#333")
+
+    # 라벨: 상위 노드만 표시
     top_nodes = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:label_top]]
     labels = {n: n for n in top_nodes}
-    nx.draw_networkx_labels(G, pos, labels=labels, font_size=8)
+    nx.draw_networkx_labels(
+        G, pos, labels=labels,
+        font_size=8,
+        font_family=font_name,  # ← 폰트명 명시
+        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7)  # 가독성↑(옵션)
+    )
+
     plt.title("Keyword Co-occurrence Network")
     plt.axis("off")
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
+
     return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
+
 
 # ---------- 리포트 생성 ----------
 def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="outputs/report.md"):
