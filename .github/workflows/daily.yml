@@ -23,14 +23,14 @@ jobs:
           python-version: "3.11"
 
       # ✅ 의존성 설치 및 가상환경 활성화
-      - name: Install dependencies
+      - name: Install visualization dependencies
         run: |
-          python -m venv .venv
           source .venv/bin/activate
-          pip install --upgrade pip
-          pip install requests beautifulsoup4 lxml
-          pip install scikit-learn krwordrank soynlp networkx
-          pip install tomotopy google-generativeai
+          pip install matplotlib seaborn markdown
+          sudo apt-get update
+          sudo apt-get install -y fonts-nanum fonts-noto-cjk
+          fc-list | grep -i -E "Nanum|Noto|CJK" || true
+          fc-cache -f -v
         shell: bash
 
       # ✅ 설치 단계에 패키지/폰트 추가(이미 있다면 중복 설치 OK)
