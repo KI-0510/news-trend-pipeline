@@ -216,6 +216,8 @@ def main():
         }, f, ensure_ascii=False, indent=2)
     
     print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(keywords)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
+    print(f"[INFO] SUMMARY | B | docs={len(docs)} unique_kws={len({k['keyword'] for k in keywords})} top3={[k['keyword'] for k in keywords[:3]]}")
+
 
 if __name__ == "__main__":
     main()  # 이 줄이 올바른 위치에서 호출되도록 수정됨
