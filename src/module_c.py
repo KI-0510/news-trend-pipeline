@@ -169,7 +169,7 @@ def gemini_insight(api_key: str, model: str, context: dict, max_tokens=2048, tem
     text = (getattr(resp, "text", None) or "").strip()
     
     # 문장 완결성 검사: 마침표/물음표/느낌표/종결문자 없이 끝나면 후속 요청 한 번 더
-    if text and not re.search(r"[\.!?]\$|[다요음]\s*\$", text):
+    if text and not re.search(r"[\.!?]$|[다요음]\s*$", text):
         cont = gmodel.generate_content(
             "방금 작성한 응답의 마지막 문장부터 이어서 3~5문장으로 마무리해줘. 반복은 피하고 결론을 명확히.",
             generation_config={"max_output_tokens": 384, "temperature": temperature}
