@@ -340,6 +340,7 @@ def main():
         json.dump({"ideas": ideas}, f, ensure_ascii=False, indent=2)
 
     print(f"[INFO] 모듈 D 완료 | ideas={len(ideas)} | 출력={out_path} | 경과(초)={round(time.time()-t0,2)}")
+    print(f"[INFO] SUMMARY | D | ideas={len(ideas)} titles={[ (it.get('idea') or '')[:12] for it in ideas[:3] ]}")
 
 if __name__ == "__main__":
     main()
