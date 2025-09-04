@@ -194,19 +194,20 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     plt.close()
 
 
-def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png", topn=50, min_cooccur=2, max_edges=200, label_top=15):
-    import os, math
+def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png",
+                         topn=50, min_cooccur=2, max_edges=200, label_top=None):
+    import os, math, re
     import matplotlib.pyplot as plt
     import seaborn as sns
     import networkx as nx
 
-    # 폰트 적용(함수가 TrueFont를 rcParams에 설정하고, 이름을 반환)
-    font_name = ensure_fonts()  # ← 폰트명 받아오기
+    # 폰트 적용 + 폰트명 반환
+    font_name = ensure_fonts()
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     # 상위 키워드 집합
-    kw = [k["keyword"].lower() for k in keywords.get("keywords", [])[:topn]]
+    kw = [k["keyword"].lower() for k in (keywords.get("keywords", [])[:topn])]
     vocab = set(kw)
 
     # 데이터 부족 처리
@@ -218,7 +219,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
         plt.close()
         return {"nodes": 0, "edges": 0}
 
-    # 문서 토큰화
+    # 문서 토큰화(문서 내 중복 토큰 제거)
     def _tok(x: str):
         return re.findall(r"[가-힣A-Za-z0-9]+", x or "")
 
@@ -240,12 +241,14 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     edges = [(a, b, c) for (a, b), c in co.items() if c >= min_cooccur]
     edges = sorted(edges, key=lambda x: x[2], reverse=True)[:max_edges]
 
+    # 그래프 구성
     G = nx.Graph()
     for w, f in freq.items():
-        if f > 0:
+        if f > 0 and w in vocab:  # vocab에 포함된 키워드만 노드
             G.add_node(w, freq=f)
     for a, b, c in edges:
-        G.add_edge(a, b, weight=c)
+        if a in G.nodes and b in G.nodes:
+            G.add_edge(a, b, weight=c)
 
     if G.number_of_nodes() == 0 or G.number_of_edges() == 0:
         plt.figure(figsize=(8, 5))
@@ -267,8 +270,8 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
         comm_map = {n: 0 for n in G.nodes()}
         num_comm = 1
 
-    # 레이아웃
-    pos = nx.spring_layout(G, seed=42, k=0.8)
+    # 레이아웃(간격 조금 넉넉히)
+    pos = nx.spring_layout(G, seed=42, k=0.9)
 
     # 스타일
     palette = sns.color_palette("tab10", n_colors=max(10, num_comm))
@@ -281,14 +284,19 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors,
                            alpha=0.9, linewidths=0.5, edgecolors="#333")
 
-    # 라벨: 상위 노드만 표시
-    top_nodes = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:label_top]]
-    labels = {n: n for n in top_nodes}
+    # 라벨: label_top=None이면 모든 노드에 라벨
+    if label_top is None:
+        label_nodes = list(G.nodes())
+    else:
+        label_nodes = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:label_top]]
+        label_nodes = [n for n in label_nodes if n in G.nodes()]
+
+    labels = {n: n for n in label_nodes}
     nx.draw_networkx_labels(
         G, pos, labels=labels,
         font_size=8,
-        font_family=font_name,  # ← 폰트명 명시
-        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7)  # 가독성↑(옵션)
+        font_family=font_name,
+        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7)
     )
 
     plt.title("Keyword Co-occurrence Network")
@@ -298,7 +306,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     plt.close()
 
     return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
-
+                             
 
 # ---------- 리포트 생성 ----------
 def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="outputs/report.md"):
@@ -354,17 +362,19 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
         lines.append("- (요약 없음)\n")
 
     lines.append("## Opportunities (Top 5)\n")
+    ideas = opps.get("ideas", [])[:5]
     if ideas:
         lines.append("| Idea | Target | Value Prop | Score |")
         lines.append("|---|---|---|---:|")
-
         for it in ideas:
-            vp = (it.get('value_prop','') or '').replace('\n',' ').strip()
-            # 완전 원문 사용:
-            # vp_disp = vp
-            # 또는 길이 제한을 180자로 완화:
-            vp_disp = (vp[:180] + "…") if len(vp) > 180 else vp
-            lines.append(f"| {it.get('idea','')} | {it.get('target_customer','')} | {vp_disp} | {it.get('priority_score','')} |")
+            idea = (it.get('idea','') or '').replace('|', r'\|').strip()
+            tgt  = (it.get('target_customer','') or '').replace('|', r'\|').strip()
+            vp   = (it.get('value_prop','') or '').replace('\n',' ').replace('|', r'\|').strip()
+            # 완전 원문 사용(잘림 제거) — 길면 아래 300자 제한 주석 해제
+            vp_disp = vp
+            # vp_disp = (vp[:300] + "…") if len(vp) > 300 else vp
+            score = it.get('priority_score','')
+            lines.append(f"| {idea} | {tgt} | {vp_disp} | {score} |")
     else:
         lines.append("- (아이디어 없음)")
 
@@ -405,12 +415,23 @@ def main():
     except Exception as e:
         print("[WARN] timeseries 그림 실패:", e)
 
+# 네트워크 생성 (module_e.py main 내부)
     try:
         docs = build_docs_from_meta(meta_items)
-        plot_keyword_network(keywords, docs)
+        kw_list = keywords.get("keywords", [])
+        n_kw = len(kw_list)
+        label_cap = 25  # 노드 수가 적으면 전부, 많으면 최대 25개 라벨
+        plot_keyword_network(
+            keywords, docs,
+            out_path="outputs/fig/keyword_network.png",
+            topn=n_kw,                 # 상위 키워드 수만큼 노드
+            min_cooccur=1,             # 데이터 적은 날 안정성↑
+            max_edges=200,
+            label_top=(None if n_kw <= label_cap else label_cap)
+        )
     except Exception as e:
         print("[WARN] 키워드 네트워크 실패:", e)
-
+    
     try:
         build_markdown(keywords, topics, ts, insights, opps)
         build_html_from_md()
