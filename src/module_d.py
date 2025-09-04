@@ -172,63 +172,82 @@ def extract_objects_from_text(payload: str, max_items=10):
         i = end + 1
     return out
 
-def parse_ndjson_marked(text: str):
+# 기존 parse_ndjson_marked 교체
+def parse_ndjson_marked(text: str, need=5):
     """
-    마커 사이 NDJSON을 우선 라인 단위로 파싱 후,
-    부족하면 동일 구간에서 중괄호 균형 기반으로 보강 추출.
+    마커 구간이 여러 번 등장해도 모두 순회하면서 객체를 수집.
+    1) 각 구간 라인 파싱(NDJSON)
+    2) 부족하면 해당 구간 전체에서 균형 기반 보강
+    3) 구간 순회하며 need개 채우면 종료
     """
     if not text:
         return None
-    t = strip_code_fence(text)
-    s = t.find(MARK_START)
-    e = t.rfind(MARK_END)
-    if s == -1 or e == -1 or e <= s:
-        return None
-    payload = t[s + len(MARK_START):e].strip()
-    if not payload:
-        return None
 
+    t = strip_code_fence(text)
     ideas = []
-    # 1) 라인 단위 NDJSON 파싱
-    for line in payload.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        # 선행 불릿/번호 제거
-        line = re.sub(r"^[\-\*\d\.\)\s]+", "", line)
-        cj = clean_json_text(line)
-        try:
-            obj = json.loads(cj)
-            if isinstance(obj, dict):
-                ideas.append(obj)
-        except Exception:
-            # 라인 안에 객체가 2개 이상 붙은 케이스 보강
+
+    def _collect_from_payload(payload: str):
+        nonlocal ideas
+        # 1) 라인 단위
+        for line in payload.splitlines():
+            if len(ideas) >= need:
+                break
+            line = line.strip()
+            if not line:
+                continue
+            # 선행 불릿/번호/마커 조각 제거
+            line = re.sub(r"^[\-\*\d\.\)\s]+", "", line)
+            if line.startswith("<<<") or line.endswith(">>>"):
+                continue
+            cj = clean_json_text(line)
+            try:
+                obj = json.loads(cj)
+                if isinstance(obj, dict):
+                    ideas.append(obj)
+                    continue
+            except Exception:
+                pass
+            # 라인 안에 객체가 붙어있는 케이스
             objs = extract_objects_from_text(cj, max_items=2)
             for o in objs:
-                ideas.append(o)
+                if isinstance(o, dict):
+                    ideas.append(o)
+                    if len(ideas) >= need:
+                        break
 
-    # 2) 부족하면 전체 payload에서 균형 추출로 보강
-    if len(ideas) < 5:
-        extras = extract_objects_from_text(payload, max_items=10)
-        # 기존과 중복 제거하고 추가
-        seen = {json.dumps(x, sort_keys=True) for x in ideas}
-        for o in extras:
-            jkey = json.dumps(o, sort_keys=True)
-            if jkey not in seen:
-                ideas.append(o)
-                seen.add(jkey)
-            if len(ideas) >= 5:
-                break
+        # 2) 부족하면 전체 payload에서 균형 추출 보강
+        if len(ideas) < need:
+            extras = extract_objects_from_text(payload, max_items=10)
+            # 중복 제거
+            seen = {json.dumps(x, sort_keys=True) for x in ideas}
+            for o in extras:
+                jkey = json.dumps(o, sort_keys=True)
+                if jkey not in seen and isinstance(o, dict):
+                    ideas.append(o)
+                    seen.add(jkey)
+                if len(ideas) >= need:
+                    break
+
+    # 마커 구간 반복 추출
+    pos = 0
+    while len(ideas) < need and True:
+        s = t.find(MARK_START, pos)
+        if s == -1:
+            break
+        e = t.find(MARK_END, s + len(MARK_START))
+        if e == -1:
+            # 마지막 END가 없으면 중단
+            break
+        payload = t[s + len(MARK_START):e].strip()
+        if payload:
+            _collect_from_payload(payload)
+        pos = e + len(MARK_END)
 
     return ideas if ideas else None
 
 # ---------- 프롬프트 ----------
 
 def build_prompt_ndjson(ctx, retry=False):
-    """
-    NDJSON: 줄당 JSON 1개, 총 5줄. 마커 사이에만 출력.
-    retry=True일 때 더 엄격한 제약 문구 추가.
-    """
     schema_hint = {
         "idea": "아이디어 한 줄 제목",
         "problem": "해결하려는 문제(2-3문장, 280자 이내)",
@@ -251,17 +270,15 @@ def build_prompt_ndjson(ctx, retry=False):
         if domain_hints else "(서로 다른 타깃/도메인으로 다양화)"
     )
     strict = (
-        "- 각 줄은 반드시 { 로 시작하고 } 로 끝나야 한다.\n"
-        "- 5줄만 출력. 빈 줄/여분 줄/불릿/번호/코드펜스 금지.\n"
-        "- 마커 밖에는 아무것도 쓰지 마라.\n"
+        "- 출력은 반드시 단 한 번의 마커 구간만 사용한다(아래 마커 1회만).\n"
+        "- NDJSON: 각 줄은 반드시 { 로 시작하고 } 로 끝난다. 총 5줄만 출력. 빈 줄/불릿/번호/코드펜스/추가 마커 금지.\n"
+        "- 마커 밖에는 어떤 텍스트도 쓰지 마라.\n"
     )
-    stricter = (
-        "- RETRY MODE: 위 제약을 어기면 실패로 간주한다. 반드시 준수하라.\n"
-    ) if retry else ""
+    stricter = "- RETRY MODE: 위 제약 위반 시 실패로 간주. 반드시 준수.\n" if retry else ""
 
     return (
-        "아래 맥락을 바탕으로 한국 시장에 맞춘 신사업 아이디어를 정확히 5개 생성해.\n"
-        "- 출력 형식: NDJSON (각 줄에 JSON 객체 1개, 총 5줄)\n"
+        "아래 맥락을 바탕으로 한국 시장에 맞춘 디스플레이 및 인접 산업 중심의 신사업 아이디어를 정확히 5개 생성해.\n"
+        "- 출력 형식: NDJSON (줄당 JSON 1개, 총 5줄)\n"
         "- 서로 다른 타깃/도메인/채널/BM으로 다양화. " + domain_text + "\n"
         "- 각 필드는 스키마와 길이 제한을 지킬 것(과도한 장문 금지). null/빈 문자열 금지.\n"
         + strict + stricter +
@@ -318,23 +335,17 @@ def main():
         max_tokens_cfg = 1800
 
     if api_key and len(api_key) > 20:
-        # 1) NDJSON 1차
-        try:
-            text = call_gemini(api_key, build_prompt_ndjson(ctx, retry=False), max_tokens=max_tokens_cfg, temperature=0.15)
-            dump_debug(text, tag="ndjson_try1")
-            arr = parse_ndjson_marked(text)
-            if isinstance(arr, list):
-                ideas = arr
-            # 2) NDJSON 2차(엄격 모드)
-            if not ideas:
-                print("[WARN] NDJSON 파싱 실패 → 2차 엄격 모드")
-                text2 = call_gemini(api_key, build_prompt_ndjson(ctx, retry=True), max_tokens=max_tokens_cfg, temperature=0.1)
-                dump_debug(text2, tag="ndjson_try2")
-                arr2 = parse_ndjson_marked(text2)
-                if isinstance(arr2, list):
-                    ideas = arr2
-        except Exception as e:
-            print(f"[WARN] NDJSON 생성 실패: {e}")
+        # NDJSON 1차
+        text = call_gemini(api_key, build_prompt_ndjson(ctx, retry=False), max_tokens=max_tokens_cfg, temperature=0.15)
+        dump_debug(text, tag="ndjson_try1")
+        arr = parse_ndjson_marked(text, need=5)
+        
+        # NDJSON 2차(엄격 모드)
+        if not (arr and isinstance(arr, list)):
+            print("[WARN] NDJSON 파싱 실패 → 2차 엄격 모드")
+            text2 = call_gemini(api_key, build_prompt_ndjson(ctx, retry=True), max_tokens=max_tokens_cfg, temperature=0.1)
+            dump_debug(text2, tag="ndjson_try2")
+            arr = parse_ndjson_marked(text2, need=5)
 
         # 3) 폴백: 단건 × N으로 부족분 채우기
         need = 5 - len(ideas)
