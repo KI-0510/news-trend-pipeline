@@ -21,16 +21,39 @@ def strip_code_fence(text: str) -> str:
 
 
 def extract_json_array(text: str):
-    # 텍스트에서 최초의 [ ... ] 배열만 뽑아 파싱 시도
+    """
+    코드펜스 제거 후 첫 [ ... ] 배열을 괄호 균형으로 안전 추출
+    """
     t = strip_code_fence(text)
-    m = re.search(r"($.*$)", t, re.S)
-    if not m:
+    
+    start = t.find("[")
+    
+    if start == -1:
         return None
+    
+    depth, end = 0, -1
+    
+    for i in range(start, len(t)):
+        ch = t[i]
+        
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    
+    if end == -1:
+        return None
+    
+    payload = t[start:end+1]
+    
     try:
-        return json.loads(m.group(1))
+        return json.loads(payload)
     except Exception:
         return None
-
+        
 
 def normalize_list_field(v):
     # 문자열이면 한 줄 리스트로, None이면 빈 리스트로
