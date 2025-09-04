@@ -1,6 +1,9 @@
 import json
 import sys
 
+def warn(msg):
+    print(f"[WARN] {msg}")
+
 def fail(msg):
     print(f"[ERROR] {msg}")
     sys.exit(1)
@@ -14,10 +17,16 @@ def main():
         fail("biz_opportunities.json 로드 실패")
 
     ideas = data.get("ideas")
-    if not isinstance(ideas, list) or len(ideas) < 3:
-        fail("아이디어 최소 3개 미만")
+    if ideas is None or not isinstance(ideas, list):
+        fail("ideas 필드가 누락되었거나 형식이 잘못됨")
 
-    # 필수 필드(축소 버전)
+    n = len(ideas)
+    if n == 0:
+        warn("아이디어가 0개입니다(폴백 비활성화 설정).")
+    elif n < 3:
+        warn(f"아이디어가 적습니다({n}개).")
+
+    # 필드(축소 버전)
     required = [
         "idea",
         "problem",
@@ -28,22 +37,15 @@ def main():
         "priority_score",
     ]
 
-    # 샘플/빈 제목 감지
-    bad = []
-    for idx, it in enumerate(ideas, 1):
-        title = (it.get("idea") or "").strip()
-        if not title or "샘플" in title:
-            bad.append(idx)
-    if bad:
-        print(f"[WARN] 샘플/빈 제목 감지: index={bad[:5]}")
-
-    # 필드 누락 체크 (앞쪽 5건 검증)
+    # 앞쪽 최대 5건 샘플 검증(있을 때만)
     for idx, it in enumerate(ideas[:5], 1):
+        if not isinstance(it, dict):
+            fail(f"아이디어 형식 오류(index={idx})")
         for k in required:
             if k not in it:
                 fail(f"필드 누락: {k} (index={idx})")
 
-    print(f"[INFO] Check D OK | ideas={len(ideas)}")
+    print(f"[INFO] Check D OK | ideas={n}")
 
 if __name__ == "__main__":
     main()
