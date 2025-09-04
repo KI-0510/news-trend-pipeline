@@ -26,7 +26,7 @@ def load_data():
     ts       = load_json("outputs/trend_timeseries.json", {"daily":[]})
     insights = load_json("outputs/trend_insights.json", {"summary": "", "top_topics": [], "evidence":{}})
     opps     = load_json("outputs/biz_opportunities.json", {"ideas":[]})
-eeee
+
     meta_path = latest("data/news_meta_*.json")
     meta_items = load_json(meta_path, []) if meta_path else[]
 
@@ -308,96 +308,3 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
                              
 
-# ---------- 리포트 생성 ----------
-def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="outputs/report.md"):
-    klist = keywords.get("keywords", [])[:15]
-    tlist = topics.get("topics", [])
-    daily = ts.get("daily", [])
-    summary = insights.get("summary", "").strip()
-
-    ideas = opps.get("ideas", [])[:5]
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    lines =[]
-
-    lines.append(f"# Weekly/New Biz Report ({today})\n")
-    lines.append("## Executive Summary\n")
-    lines.append("- 이번 기간 핵심 토픽과 키워드, 주요 시사점을 요약합니다.\n")
-    if summary:
-        lines.append(summary + "\n")
-
-    lines.append("## Key Metrics\n")
-    lines.append(f"- 문서 수: {keywords.get('stats', {}).get('num_docs', 'N/A')}")
-    lines.append(f"- 키워드 수(상위): {len(klist)}")
-    lines.append(f"- 토픽 수: {len(tlist)}")
-    lines.append(f"- 시계열 데이터 일자 수: {len(daily)}\n")
-
-    lines.append("## Top Keywords\n")
-    if klist:
-        lines.append("| Rank | Keyword | Score |")
-        lines.append("|---:|---|---:|")
-        for i, k in enumerate(klist, 1):
-            lines.append(f"| {i} | {k['keyword']} | {round(float(k['score']), 3)} |")
-    else:
-        lines.append("- (데이터 없음)")
-    lines.append(f"\n![Top Keywords]({fig_dir}/top_keywords.png)\n")
-    lines.append(f"![Keyword Network]({fig_dir}/keyword_network.png)\n")
-
-    lines.append("## Topics\n")
-    if tlist:
-        for t in tlist:
-            words = ", ".join([w["word"] for w in t.get("top_words", [])[:6]])
-            lines.append(f"- Topic #{t.get('topic_id')}: {words}")
-    else:
-        lines.append("- (데이터 없음)")
-    lines.append(f"\n![Topics]({fig_dir}/topics.png)\n")
-
-    lines.append("## Trend\n")
-    lines.append("- 최근 14~30일 기사 수 추세와 7일 이동평균선을 제공합니다.")
-    lines.append(f"\n![Timeseries]({fig_dir}/timeseries.png)\n")
-qwfqw
-qwf
-qwf
-qwf
-
-qwfwqfwq
-
-
-
-
-
-
-
-
-
-
-
-qwf
-qwf
-
-
-
-
-
-
-
-
-
-
-
-qwf
-qwf
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-qwf
