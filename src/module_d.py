@@ -16,6 +16,7 @@ def load_json(path):
 def strip_code_fence(text: str) -> str:
     return re.sub(r"^```\s*\w*\s*\n|```\s*\n?", "", text.strip(), flags=re.M)
 
+import json
 
 def extract_json_array(text: str):
     t = strip_code_fence(text)
@@ -24,9 +25,10 @@ def extract_json_array(text: str):
     
     if start == -1:
         return None
-    
-    depth, end = 0, -1
-    
+
+    depth = 0
+    end = -1
+
     for i in range(start, len(t)):
         ch = t[i]
         
@@ -37,10 +39,10 @@ def extract_json_array(text: str):
             if depth == 0:
                 end = i
                 break
-    
+
     if end == -1:
         return None
-    
+
     payload = t[start:end+1]
     
     try:
