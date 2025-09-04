@@ -262,6 +262,8 @@ def main():
         f"ts_days={len(ts.get('daily', []))} | "
         f"경과(초)={round(time.time()-t0, 2)}"
     )
+    print(f"[INFO] SUMMARY | C | topics={len(lda.get('topics', []))} ts_days={len(ts.get('daily', []))} insight_len={len(insight_text)}")
+
 
 
 if __name__ == "__main__":
