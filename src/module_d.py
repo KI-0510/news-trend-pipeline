@@ -195,6 +195,9 @@ def call_gemini_array(api_key, prompt, max_tokens=1800, temperature=0.3):
             "response_mime_type": "application/json"
         }
     )
+    text = (getter(resp, "text", None) or "").strip
+    print("===API응답===")
+    print(text)
     return (getattr(resp, "text", None) or "").strip()
 
 def call_gemini_one(api_key, prompt_one, max_tokens=820, temperature=0.3):
