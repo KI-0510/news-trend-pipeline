@@ -4,7 +4,7 @@ import re
 import time
 import google.generativeai as genai
 
-# ---------- 유틸 ----------
+# ---------- 공통 유틸 ----------
 
 def load_json(path):
     try:
@@ -14,98 +14,35 @@ def load_json(path):
         return None
 
 def strip_code_fence(text: str) -> str:
-    # ```json ... ``` / ``` ... ``` 형태 코드펜스 제거(앞뒤 모두)
     t = (text or "").strip()
     t = re.sub(r"^```[\t ]*\w*[\t ]*\n", "", t, flags=re.M)   # 시작 펜스
     t = re.sub(r"\n```[\t ]*$", "", t, flags=re.M)            # 끝 펜스
     return t.strip()
 
-def clean_json_text(t: str) -> str:
-    # 스마트 쿼트 → ASCII, 제어문자 제거, 트레일링 콤마 정리
-    t = strip_code_fence(t)
-    # 스마트쿼트/한글따옴표 통일
-    t = t.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
-    # 제어문자 제거(줄바꿈/탭 제외)
-    t = re.sub(r"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u2028\u2029]", "", t)
-    # 트레일링 콤마 제거: }, ] 앞의 콤마
-    t = re.sub(r",\s*(\}|\])", r"\1", t)
-    # BOM 제거
-    t = t.lstrip("\ufeff")
-    return t.strip()
+def now_ts():
+    import time as _t
+    return _t.strftime("%Y%m%dT%H%M%SZ", _t.gmtime())
 
-def extract_balanced_array(t: str):
-    start = t.find("[")
-    if start == -1:
-        return None
-    depth, end = 0, -1
-    for i in range(start, len(t)):
-        ch = t[i]
-        if ch == "[":
-            depth += 1
-        elif ch == "]":
-            depth -= 1
-            if depth == 0:
-                end = i
-                break
-    if end == -1:
-        return None
-    payload = t[start:end+1]
+def dump_debug(text: str, tag="ndjson"):
     try:
-        return json.loads(payload)
-    except Exception:
-        return None
-
-def extract_ideas_any(text: str):
-    """
-    1) 전체를 파싱 시도
-      - 리스트면 그대로
-      - 객체면 ideas 배열 꺼내기
-    2) 균형괄호로 첫 배열 추출
-    3) "ideas": [ ... ] 배열만 정규식으로 뽑기
-    """
-    t = clean_json_text(text)
-
-    # 1) 전체 파싱
-    try:
-        obj = json.loads(t)
-        if isinstance(obj, list):
-            return obj
-        if isinstance(obj, dict) and isinstance(obj.get("ideas"), list):
-            return obj["ideas"]
+        os.makedirs("outputs/debug", exist_ok=True)
+        fp = f"outputs/debug/module_d_raw_{tag}_{now_ts()}.txt"
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(text or "")
+        print(f"[INFO] raw dump: {fp}")
     except Exception:
         pass
 
-    # 2) 첫 배열 균형 추출
-    arr = extract_balanced_array(t)
-    if isinstance(arr, list):
-        return arr
-
-    # 3) "ideas": [ ... ] 패턴 추출(균형 기반)
-    m = re.search(r'"ideas"\s*:\s*\[', t)
-    if m:
-        start = m.end() - 1  # '[' 위치
-        depth, end = 0, -1
-        for i in range(start, len(t)):
-            if t[i] == "[":
-                depth += 1
-            elif t[i] == "]":
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-        if end != -1:
-            payload = t[start:end+1]
-            try:
-                ideas = json.loads(payload)
-                if isinstance(ideas, list):
-                    return ideas
-            except Exception:
-                pass
-
-    return None
+# 스마트쿼트/제어문자/트레일링 콤마 정리
+def clean_json_text(t: str) -> str:
+    t = strip_code_fence(t)
+    t = t.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
+    t = re.sub(r"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u2028\u2029]", "", t)
+    t = re.sub(r",\s*(\}|\])", r"\1", t)
+    t = t.lstrip("\ufeff")
+    return t.strip()
 
 def normalize_list_field(v):
-    # 문자열이면 한 줄 리스트로, None이면 빈 리스트로
     if v is None:
         return []
     if isinstance(v, list):
@@ -116,36 +53,32 @@ def normalize_list_field(v):
             return []
         parts = [p.strip("-•* \t") for p in re.split(r"[\n;,]+|•|-|\*", s) if p.strip()]
         return parts if parts else [s]
-    # 그 외 타입은 문자열 변환 후 리스트로
     return [str(v)]
 
 def postprocess_ideas(ideas):
-    # 필수 필드 보정 + 중복 제거 + 점수 정리
     required = ["idea", "problem", "target_customer", "value_prop",
                 "solution", "poc_plan", "risks", "roadmap_3m", "metrics", "priority_score"]
     seen, out = set(), []
     for it in ideas:
         if not isinstance(it, dict):
             continue
-        # 빠진 키 기본값 채우기
         for k in required:
             it.setdefault(k, "" if k != "priority_score" else 3.0)
-        # 리스트 정규화
         for k in ["solution", "poc_plan", "risks", "metrics"]:
             it[k] = normalize_list_field(it.get(k))
-        # 점수 보정
         try:
             s = float(it.get("priority_score", 3))
         except Exception:
             s = 3.0
         it["priority_score"] = max(1.0, min(5.0, round(s, 1)))
         title = (it.get("idea") or "").strip()
+        if not title:
+            continue
         key = title.lower()
-        if not title or key in seen:
+        if key in seen:
             continue
         seen.add(key)
         out.append(it)
-    # 우선순위 점수 내림차순
     out = sorted(out, key=lambda x: x.get("priority_score", 0), reverse=True)
     return out
 
@@ -180,44 +113,73 @@ def compact_context():
         "insight_hint": summary
     }
 
-# ---------- Gemini 호출 ----------
+# ---------- LLM 호출 ----------
 
-def call_gemini_array(api_key, prompt, max_tokens=1800, temperature=0.3):
+def call_gemini(api_key, prompt, max_tokens=1800, temperature=0.2):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
-    # 스키마 미사용(일부 SDK 미지원 이슈 회피), JSON MIME만 강제
     resp = model.generate_content(
         prompt,
         generation_config={
             "max_output_tokens": max_tokens,
             "temperature": temperature,
             "top_p": 0.9,
-            "response_mime_type": "application/json"
-        }
-    )
-    text = (getter(resp, "text", None) or "").strip
-    print("===API응답===")
-    print(text)
-    return (getattr(resp, "text", None) or "").strip()
-
-def call_gemini_one(api_key, prompt_one, max_tokens=820, temperature=0.3):
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    resp = model.generate_content(
-        prompt_one,
-        generation_config={
-            "max_output_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-            "response_mime_type": "application/json"
+            "response_mime_type": "text/plain"  # 텍스트로 받아 NDJSON 파싱
         }
     )
     return (getattr(resp, "text", None) or "").strip()
 
-def build_prompt_array(ctx, mode="array"):
+# ---------- NDJSON 마커 파싱 ----------
+
+MARK_START = "<<<NDJSON>>>"
+MARK_END = "<<<END>>>"
+
+def parse_ndjson_marked(text: str):
     """
-    mode="array": 최종 출력이 JSON 배열([]) 5개
-    mode="object": 최종 출력이 {"ideas":[...]} 5개
+    마커 사이 NDJSON을 라인 단위로 파싱.
+    성공 시 list[dict] 반환, 실패 시 None.
+    """
+    if not text:
+        return None
+    t = strip_code_fence(text)
+    s = t.find(MARK_START)
+    e = t.rfind(MARK_END)
+    if s == -1 or e == -1 or e <= s:
+        return None
+    payload = t[s + len(MARK_START):e].strip()
+    if not payload:
+        return None
+
+    ideas = []
+    for line in payload.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # 마커/번호/불릿 같은 잡텍스트 제거 시도
+        line = re.sub(r"^[\-\*\d\.\)\s]+", "", line)
+        cj = clean_json_text(line)
+        try:
+            obj = json.loads(cj)
+            if isinstance(obj, dict):
+                ideas.append(obj)
+        except Exception:
+            # 라인 내부에 객체가 둘 들어가는 등 비정형 대응: 중괄호 균형으로 첫 객체만 추출
+            m = re.search(r"(\{.*\})", cj, re.S)
+            if m:
+                try:
+                    obj = json.loads(clean_json_text(m.group(1)))
+                    if isinstance(obj, dict):
+                        ideas.append(obj)
+                except Exception:
+                    pass
+    return ideas if ideas else None
+
+# ---------- 프롬프트 ----------
+
+def build_prompt_ndjson(ctx):
+    """
+    한 번에 5개 객체를 NDJSON(각 줄 JSON 한 개)로 생성.
+    마커(MARK_START ~ MARK_END) 사이에만 출력.
     """
     schema_hint = {
         "idea": "아이디어 한 줄 제목",
@@ -231,35 +193,30 @@ def build_prompt_array(ctx, mode="array"):
         "metrics": ["KPI 3-5개"],
         "priority_score": 3.5
     }
-
     try:
         cfg = json.load(open("config.json", "r", encoding="utf-8"))
         domain_hints = cfg.get("domain_hints", [])
     except Exception:
         domain_hints = []
-
     domain_text = (
         f"(가능하면 서로 다른 도메인 반영: {', '.join(domain_hints)})"
         if domain_hints else "(서로 다른 타깃/도메인으로 다양화)"
     )
-
-    header = (
+    return (
         "아래 맥락(토픽, 키워드, 시계열, 요약)을 바탕으로 한국 시장에 맞춘 신사업 아이디어를 정확히 5개 생성해.\n"
-        "- 반드시 순수 JSON만 반환. 코드펜스/설명/서문/후문 금지.\n"
+        "- 출력 형식은 NDJSON: 각 줄에 JSON 객체 1개(총 5줄)만 출력.\n"
+        "- 반드시 마커 사이에만 출력. 마커 밖에는 아무것도 쓰지 마.\n"
         "- 서로 다른 타깃/도메인/채널/BM으로 다양화. " + domain_text + "\n"
         "- 각 필드는 스키마와 길이 제한을 지킬 것(과도한 장문 금지). null/빈 문자열 금지.\n"
-    )
-
-    if mode == "array":
-        footer = "출력: 아이디어 5개 객체로 이뤄진 JSON 배열([])만 반환"
-    else:
-        footer = '출력: {"ideas":[ 아이디어 5개 객체 ]} 형태의 JSON 객체만 반환'
-
-    return (
-        header
-        + f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
-        + f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
-        + footer
+        f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
+        f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
+        f"{MARK_START}\n"
+        "{...}\n"
+        "{...}\n"
+        "{...}\n"
+        "{...}\n"
+        "{...}\n"
+        f"{MARK_END}"
     )
 
 def build_prompt_one(ctx, used_titles=None, used_targets=None):
@@ -278,15 +235,15 @@ def build_prompt_one(ctx, used_titles=None, used_targets=None):
     used_titles = sorted(list(used_titles or []))[:10]
     used_targets = sorted(list(used_targets or []))[:10]
     guard = {"used_titles": used_titles, "used_targets": used_targets}
-
     return (
-        "아래 맥락을 바탕으로 신사업 아이디어 1개만 JSON 객체로 반환해. 코드펜스/설명 금지, JSON만.\n"
+        "아래 맥락을 바탕으로 신사업 아이디어 1개만 JSON 객체로 출력해.\n"
+        f"- 반드시 {MARK_START} 와 {MARK_END} 사이에 순수 JSON만 1줄로 출력.\n"
         "- 이미 생성된 아이디어(제목/타깃)와 겹치지 않게 새로운 타깃/도메인/채널/BM 선택.\n"
         "- 필수 필드 모두 포함. null/빈 문자열 금지.\n"
         f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
         f"중복 회피 힌트: {json.dumps(guard, ensure_ascii=False)}\n"
         f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
-        "출력: JSON 객체"
+        f"{MARK_START}{{ JSON 객체 }}{MARK_END}"
     )
 
 # ---------- 메인 ----------
@@ -297,7 +254,7 @@ def main():
     ctx = compact_context()
     ideas = []
 
-    # config에서 llm.max_output_tokens 읽기(없으면 1800)
+    # config에서 llm.max_output_tokens
     try:
         cfg_all = json.load(open("config.json", "r", encoding="utf-8"))
         max_tokens_cfg = int(cfg_all.get("llm", {}).get("max_output_tokens", 1800))
@@ -305,65 +262,66 @@ def main():
         max_tokens_cfg = 1800
 
     if api_key and len(api_key) > 20:
-        # 1) 배열 한 번에 생성(+재시도 2단계: 배열→객체)
-        arr = None
+        # 1) NDJSON 한 방에(마커) 시도
         try:
-            # 1차: 배열([])로 유도
-            text = call_gemini_array(api_key, build_prompt_array(ctx, mode="array"),
-                                     max_tokens=max_tokens_cfg, temperature=0.3)
-            arr = extract_ideas_any(text)
-            if not (arr and isinstance(arr, list)):
-                print("[WARN] 1차 배열 파싱 실패 → 재시도(객체 모드)")
-                # 2차: {"ideas":[...]} 객체로 유도
-                text2 = call_gemini_array(api_key, build_prompt_array(ctx, mode="object"),
-                                          max_tokens=max_tokens_cfg, temperature=0.25)
-                arr = extract_ideas_any(text2)
+            text = call_gemini(api_key, build_prompt_ndjson(ctx), max_tokens=max_tokens_cfg, temperature=0.2)
+            dump_debug(text, tag="ndjson_try1")
+            arr = parse_ndjson_marked(text)
+            if isinstance(arr, list):
+                ideas = arr
+            else:
+                print("[WARN] NDJSON 파싱 실패 → 2차 시도")
+                text2 = call_gemini(api_key, build_prompt_ndjson(ctx), max_tokens=max_tokens_cfg, temperature=0.15)
+                dump_debug(text2, tag="ndjson_try2")
+                arr = parse_ndjson_marked(text2)
+                if isinstance(arr, list):
+                    ideas = arr
         except Exception as e:
-            print(f"[WARN] 배열 생성 실패: {e}")
+            print(f"[WARN] NDJSON 생성 실패: {e}")
 
-        if arr and isinstance(arr, list):
-            ideas = arr
-        else:
-            print("[WARN] 배열 JSON 파싱 실패 → 폴백 모드(단건 x 5)")
-
-        # 2) 폴백: 단건 아이디어 생성(중복 제거)
-        if not ideas or len(ideas) < 3:
+        # 2) 폴백: 단건 × N으로 채우기
+        need = 5 - len(ideas)
+        if need > 0:
             uniq_titles, uniq_targets = set(), set()
-
-            # 기존 아이디어에서 선점된 타이틀/타깃 수집
             for it in ideas:
                 t = (it.get("idea") or "").strip().lower()
                 c = (it.get("target_customer") or "").strip().lower()
-                if t:
-                    uniq_titles.add(t)
-                if c:
-                    uniq_targets.add(c)
+                if t: uniq_titles.add(t)
+                if c: uniq_targets.add(c)
 
-            for _ in range(10):
-                one_text = call_gemini_one(
-                    api_key,
-                    build_prompt_one(ctx, uniq_titles, uniq_targets),
-                    max_tokens=820,
-                    temperature=0.3
-                )
-                cleaned = strip_code_fence(one_text)
-                m = re.search(r"(\{.*\})", cleaned, re.S)
-                if not m:
-                    continue
-                try:
-                    obj = json.loads(clean_json_text(m.group(1)))
-                except Exception:
-                    continue
-                if isinstance(obj, dict):
-                    title = (obj.get("idea") or "").strip().lower()
-                    cust = (obj.get("target_customer") or "").strip().lower()
-                    if title and title not in uniq_titles and cust not in uniq_targets:
-                        ideas.append(obj)
-                        uniq_titles.add(title)
-                        if cust:
-                            uniq_targets.add(cust)
+            for _ in range(12):
                 if len(ideas) >= 5:
                     break
+                one_text = call_gemini(
+                    api_key,
+                    build_prompt_one(ctx, uniq_titles, uniq_targets),
+                    max_tokens=820, temperature=0.2
+                )
+                dump_debug(one_text, tag="one")
+                # 마커 구간만 추출 후 파싱(1줄 JSON)
+                s = one_text.find(MARK_START); e = one_text.rfind(MARK_END)
+                if s == -1 or e == -1 or e <= s:
+                    continue
+                line = one_text[s + len(MARK_START):e].strip()
+                line = clean_json_text(line)
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    # 백업: 중괄호 첫 객체만
+                    m = re.search(r"(\{.*\})", line, re.S)
+                    if not m:
+                        continue
+                    try:
+                        obj = json.loads(clean_json_text(m.group(1)))
+                    except Exception:
+                        continue
+                if isinstance(obj, dict):
+                    title = (obj.get("idea") or "").strip().lower()
+                    cust  = (obj.get("target_customer") or "").strip().lower()
+                    if title and (title not in uniq_titles) and (cust not in uniq_targets):
+                        ideas.append(obj)
+                        uniq_titles.add(title)
+                        if cust: uniq_targets.add(cust)
     else:
         print("[WARN] GEMINI_API_KEY 비정상 → DRY 아이디어 3개 생성")
         ideas = [
@@ -379,8 +337,43 @@ def main():
     ideas = postprocess_ideas(ideas)
     if len(ideas) > 5:
         ideas = ideas[:5]
+
+    if len(ideas) < 5 and api_key and len(api_key) > 20:
+        # 아주 마지막 보강 라운드
+        uniq_titles = { (it.get("idea") or "").strip().lower() for it in ideas }
+        uniq_targets = { (it.get("target_customer") or "").strip().lower() for it in ideas }
+        for _ in range(8):
+            if len(ideas) >= 5:
+                break
+            one_text = call_gemini(
+                api_key,
+                build_prompt_one(ctx, uniq_titles, uniq_targets),
+                max_tokens=820, temperature=0.2
+            )
+            dump_debug(one_text, tag="one_fill")
+            s = one_text.find(MARK_START); e = one_text.rfind(MARK_END)
+            if s == -1 or e == -1 or e <= s:
+                continue
+            line = clean_json_text(one_text[s + len(MARK_START):e].strip())
+            try:
+                obj = json.loads(line)
+            except Exception:
+                m = re.search(r"(\{.*\})", line, re.S)
+                if not m:
+                    continue
+                try:
+                    obj = json.loads(clean_json_text(m.group(1)))
+                except Exception:
+                    continue
+            if isinstance(obj, dict):
+                title = (obj.get("idea") or "").strip().lower()
+                cust  = (obj.get("target_customer") or "").strip().lower()
+                if title and (title not in uniq_titles) and (cust not in uniq_targets):
+                    ideas.append(obj)
+                    uniq_titles.add(title)
+                    if cust: uniq_targets.add(cust)
+
     if len(ideas) < 3:
-        # 마지막 안전장치: 최소 3개 보장
         needed = 3 - len(ideas)
         for i in range(needed):
             ideas.append({
