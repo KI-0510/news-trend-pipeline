@@ -354,3 +354,8 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
     lines.append("## Trend\n")
     lines.append("- 최근 14~30일 기사 수 추세와 7일 이동평균선을 제공합니다.")
     lines.append(f"\n![Timeseries]({fig_dir}/timeseries.png)\n")
+qwfqw
+qwf
+qwf
+qwf
+
