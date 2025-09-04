@@ -5,8 +5,6 @@ import time
 import google.generativeai as genai
 
 
-# ---------- 유틸 ----------
-
 def load_json(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -16,16 +14,12 @@ def load_json(path):
 
 
 def strip_code_fence(text: str) -> str:
-    # json ... 같은 코드 펜스 제거
     return re.sub(r"^```\s*\w*\s*\n|```\s*\n?", "", text.strip(), flags=re.M)
 
 
 def extract_json_array(text: str):
-    """
-    코드펜스 제거 후 첫 [ ... ] 배열을 괄호 균형으로 안전 추출
-    """
     t = strip_code_fence(text)
-    
+
     start = t.find("[")
     
     if start == -1:
@@ -53,10 +47,9 @@ def extract_json_array(text: str):
         return json.loads(payload)
     except Exception:
         return None
-        
+
 
 def normalize_list_field(v):
-    # 문자열이면 한 줄 리스트로, None이면 빈 리스트로
     if v is None:
         return []
     if isinstance(v, list):
@@ -65,28 +58,25 @@ def normalize_list_field(v):
         s = v.strip()
         if not s:
             return []
-        # 문장부호/줄바꿈 기준으로 분할 시도
         parts = [p.strip("-• \t") for p in re.split(r"[\n;]|•|-|•", s) if p.strip()]
         return parts if parts else [s]
-    # 그 외 타입은 문자열 변환 후 리스트로
     return [str(v)]
 
 
 def postprocess_ideas(ideas):
-    # 필수 필드 보정 + 중복 제거 + 점수 정리
-    required = ["idea", "problem", "target_customer", "value_prop", "solution", "poc_plan", "risks", "roadmap_3m", "metrics", "priority_score"]
+    required = [
+        "idea", "problem", "target_customer", "value_prop", 
+        "solution", "poc_plan", "risks", "roadmap_3m", "metrics", "priority_score"
+    ]
     seen, out = set(), []
 
     for it in ideas:
         if not isinstance(it, dict):
             continue
-        # 빠진 키 기본값 채우기
         for k in required:
             it.setdefault(k, "" if k != "priority_score" else 3.0)
-        # 리스트여야 할 필드 정규화
         for k in ["solution", "poc_plan", "risks", "metrics"]:
             it[k] = normalize_list_field(it.get(k))
-        # 점수 보정
         try:
             s = float(it.get("priority_score", 3))
         except Exception:
@@ -98,7 +88,6 @@ def postprocess_ideas(ideas):
             continue
         seen.add(key)
         out.append(it)
-    # 우선순위 점수 내림차순
     out = sorted(out, key=lambda x: x.get("priority_score", 0), reverse=True)
     return out
 
@@ -135,27 +124,55 @@ def compact_context():
     }
 
 
-# ---------- Gemini 호출 ----------
-
-def call_gemini_array(api_key, prompt, max_tokens=2048, temperature=0.5):
+def call_gemini_array(api_key, prompt, max_tokens=2040, temperature=0.4):
     genai.configure(api_key=api_key)
+    
     model = genai.GenerativeModel("gemini-1.5-flash")
+    
+    response_schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "required": [
+                "idea", "problem", "target_customer", "value_prop", 
+                "solution", "poc_plan", "risks", "roadmap_3m", "metrics", "priority_score"
+            ],
+            "properties": {
+                "idea": {"type": "string"},
+                "problem": {"type": "string"},
+                "target_customer": {"type": "string"},
+                "value_prop": {"type": "string"},
+                "solution": {"type": "array", "items": {"type": "string"}},
+                "poc_plan": {"type": "array", "items": {"type": "string"}},
+                "risks": {"type": "array", "items": {"type": "string"}},
+                "roadmap_3m": {"type": "array", "items": {"type": "string"}},
+                "metrics": {"type": "array", "items": {"type": "string"}},
+                "priority_score": {"type": "number"}
+            }
+        },
+        "minItems": 3,
+        "maxItems": 5
+    }
+    
     resp = model.generate_content(
         prompt,
         generation_config={
             "max_output_tokens": max_tokens,
             "temperature": temperature,
             "top_p": 0.9,
-            "response_mime_type": "application/json"  # JSON 강제
+            "response_mime_type": "application/json",
+            "response_schema": response_schema
         }
     )
+    
     return (getattr(resp, "text", None) or "").strip()
 
 
-def call_gemini_one(api_key, prompt_one, max_tokens=768, temperature=0.5):
-    # 아이디어 1개씩 생성(폴백용)
+def call_gemini_one(api_key, prompt_one, max_tokens=820, temperature=0.4):
     genai.configure(api_key=api_key)
+    
     model = genai.GenerativeModel("gemini-1.5-flash")
+    
     resp = model.generate_content(
         prompt_one,
         generation_config={
@@ -165,6 +182,7 @@ def call_gemini_one(api_key, prompt_one, max_tokens=768, temperature=0.5):
             "response_mime_type": "application/json"
         }
     )
+    
     return (getattr(resp, "text", None) or "").strip()
 
 
@@ -182,22 +200,21 @@ def build_prompt_array(ctx):
         "priority_score": 3.5
     }
 
-    # 도메인 힌트가 있을 경우 다양화 가이드
     try:
         cfg = json.load(open("config.json", "r", encoding="utf-8"))
         domain_hints = cfg.get("domain_hints", [])
     except Exception:
-        domain_hints =[]
+        domain_hints = []
 
     domain_text = (
         f"(가능하면 서로 다른 도메인 반영: {', '.join(domain_hints)})"
-        if domain_hints
-        else "(서로 다른 타깃/도메인으로 다양화)"
+        if domain_hints else "(서로 다른 타깃/도메인으로 다양화)"
     )
 
     return (
         "아래 맥락(토픽, 키워드, 시계열, 요약)을 바탕으로 한국 시장에 맞춘 신사업 아이디어를 정확히 5개 생성해.\n"
         "- 반드시 JSON 배열([])만 반환. 코드펜스/설명 금지.\n"
+        "- 배열 크기는 최대 5개, 최소 3개. 각 항목에 필수 필드 모두 포함. null/빈값 지양.\n"
         "- 서로 다른 타깃/도메인/채널/BM으로 다양화. " + domain_text + "\n"
         "- 각 필드는 스키마와 길이 제한을 지킬 것(과도한 장문 금지).\n"
         f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
@@ -220,8 +237,8 @@ def build_prompt_one(ctx, used_titles=None, used_targets=None):
         "priority_score": 3.5
     }
 
-    used_titles = sorted(list(used_titles or[]))[:10]
-    used_targets = sorted(list(used_targets or[]))[:10]
+    used_titles = sorted(list(used_titles or []))[:10]
+    used_targets = sorted(list(used_targets or []))[:10]
 
     guard = {
         "used_titles": used_titles,
@@ -230,6 +247,7 @@ def build_prompt_one(ctx, used_titles=None, used_targets=None):
 
     return (
         "아래 맥락을 바탕으로 신사업 아이디어 1개만 JSON 객체로 반환해. 코드펜스/설명 금지, JSON만.\n"
+        "- 배열 크기는 최대 5개, 최소 3개. 각 항목에 필수 필드 모두 포함. null/빈값 지양.\n"
         "- 이미 생성된 아이디어(제목/타깃)와 겹치지 않게 새로운 타깃/도메인/채널/BM 선택.\n"
         f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
         f"중복 회피 힌트: {json.dumps(guard, ensure_ascii=False)}\n"
@@ -238,8 +256,6 @@ def build_prompt_one(ctx, used_titles=None, used_targets=None):
     )
 
 
-# ---------- 메인 ----------
-
 def main():
     t0 = time.time()
     api_key = (os.getenv("GEMINI_API_KEY", "") or "").strip()
@@ -247,22 +263,40 @@ def main():
     ideas = []
 
     if api_key and len(api_key) > 20:
-        # 1) 배열 한 번에 생성 시도
+        arr = None
         try:
-            text = call_gemini_array(api_key, build_prompt_array(ctx), max_tokens=1536, temperature=0.5)
+            text = call_gemini_array(
+                api_key, 
+                build_prompt_array(ctx), 
+                max_tokens=1800, 
+                temperature=0.4
+            )
+            
             arr = extract_json_array(text)
-            if arr and isinstance(arr, list):
-                ideas = arr
-            else:
-                print("[WARN] 배열 JSON 파싱 실패 → 폴백 모드(단건 x 5)")
+            
+            if not (arr and isinstance(arr, list)):
+                print("[WARN] 1차 배열 파싱 실패 → 재시도")
+                
+                text2 = call_gemini_array(
+                    api_key, 
+                    build_prompt_array(ctx), 
+                    max_tokens=1800, 
+                    temperature=0.3
+                )
+                
+                arr = extract_json_array(text2)
+                
         except Exception as e:
-            print(f"[WARN] 배열 생성 실패: {e} → 폴백 모드로 진행")
-
-        # 2) 폴백: 단건 아이디어 5회 생성(중복 제거)
+            print(f"[WARN] 배열 생성 실패: {e}")
+        
+        if arr and isinstance(arr, list):
+            ideas = arr
+        else:
+            print("[WARN] 배열 JSON 파싱 실패 → 폴백 모드(단건 x 5)")
+        
         if not ideas or len(ideas) < 3:
             uniq_titles, uniq_targets = set(), set()
         
-            # 기존 아이디어에서 선점된 타이틀/타깃 수집
             for it in ideas:
                 t = (it.get("idea") or "").strip().lower()
                 c = (it.get("target_customer") or "").strip().lower()
@@ -286,7 +320,7 @@ def main():
                 if isinstance(obj, dict):
                     title = (obj.get("idea") or "").strip().lower()
                     cust = (obj.get("target_customer") or "").strip().lower()
-                    if title and title not in uniq_titles and cust not in uniq_targets:
+                    if title and title not in uniq_titles and (not cust or cust not in uniq_targets):
                         ideas.append(obj)
                         uniq_titles.add(title)
                         if cust:
@@ -304,7 +338,6 @@ def main():
     ideas = postprocess_ideas(ideas)
 
     if len(ideas) < 3:
-        # 마지막 안전장치: 최소 3개 보장
         needed = 3 - len(ideas)
         for i in range(needed):
             ideas.append({
