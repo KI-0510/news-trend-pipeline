@@ -26,7 +26,7 @@ def load_data():
     ts       = load_json("outputs/trend_timeseries.json", {"daily":[]})
     insights = load_json("outputs/trend_insights.json", {"summary": "", "top_topics": [], "evidence":{}})
     opps     = load_json("outputs/biz_opportunities.json", {"ideas":[]})
-
+eeee
     meta_path = latest("data/news_meta_*.json")
     meta_items = load_json(meta_path, []) if meta_path else[]
 
@@ -359,3 +359,45 @@ qwf
 qwf
 qwf
 
+qwfwqfwq
+
+
+
+
+
+
+
+
+
+
+
+qwf
+qwf
+
+
+
+
+
+
+
+
+
+
+
+qwf
+qwf
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+qwf
