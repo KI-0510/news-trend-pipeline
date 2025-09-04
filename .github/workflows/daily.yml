@@ -145,15 +145,17 @@ jobs:
           source .venv/bin/activate
           python src/check_e.py
         shell: bash
-      
+
+      # ✅ Commit & Push Outputs 단계
       - name: Commit & Push outputs
         run: |
           set -e
-          ts=$(date -u +'%Y%m%dT%H%M%SZ')
-
+          export TZ=Asia/Seoul
+          ts=$(date +'%Y%m%dT%H%M%S')KST   # 예: 20250904T223755KST
+          
           # 일자별 폴더 생성
           mkdir -p outputs/daily/$ts/fig
-          mkdir -p outputs/daily/$ts/debug   # ← 추가
+          mkdir -p outputs/daily/$ts/debug 
 
           # 리포트/분석 산출물 복사
           cp outputs/topics.json             outputs/daily/$ts/ || true
@@ -164,11 +166,14 @@ jobs:
           cp outputs/report.md               outputs/daily/$ts/ || true
           cp outputs/report.html             outputs/daily/$ts/ || true
 
+          # CSV 파일
+          cp outputs/*.csv                   outputs/daily/$ts/ || true
+
           # 그림 복사
           cp outputs/fig/*.png               outputs/daily/$ts/fig/ || true
 
-          # 디버그 덤프 복사
-          cp -r outputs/debug/*              outputs/daily/$ts/debug/ || true   # ← 추가
+          # 디버그 덤프 복사 (사업기회 도출에 대한 LLM 출력 텍스트 파일)
+          cp -r outputs/debug/*              outputs/daily/$ts/debug/ || true
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
