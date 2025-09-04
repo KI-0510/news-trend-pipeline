@@ -20,9 +20,20 @@ def strip_code_fence(text: str) -> str:
     t = re.sub(r"\n```[\t ]*$", "", t, flags=re.M)            # 끝 펜스
     return t.strip()
 
-def extract_json_array(text: str):
-    # 코드펜스 제거 후 첫 [ ... ] 배열을 괄호 균형으로 안전 추출
-    t = strip_code_fence(text)
+def clean_json_text(t: str) -> str:
+    # 스마트 쿼트 → ASCII, 제어문자 제거, 트레일링 콤마 정리
+    t = strip_code_fence(t)
+    # 스마트쿼트/한글따옴표 통일
+    t = t.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
+    # 제어문자 제거(줄바꿈/탭 제외)
+    t = re.sub(r"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u2028\u2029]", "", t)
+    # 트레일링 콤마 제거: }, ] 앞의 콤마
+    t = re.sub(r",\s*(\}|\])", r"\1", t)
+    # BOM 제거
+    t = t.lstrip("\ufeff")
+    return t.strip()
+
+def extract_balanced_array(t: str):
     start = t.find("[")
     if start == -1:
         return None
@@ -43,6 +54,55 @@ def extract_json_array(text: str):
         return json.loads(payload)
     except Exception:
         return None
+
+def extract_ideas_any(text: str):
+    """
+    1) 전체를 파싱 시도
+      - 리스트면 그대로
+      - 객체면 ideas 배열 꺼내기
+    2) 균형괄호로 첫 배열 추출
+    3) "ideas": [ ... ] 배열만 정규식으로 뽑기
+    """
+    t = clean_json_text(text)
+
+    # 1) 전체 파싱
+    try:
+        obj = json.loads(t)
+        if isinstance(obj, list):
+            return obj
+        if isinstance(obj, dict) and isinstance(obj.get("ideas"), list):
+            return obj["ideas"]
+    except Exception:
+        pass
+
+    # 2) 첫 배열 균형 추출
+    arr = extract_balanced_array(t)
+    if isinstance(arr, list):
+        return arr
+
+    # 3) "ideas": [ ... ] 패턴 추출(균형 기반)
+    m = re.search(r'"ideas"\s*:\s*\[', t)
+    if m:
+        start = m.end() - 1  # '[' 위치
+        depth, end = 0, -1
+        for i in range(start, len(t)):
+            if t[i] == "[":
+                depth += 1
+            elif t[i] == "]":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end != -1:
+            payload = t[start:end+1]
+            try:
+                ideas = json.loads(payload)
+                if isinstance(ideas, list):
+                    return ideas
+            except Exception:
+                pass
+
+    return None
 
 def normalize_list_field(v):
     # 문자열이면 한 줄 리스트로, None이면 빈 리스트로
@@ -70,7 +130,7 @@ def postprocess_ideas(ideas):
         # 빠진 키 기본값 채우기
         for k in required:
             it.setdefault(k, "" if k != "priority_score" else 3.0)
-        # 리스트여야 할 필드 정규화
+        # 리스트 정규화
         for k in ["solution", "poc_plan", "risks", "metrics"]:
             it[k] = normalize_list_field(it.get(k))
         # 점수 보정
@@ -122,59 +182,22 @@ def compact_context():
 
 # ---------- Gemini 호출 ----------
 
-def call_gemini_array(api_key, prompt, max_tokens=1800, temperature=0.4):
+def call_gemini_array(api_key, prompt, max_tokens=1800, temperature=0.3):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
-
-    # 스키마(길이 제약 제외) — 일부 SDK에서만 지원됨. 실패 시 자동 폴백
-    response_schema = {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "required": [
-                "idea","problem","target_customer","value_prop",
-                "solution","poc_plan","risks","roadmap_3m","metrics","priority_score"
-            ],
-            "properties": {
-                "idea": {"type":"string"},
-                "problem": {"type":"string"},
-                "target_customer": {"type":"string"},
-                "value_prop": {"type":"string"},
-                "solution": {"type":"array","items":{"type":"string"}},
-                "poc_plan": {"type":"array","items":{"type":"string"}},
-                "risks": {"type":"array","items":{"type":"string"}},
-                "roadmap_3m": {"type":"array","items":{"type":"string"}},
-                "metrics": {"type":"array","items":{"type":"string"}},
-                "priority_score": {"type":"number"}
-            },
-            "additionalProperties": False
+    # 스키마 미사용(일부 SDK 미지원 이슈 회피), JSON MIME만 강제
+    resp = model.generate_content(
+        prompt,
+        generation_config={
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": 0.9,
+            "response_mime_type": "application/json"
         }
-    }
+    )
+    return (getattr(resp, "text", None) or "").strip()
 
-    gen_conf = {
-        "max_output_tokens": max_tokens,
-        "temperature": temperature,
-        "top_p": 0.9,
-        "response_mime_type": "application/json"
-    }
-
-    text = ""
-    # 1) 스키마 포함 시도
-    try:
-        resp = model.generate_content(
-            prompt,
-            generation_config={**gen_conf, "response_schema": response_schema}
-        )
-        text = (getattr(resp, "text", None) or "").strip()
-    except Exception as e:
-        # 2) 스키마 미지원/에러 → 스키마 없이 다시 호출
-        print(f"[WARN] 구조화 스키마 비활성화: {e} → 스키마 없이 재호출")
-        resp = model.generate_content(prompt, generation_config=gen_conf)
-        text = (getattr(resp, "text", None) or "").strip()
-
-    return text
-
-def call_gemini_one(api_key, prompt_one, max_tokens=820, temperature=0.4):
+def call_gemini_one(api_key, prompt_one, max_tokens=820, temperature=0.3):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
     resp = model.generate_content(
@@ -188,7 +211,11 @@ def call_gemini_one(api_key, prompt_one, max_tokens=820, temperature=0.4):
     )
     return (getattr(resp, "text", None) or "").strip()
 
-def build_prompt_array(ctx):
+def build_prompt_array(ctx, mode="array"):
+    """
+    mode="array": 최종 출력이 JSON 배열([]) 5개
+    mode="object": 최종 출력이 {"ideas":[...]} 5개
+    """
     schema_hint = {
         "idea": "아이디어 한 줄 제목",
         "problem": "해결하려는 문제(2-3문장, 280자 이내)",
@@ -202,7 +229,6 @@ def build_prompt_array(ctx):
         "priority_score": 3.5
     }
 
-    # 도메인 힌트가 있을 경우 다양화 가이드
     try:
         cfg = json.load(open("config.json", "r", encoding="utf-8"))
         domain_hints = cfg.get("domain_hints", [])
@@ -214,15 +240,23 @@ def build_prompt_array(ctx):
         if domain_hints else "(서로 다른 타깃/도메인으로 다양화)"
     )
 
-    return (
+    header = (
         "아래 맥락(토픽, 키워드, 시계열, 요약)을 바탕으로 한국 시장에 맞춘 신사업 아이디어를 정확히 5개 생성해.\n"
-        "- 반드시 JSON 배열([])만 반환. 코드펜스/설명 금지.\n"
+        "- 반드시 순수 JSON만 반환. 코드펜스/설명/서문/후문 금지.\n"
         "- 서로 다른 타깃/도메인/채널/BM으로 다양화. " + domain_text + "\n"
-        "- 각 필드는 스키마와 길이 제한을 지킬 것(과도한 장문 금지).\n"
-        "- 배열 크기는 정확히 5개. 각 항목의 필수 필드를 모두 포함. null/빈 문자열 금지.\n"
-        f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
-        f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
-        "출력: 아이디어 5개 객체로 이뤄진 JSON 배열([])"
+        "- 각 필드는 스키마와 길이 제한을 지킬 것(과도한 장문 금지). null/빈 문자열 금지.\n"
+    )
+
+    if mode == "array":
+        footer = "출력: 아이디어 5개 객체로 이뤄진 JSON 배열([])만 반환"
+    else:
+        footer = '출력: {"ideas":[ 아이디어 5개 객체 ]} 형태의 JSON 객체만 반환'
+
+    return (
+        header
+        + f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
+        + f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
+        + footer
     )
 
 def build_prompt_one(ctx, used_titles=None, used_targets=None):
@@ -238,14 +272,9 @@ def build_prompt_one(ctx, used_titles=None, used_targets=None):
         "metrics": ["KPI 3-5개"],
         "priority_score": 3.5
     }
-
     used_titles = sorted(list(used_titles or []))[:10]
     used_targets = sorted(list(used_targets or []))[:10]
-
-    guard = {
-        "used_titles": used_titles,
-        "used_targets": used_targets
-    }
+    guard = {"used_titles": used_titles, "used_targets": used_targets}
 
     return (
         "아래 맥락을 바탕으로 신사업 아이디어 1개만 JSON 객체로 반환해. 코드펜스/설명 금지, JSON만.\n"
@@ -273,15 +302,19 @@ def main():
         max_tokens_cfg = 1800
 
     if api_key and len(api_key) > 20:
-        # 1) 배열 한 번에 생성(+재시도 1회)
+        # 1) 배열 한 번에 생성(+재시도 2단계: 배열→객체)
         arr = None
         try:
-            text = call_gemini_array(api_key, build_prompt_array(ctx), max_tokens=max_tokens_cfg, temperature=0.4)
-            arr = extract_json_array(text)
+            # 1차: 배열([])로 유도
+            text = call_gemini_array(api_key, build_prompt_array(ctx, mode="array"),
+                                     max_tokens=max_tokens_cfg, temperature=0.3)
+            arr = extract_ideas_any(text)
             if not (arr and isinstance(arr, list)):
-                print("[WARN] 1차 배열 파싱 실패 → 재시도")
-                text2 = call_gemini_array(api_key, build_prompt_array(ctx), max_tokens=max_tokens_cfg, temperature=0.3)
-                arr = extract_json_array(text2)
+                print("[WARN] 1차 배열 파싱 실패 → 재시도(객체 모드)")
+                # 2차: {"ideas":[...]} 객체로 유도
+                text2 = call_gemini_array(api_key, build_prompt_array(ctx, mode="object"),
+                                          max_tokens=max_tokens_cfg, temperature=0.25)
+                arr = extract_ideas_any(text2)
         except Exception as e:
             print(f"[WARN] 배열 생성 실패: {e}")
 
@@ -308,14 +341,14 @@ def main():
                     api_key,
                     build_prompt_one(ctx, uniq_titles, uniq_targets),
                     max_tokens=820,
-                    temperature=0.4
+                    temperature=0.3
                 )
                 cleaned = strip_code_fence(one_text)
                 m = re.search(r"(\{.*\})", cleaned, re.S)
                 if not m:
                     continue
                 try:
-                    obj = json.loads(m.group(1))
+                    obj = json.loads(clean_json_text(m.group(1)))
                 except Exception:
                     continue
                 if isinstance(obj, dict):
