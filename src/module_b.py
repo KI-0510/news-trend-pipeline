@@ -4,6 +4,7 @@ import glob
 import re
 import unicodedata
 import time
+import csv
 import string
 from collections import defaultdict
 from soynlp.normalizer import normalize, repeat_normalize, emoticon_normalize
@@ -214,6 +215,15 @@ def main():
             "stats": {"num_docs": len(docs)},
             "keywords": keywords
         }, f, ensure_ascii=False, indent=2)
+
+    # [CSV 추가 코드 삽입 위치]
+    with open("outputs/keywords.csv", "w", encoding="utf-8", newline="") as cf:
+        w = csv.writer(cf)
+        w.writerow(["rank", "keyword", "score"])
+        for i, k in enumerate(keywords, 1):
+            w.writerow([i, k.get("keyword", ""), k.get("score", "")])
+    print(f"[INFO] CSV 저장: outputs/keywords.csv")
+
     
     print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(keywords)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
     print(f"[INFO] SUMMARY | B | docs={len(docs)} unique_kws={len({k['keyword'] for k in keywords})} top3={[k['keyword'] for k in keywords[:3]]}")
