@@ -1,4 +1,3 @@
-# src/utils.py
 from __future__ import annotations
 import time as _t
 import random as _rand
