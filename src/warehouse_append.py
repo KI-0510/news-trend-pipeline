@@ -6,7 +6,7 @@ import sys
 import datetime
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone, timedelta
-from src.utils import (
+from utils import (
     log_info, log_warn, log_error, abort,
     call_with_retry, http_get_with_retry, json_from_response
 )
