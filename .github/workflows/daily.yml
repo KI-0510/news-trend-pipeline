@@ -22,16 +22,15 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-
+          cache-dependency-path: "requirements.txt"
+      
       # ✅ 의존성 설치 및 가상환경 활성화
       - name: Install dependencies
         run: |
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
-          pip install requests beautifulsoup4 lxml
-          pip install scikit-learn krwordrank soynlp networkx
-          pip install tomotopy google-generativeai
+          pip install -r requirements.txt
         shell: bash
 
       # ✅ 설치 단계에 패키지/폰트 추가(이미 있다면 중복 설치 OK)
