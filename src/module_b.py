@@ -11,7 +11,7 @@ from soynlp.normalizer import normalize, repeat_normalize, emoticon_normalize
 from krwordrank.word import KRWordRank
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from src.utils import (
+from utils import (
     log_info, log_warn, log_error, abort,
     call_with_retry, http_get_with_retry, json_from_response
 )
