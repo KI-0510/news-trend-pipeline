@@ -338,8 +338,8 @@ def main():
     os.makedirs("outputs", exist_ok=True)
     out_path = "outputs/biz_opportunities.json"
     with open("outputs/opportunities.csv", "w", encoding="utf-8", newline="") as cf:
-    w = csv.writer(cf)
-    w.writerow(["idea", "target_customer", "value_prop", "priority_score"])
+        w = csv.writer(cf)
+        w.writerow(["idea", "target_customer", "value_prop", "priority_score"])
     for it in ideas:
         w.writerow([
             it.get("idea", ""),
