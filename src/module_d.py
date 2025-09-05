@@ -340,13 +340,13 @@ def main():
     with open("outputs/opportunities.csv", "w", encoding="utf-8", newline="") as cf:
         w = csv.writer(cf)
         w.writerow(["idea", "target_customer", "value_prop", "priority_score"])
-    for it in ideas:
-        w.writerow([
-            it.get("idea", ""),
-            it.get("target_customer", ""), 
-            (it.get("value_prop", "") or "").replace("\n", " "),
-            it.get("priority_score", "")  
-        ]) 
+        for it in ideas:
+            w.writerow([
+                it.get("idea", ""),
+                it.get("target_customer", ""), 
+                (it.get("value_prop", "") or "").replace("\n", " "),
+                it.get("priority_score", "")  
+            ]) 
     print(f"[INFO] CSV 저장: outputs/opportunities.csv")
 
     with open(out_path, "w", encoding="utf-8") as f:
