@@ -18,7 +18,8 @@ import datetime as dt
 from typing import List, Dict, Any
 
 import pandas as pd
-import matplotlib.pyplot as plt import os, shutil
+import matplotlib.pyplot as plt
+import shutil
 
 # tomotopy는 선택(없어도 파이프라인은 계속 동작)
 try:
