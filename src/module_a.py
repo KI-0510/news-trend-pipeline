@@ -12,7 +12,7 @@ from utils import (
     call_with_retry, http_get_with_retry, json_from_response
 )
 
-NAVER_API = "https://openapi.naver.com/v1/search/news_tttttttttt.json"
+NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
 def load_config():
     try:
