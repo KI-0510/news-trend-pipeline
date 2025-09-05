@@ -385,8 +385,23 @@ def main():
     kw_json = load_keywords_json()
     prev_hint = load_insight_hint()
     insight_text = generate_insight_text(cfg, prev_hint, kw_json, topics_json)
+    
+    # 4-1) 상위 키워드/토픽 압축 요약 생성(검증 스키마 충족용)
+    top_keywords = [k.get("keyword", "") for k in (kw_json.get("keywords") or [])][:15]
+    
+    top_topics_compact = []
+    for t in (topics_json.get("topics") or [])[:5]:
+        words = [w.get("word", "") for w in (t.get("top_words") or [])][:8]
+        top_topics_compact.append({
+            "topic_id": t.get("topic_id"),
+            "top_words": words
+        })
+    
+    # 4-2) trend_insights.json 저장
     save_json(os.path.join(OUTPUT_DIR, "trend_insights.json"), {
-        "summary": insight_text,
+        "summary": insight_text or "",
+        "top_keywords": top_keywords,  # 검증에서 기대하는 필드
+        "top_topics": top_topics_compact,  # 검증에서 기대하는 필드
         "updated_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
     })
 
