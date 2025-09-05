@@ -117,25 +117,24 @@ jobs:
         shell: bash
         
       # ✅ YML용 프리플라이트 스텝
-      - name: Preflight | Show trend_insights.json
-        run: |
-          echo "----- outputs/trend_insights.json -----"
-          if [ -f outputs/trend_insights.json ]; then
-            cat outputs/trend_insights.json
-            python - << 'PY'
-          import json
-          with open("outputs/trend_insights.json","r",encoding="utf-8") as f:
-              data=json.load(f)
-          print("[DEBUG] keys:", list(data.keys()))
-          print("[DEBUG] top_topics type:", type(data.get("top_topics", None)).__name__)
-          print("[DEBUG] top_keywords len:", len(data.get("top_keywords", [])) if isinstance(data.get("top_keywords"), list) else "N/A")
-          PY
-              else
-                echo "trend_insights.json 파일이 없음"
-                exit 1
-              fi
-        shell: bash
-
+#      - name: Preflight | Show trend_insights.json
+#        run: |
+#          echo "----- outputs/trend_insights.json -----"
+#          if [ -f outputs/trend_insights.json ]; then
+#            cat outputs/trend_insights.json
+#            python - << 'PY'
+#          import json
+#          with open("outputs/trend_insights.json","r",encoding="utf-8") as f:
+#              data=json.load(f)
+#          print("[DEBUG] keys:", list(data.keys()))
+#          print("[DEBUG] top_topics type:", type(data.get("top_topics", None)).__name__)
+#          print("[DEBUG] top_keywords len:", len(data.get("top_keywords", [])) if isinstance(data.get("top_keywords"), list) else "N/A")
+#          PY
+#              else
+#                echo "trend_insights.json 파일이 없음"
+#                exit 1
+#              fi
+#        shell: bash
 
       - name: Check C - Validate Insights
         run: |
