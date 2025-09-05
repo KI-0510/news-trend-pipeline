@@ -7,10 +7,6 @@ import glob
 import html
 import requests
 from bs4 import BeautifulSoup
-from utils import (
-    log_info, log_warn, log_error, abort,
-    call_with_retry, http_get_with_retry, json_from_response
-)
 
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
@@ -65,16 +61,8 @@ def fetch_naver_news(query, display=30, pages=2):
             "start": start,
             "sort": "date"
         }
-        r = http_get_with_retry(
-            NAVER_API,
-            params=params,
-            headers=naver_headers(),
-            timeout=10,
-            max_attempts=4,
-            hard_timeout=45,
-            label="naver.search"
-        )
-        data = json_from_response(r)
+        r = http_get(NAVER_API, params=params, headers=naver_headers(), timeout=10, max_retry=3)
+        data = r.json()
         batch = data.get("items", [])
         if not batch:
             break
@@ -104,7 +92,7 @@ def expand_with_og(url):
         "published_time": None
     }
     try:
-        r = http_get_with_retry(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_attempts=3, hard_timeout=45, label="og.fetch")
+        r = http_get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_retry=2)
         soup = BeautifulSoup(r.text, "lxml")
         def og(name):
             tag = soup.find("meta", property=name)
@@ -175,7 +163,6 @@ def main():
         json.dump(meta_list, f, ensure_ascii=False, indent=2)
 
     print(f"[INFO] 저장 완료: {raw_path}, {meta_path} | 총 수집(중복 제거 후): {len(clean_items)} | 경과(초): {round(time.time()-t0,2)}")
-    print(f"[INFO] SUMMARY | A | items={len(clean_items)} meta={len(meta_list)} queries={queries}")
 
 if __name__ == "__main__":
     main()
