@@ -5,7 +5,12 @@ import re
 import sys
 import datetime
 from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone, timedelta
 
+def now_kst_str():
+    kst = timezone(timedelta(hours=9))
+    return datetime.now(kst).strftime("%Y%m%dT%H%M%S")  # 예: 20250905T112233
+    
 def latest(globpat):
     files = sorted(glob.glob(globpat))
     return files[-1] if files else None
@@ -95,7 +100,8 @@ def main():
             "created_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
         }
         
-        out_path = f"data/warehouse/{published}.jsonl"
+        run_kst = now_kst_str()
+        out_path = f"data/warehouse/{published}-{run_kst}KST.jsonl"
         existing = load_existing_urls(out_path)
         
         if url in existing:
