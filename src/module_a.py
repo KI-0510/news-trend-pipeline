@@ -7,6 +7,10 @@ import glob
 import html
 import requests
 from bs4 import BeautifulSoup
+from src.utils import (
+    log_info, log_warn, log_error, abort,
+    call_with_retry, http_get_with_retry, json_from_response
+)
 
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
