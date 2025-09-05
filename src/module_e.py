@@ -439,6 +439,13 @@ def main():
         print("[WARN] 리포트 생성 실패:", e)
 
     print("[INFO] Module E 완료 | report.md, report.html 생성")
+ 
+    try:
+        img_count = len([p for p in os.listdir('outputs/fig') if p.endswith('.png')])
+    except Exception:
+        img_count = 0
+    print(f"[INFO] SUMMARY | E | images={img_count} report=outputs/report.md")
+
 
 if __name__ == "__main__":
     main()
