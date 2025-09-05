@@ -32,7 +32,7 @@ def load_data():
     keywords = load_json("outputs/keywords.json", {"keywords": [], "stats": {}})
     topics   = load_json("outputs/topics.json", {"topics": []})
     ts       = load_json("outputs/trend_timeseries.json", {"daily": []})
-    # evidence는 리스트가 맞음
+    # evidence는 리스트로 유지
     insights = load_json("outputs/trend_insights.json", {"summary": "", "top_topics": [], "evidence": []})
     opps     = load_json("outputs/biz_opportunities.json", {"ideas": []})
 
@@ -77,7 +77,7 @@ def ensure_fonts():
         font_name = "NanumGothic"
 
     matplotlib.rcParams["font.family"] = font_name
-    matplotlib.rcParams["font.sans-serif"] = [font_name, "NanumGothic", "Noto Sans CJK KR", "Malgun Gothic", "AppleGothic", "DejaVu Sans"]
+    matplotlib.rcParams["font.sans-serif"] = [font_name, "NanumGothic", "Noto Sans C JK KR", "Malgun Gothic", "AppleGothic", "DejaVu Sans"]
     matplotlib.rcParams["axes.unicode_minus"] = False
 
     try:
@@ -243,10 +243,11 @@ def build_report_md(keywords: Dict[str, Any],
     lines.append("## Topics")
     lines.append("![Topics](outputs/fig/topics.png)")
     lines.append("")
+    # Executive Summary(검증 요구 제목)
     lines.append("## Executive Summary")
     summary_txt = (insights.get("summary") or "").strip()
-        if not summary_txt:
-            summary_txt = "요약 없음"
+    if not summary_txt:
+        summary_txt = "_요약 없음_"
     lines.append(summary_txt)
     lines.append("")
 
@@ -279,7 +280,6 @@ def build_report_html(md_path="outputs/report.md", out_html="outputs/report.html
     except Exception:
         md = "# 리포트 없음\n\nreport.md 파일을 찾을 수 없습니다."
 
-    # 초간단 마크다운 → HTML 변환
     def md_to_html(text: str) -> str:
         html_lines = []
         for line in text.splitlines():
