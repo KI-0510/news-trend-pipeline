@@ -1,485 +1,269 @@
-# -*- coding: utf-8 -*-
-"""
-Module C
-- warehouse 읽어 시계열(Articles per Day) 생성/그림 저장
-- 간단 토픽 추출(tomotopy 사용 가능 시)
-- 인사이트 요약(LLM) 생성
-- 견고성: utils.call_with_retry / 표준 로그 사용
-- 날짜 처리: datetime as dt 통일
-"""
-
 import os
-import re
 import json
+import re
 import glob
-import math
-import random
-import datetime as dt
-from typing import List, Dict, Any
-
-import pandas as pd
-import matplotlib.pyplot as plt
-import shutil
-
-# tomotopy는 선택(없어도 파이프라인은 계속 동작)
-try:
-    import tomotopy as tp
-except Exception:
-    tp = None
-
-# LLM
+import unicodedata
+import time
+import datetime
+import tomotopy as tp
 import google.generativeai as genai
+from email.utils import parsedate_to_datetime
 
-# 공용 유틸(E1/E2)
-from utils import (
-    log_info, log_warn, log_error, abort,
-    call_with_retry, http_get_with_retry, json_from_response
-)
 
-# ------------------------------------------------------------
-# 경로/기본 설정
-# ------------------------------------------------------------
+def latest(globpat: str):
+    files = sorted(glob.glob(globpat))
+    return files[-1] if files else None
 
-WAREHOUSE_DIR = "data/warehouse"
-OUTPUT_DIR = "outputs"
-FIG_DIR = os.path.join(OUTPUT_DIR, "fig")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-os.makedirs(FIG_DIR, exist_ok=True)
-
-# ------------------------------------------------------------
-# 설정/입출력 유틸
-# ------------------------------------------------------------
-
-def load_config() -> Dict[str, Any]:
-    cfg_path = "config.json"
-    if not os.path.exists(cfg_path):
-        log_warn("config.json 없음 → 기본값 사용")
-        return {
-            "llm": {
-                "model": "gemini-1.5-flash",
-                "max_output_tokens": 1200,
-                "temperature": 0.3
-            },
-            "topics": {"k": 6, "topn": 10}
-        }
-    try:
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-    except json.JSONDecodeError as e:
-        log_error("config.json JSONDecodeError", line=e.lineno, col=e.colno, msg=e.msg)
-        return {
-            "llm": {
-                "model": "gemini-1.5-flash",
-                "max_output_tokens": 1200,
-                "temperature": 0.3
-            },
-            "topics": {"k": 6, "topn": 10}
-        }
-    return cfg
-
-def save_json(path: str, data: Dict[str, Any]):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_keywords_json() -> Dict[str, Any]:
-    fp = os.path.join(OUTPUT_DIR, "keywords.json")
-    if not os.path.exists(fp):
-        return {"keywords": []}
-    try:
-        with open(fp, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {"keywords": []}
-
-def load_insight_hint() -> str:
-    fp = os.path.join(OUTPUT_DIR, "trend_insights.json")
-    if not os.path.exists(fp):
-        return ""
-    try:
-        with open(fp, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return (data.get("summary") or "").strip()
-    except Exception:
-        return ""
-
-def build_evidence(ts_json: Dict[str, Any],
-                   top_keywords: List[str],
-                   top_topics_compact: List[Dict[str, Any]]) -> List[str]:
-    """
-    검증용 'evidence' 필드(문장 리스트) 생성:
-    - 기간/일수/최대치 요약
-    - 키워드 샘플
-    - 토픽 샘플(단어)
-    """
-    evid = []
-
-    # 기간/일수/최대치
-    daily = ts_json.get("daily", [])
-    if daily:
-        dates = [d.get("date") for d in daily if d.get("date")]
-        counts = [int(d.get("count", 0)) for d in daily]
-        if dates:
-            start, end = dates[0], dates[-1]
-            total_days = len(dates)
-            max_val = max(counts) if counts else 0
-            evid.append(f"분석 기간: {start} ~ {end} (총 {total_days}일), 일별 최대 기사 수: {max_val}건")
-    else:
-        evid.append("분석 기간 데이터가 부족합니다(일별 집계 없음).")
-
-    # 키워드 샘플
-    if top_keywords:
-        sample_kw = ", ".join(top_keywords[:8])
-        evid.append(f"상위 키워드 샘플: {sample_kw}")
-    else:
-        evid.append("상위 키워드가 충분하지 않습니다.")
-
-    # 토픽 샘플
-    if top_topics_compact:
-        parts = []
-        for t in top_topics_compact[:3]:
-            tid = t.get("topic_id")
-            wds = ", ".join((t.get("top_words") or [])[:6])
-            parts.append(f"Topic#{tid}: {wds}")
-        evid.append("토픽 샘플: " + " | ".join(parts))
-    else:
-        evid.append("토픽 추출 결과가 비어 있습니다.")
-
-    return evid[:6]
-                       
-# ------------------------------------------------------------
-# 날짜 처리/로딩
-# ------------------------------------------------------------
 
 def to_date(s: str) -> str:
-    """여러 형태의 날짜 문자열 → YYYY-MM-DD"""
-    from email.utils import parsedate_to_datetime
-    today = dt.date.today()
+    today = datetime.date.today()
     if not s or not isinstance(s, str):
         return today.strftime("%Y-%m-%d")
     s = s.strip()
-
-    # 1) ISO-8601
+    
     try:
         iso = s.replace("Z", "+00:00")
-        dtt = dt.datetime.fromisoformat(iso)
-        d = dtt.date()
+        dt = datetime.datetime.fromisoformat(iso)
+        d = dt.date()
     except Exception:
-        # 2) RFC2822
         try:
-            dtt = parsedate_to_datetime(s)
-            d = dtt.date()
+            dt = parsedate_to_datetime(s)
+            d = dt.date()
         except Exception:
-            # 3) 단순 정규식 YYYY[-/. ]MM[-/. ]DD
             m = re.search(r"(\d{4}).*?(\d{1,2}).*?(\d{1,2})", s)
             if m:
                 y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
                 try:
-                    d = dt.date(y, mm, dd)
+                    d = datetime.date(y, mm, dd)
                 except Exception:
                     d = today
             else:
                 d = today
-
+    
     if d > today:
         d = today
     return d.strftime("%Y-%m-%d")
 
-def load_warehouse_rows() -> List[Dict[str, Any]]:
-    rows = []
-    files = sorted(glob.glob(os.path.join(WAREHOUSE_DIR, "*.jsonl")))
+
+def clean_text(t: str) -> str:
+    if not t:
+        return ""
+    t = re.sub(r"<.+?>", " ", t)
+    t = unicodedata.normalize("NFKC", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def load_warehouse(days=30):
+    files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
+    docs, dates = [], []
+    
     for fp in files:
-        try:
-            with open(fp, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
+        with open(fp, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    title = clean_text((obj.get("title") or "").strip())
+                    if not title:
                         continue
-                    try:
-                        obj = json.loads(line)
-                        obj["published"] = to_date(obj.get("published"))
-                        rows.append(obj)
-                    except Exception:
-                        continue
-        except Exception as e:
-            log_warn("warehouse 파일 로드 실패", file=fp, err=repr(e))
-    return rows
-
-# ------------------------------------------------------------
-# 시계열(Articles per Day)
-# ------------------------------------------------------------
-
-def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:    
-    ART_IMG = os.path.join(FIG_DIR, "articles_per_day.png")  # 렌더링은 항상 이 이름으로
-    FINAL_IMG = os.path.join(FIG_DIR, "timeseries.png")      # 최종 산출물 파일명(리포트 호환)
-    
-    def _finalize_save(fig, *, tight=False):
-        try:
-            if tight:
-                fig.savefig(ART_IMG, dpi=150, bbox_inches="tight")
-            else:
-                fig.savefig(ART_IMG, dpi=150)
-        finally:
-            plt.close(fig)
-        # 파일명만 교체(그림 비트 동일)
-        try:
-            os.replace(ART_IMG, FINAL_IMG)
-        except Exception:
-            try:
-                shutil.copyfile(ART_IMG, FINAL_IMG)
-                os.remove(ART_IMG)
-            except Exception as e:
-                log_warn("image finalize 실패", err=repr(e))
-        print(f"[INFO] FIG | saved={os.path.basename(FINAL_IMG)} (renamed from {os.path.basename(ART_IMG)})")
-    
-    df = pd.DataFrame(rows)
-    
-    # 빈 데이터 처리 1
-    if df.empty or "published" not in df.columns:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
-        ax.axis("off")
-        _finalize_save(fig, tight=True)
-        return {"daily": [], "ma7": []}
-    
-    # 문자열 → datetime
-    df["published"] = pd.to_datetime(df["published"], errors="coerce")
-    base = (
-        df.dropna(subset=["published"])
-          .groupby(df["published"].dt.date)
-          .size()
-          .rename("count")
-          .to_frame()
-    )
-    base.index = pd.to_datetime(base.index)
-    
-    # 빈 데이터 처리 2
-    if base.empty:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
-        ax.axis("off")
-        _finalize_save(fig, tight=True)
-        return {"daily": [], "ma7": []}
-    
-    # 연속 날짜로 재색인(빈 날 0)
-    full_range = pd.date_range(base.index.min(), base.index.max(), freq="D")
-    daily = base.reindex(full_range).fillna(0.0)["count"].astype(int)
-    # 7일 이동평균(데이터 적어도 보이게)
-    ma7 = daily.rolling(window=7, min_periods=1).mean()
-    
-    # 방어형 시각화(현재 스타일 유지)
-    fig, ax = plt.subplots(figsize=(12, 4.2))
-    ax.plot(daily.index, daily.values, "-o", color="#1f77b4", linewidth=1.8, markersize=3, label="Daily")
-    ax.plot(ma7.index, ma7.values, "-", color="#ff7f0e", linewidth=1.6, label="7d MA")
-    
-    # x축 확대(하루만 있어도 보이게)
-    if daily.index.min() == daily.index.max():
-        start = daily.index.min() - pd.Timedelta(days=3)
-        end = daily.index.max() + pd.Timedelta(days=3)
-    else:
-        start = daily.index.min() - pd.Timedelta(days=1)
-        end = daily.index.max() + pd.Timedelta(days=1)
-    ax.set_xlim(start, end)
-    
-    # y축 0부터 + 20% 패딩
-    ymax = max(5, int(daily.max() * 1.2))
-    ax.set_ylim(0, ymax)
-    
-    ax.set_title("Articles per Day")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Count")
-    ax.grid(alpha=0.25, linestyle=":")
-    ax.legend(loc="upper right")
-    plt.tight_layout()
-    
-    # 저장(항상 articles_per_day.png로 만든 뒤 → timeseries.png로 이름만 변경)
-    _finalize_save(fig, tight=False)
-    
-    # JSON 변환
-    daily_out = [{"date": d.strftime("%Y-%m-%d"), "count": int(c)} for d, c in zip(daily.index, daily.values)]
-    ma7_out = [{"date": d.strftime("%Y-%m-%d"), "count": float(round(v, 3))} for d, v in zip(ma7.index, ma7.values)]
-    return {"daily": daily_out, "ma7": ma7_out}
+                    docs.append(title)  # 간단: 제목만
+                    dates.append(obj.get("published"))
+                except Exception:
+                    continue
+    return docs, dates
 
 
+def load_today_meta():
+    meta_path = latest("data/news_meta_*.json")
+    if not meta_path:
+        return [], []
+    
+    with open(meta_path, "r", encoding="utf-8") as f:
+        items = json.load(f)
+    
+    docs, dates = [], []
+    for it in items:
+        title = clean_text(it.get("title") or it.get("title_og"))
+        desc = clean_text(it.get("description") or it.get("description_og"))
+        doc = (title + " " + desc).strip()
+        
+        if doc:
+            docs.append(doc)
+            d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
+            dates.append(to_date(d_raw))
+    return docs, dates
 
-# ------------------------------------------------------------
-# 토픽 추출(옵션: tomotopy)
-# ------------------------------------------------------------
 
-def build_corpus_for_topics(rows: List[Dict[str, Any]]) -> List[str]:
-    texts = []
-    for r in rows:
-        title = (r.get("title") or "").strip()
-        desc = (r.get("description") or "").strip()
-        text = (title + " " + desc).strip()
-        if text:
-            texts.append(text)
-    return texts
+def simple_tokenize_ko(text: str):
+    toks = re.findall(r"[가-힣A-Za-z0-9]+", text)
+    toks = [t.lower() for t in toks if len(t) >= 2]
+    return toks
 
-def extract_topics(texts: List[str], k: int = 6, topn: int = 10) -> Dict[str, Any]:
-    # 입력 검증
-    if not texts:
-        return {"topics": []}
-    if tp is None:
-        log_warn("tomotopy 미설치 → 토픽 스킵")
-        return {"topics": []}
 
-    # 매우 가벼운 토큰화
-    docs = []
-    for t in texts:
-        toks = re.findall(r"[가-힣A-Za-z0-9]+", t.lower())
-        if toks:
-            docs.append(toks)
-
-    n_docs = len(docs)
-    if n_docs < 2:
-        # 문서가 1개 이하이면 토픽 추출 의미 없음
-        return {"topics": []}
-
-    # k 보정: 문서 수를 넘지 않도록
-    k_eff = max(2, min(k, n_docs))
-    # 학습 횟수도 크기에 맞춰 조절
-    train_iters = min(200, max(60, 12 * k_eff))
-
-    # 모델 학습
-    mdl = tp.LDAModel(k=k_eff, alpha=0.1, eta=0.01, min_df=3)
+def lda_topics(docs, k=6, topn=8, min_cf=2, iters=150):
+    mdl = tp.LDAModel(k=k, alpha=0.1, eta=0.01, min_cf=min_cf)
     for d in docs:
-        mdl.add_doc(d)
-    for _ in range(train_iters // 10):
+        mdl.add_doc(simple_tokenize_ko(d))
+    
+    if len(mdl.docs) == 0:  # num_docs 대신 len(mdl.docs) 사용
+        return {"topics": [], "doc_topics": []}
+    
+    mdl.burn_in = 50
+    for _ in range(iters):
         mdl.train(10)
-
+    
     topics = []
     for ti in range(mdl.k):
         words = mdl.get_topic_words(ti, top_n=topn)
         topics.append({
             "topic_id": ti,
-            "top_words": [{"word": w, "prob": float(round(p, 4))} for w, p in words]
+            "top_words": [{"word": w, "prob": float(p)} for w, p in words]
         })
-    return {"topics": topics}
+    
+    doc_topics = []
+    for di in range(len(mdl.docs)):  # num_docs 대신 len(mdl.docs) 사용
+        dist = mdl.docs[di].get_topics(top_n=3)
+        doc_topics.append([{"topic_id": tid, "prob": float(prob)} for tid, prob in dist])
+    
+    return {"topics": topics, "doc_topics": doc_topics}
 
-# ------------------------------------------------------------
-# 인사이트 요약(LLM)
-# ------------------------------------------------------------
 
-def build_insight_prompt(summary_hint: str, top_keywords: List[str], top_topics: List[Dict[str, Any]]) -> str:
-    tw = []
-    for t in top_topics[:3]:
-        words = [w["word"] for w in (t.get("top_words") or [])][:8]
-        tw.append(f"Topic#{t.get('topic_id')}: " + ", ".join(words))
-    kw = ", ".join(top_keywords[:12])
-    hint = (summary_hint or "").strip()
-    return (
-        "아래 자료를 바탕으로 지난 기간 뉴스 트렌드를 7-10문장으로 요약해줘.\n"
-        "- 한국어, 간결하게. 과장 금지, 데이터 근거 중심.\n"
-        "- 키 포인트: 급증/감소, 반복 테마, 잠재 리스크, 다음 주 관전 포인트.\n"
-        f"키워드 Top: {kw}\n"
-        f"토픽 샘플: {' | '.join(tw)}\n"
-        f"참고 요약 힌트: {hint}\n"
-        "출력: 순수 텍스트만"
-    )
+def timeseries_by_date(dates):
+    counts = {}
+    for d in dates:
+        if not d:
+            continue
+        counts[d] = counts.get(d, 0) + 1
+    
+    daily = [{"date": k, "count": v} for k, v in sorted(counts.items())]
+    return {"daily": daily}
 
-def generate_insight_text(cfg: Dict[str, Any], summary_hint: str, keywords_json: Dict[str, Any], topics_json: Dict[str, Any]) -> str:
-    api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
-    if not api_key or len(api_key) < 20:
-        log_warn("GEMINI_API_KEY 없음 → 인사이트 생략")
-        return ""
 
-    model_name = cfg.get("llm", {}).get("model", "gemini-1.5-flash")
-    max_tokens = int(cfg.get("llm", {}).get("max_output_tokens", 1200))
-    temperature = float(cfg.get("llm", {}).get("temperature", 0.3))
-
+def gemini_insight(api_key: str, model: str, context: dict, max_tokens=2048, temperature=0.6):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-
-    top_keywords = [k["keyword"] for k in (keywords_json.get("keywords") or [])][:30]
-    top_topics = topics_json.get("topics") or []
-    prompt = build_insight_prompt(summary_hint, top_keywords, top_topics)
-
-    def _gen():
-        return model.generate_content(
-            prompt,
-            generation_config={
-                "max_output_tokens": max_tokens,
-                "temperature": temperature,
-                "top_p": 0.9
-            }
-        )
-
-    resp = call_with_retry(
-        _gen,
-        max_attempts=4,
-        base=0.6,
-        max_backoff=6,
-        hard_timeout=50,
-        label="gemini.c.insight"
+    gmodel = genai.GenerativeModel(model)
+    
+    # 1차 요청 프롬프트(구조 유지, 길이는 여유)
+    prompt = (
+        "아래는 한국어 뉴스에서 추출한 토픽과 날짜별 기사 수 요약입니다.\n"
+        "요청:\n"
+        "1) 상위 토픽을 3~5개 주제로 묶어 핵심 맥락 설명(2~3문장)\n"
+        "2) 최근 변화/스파이크가 있으면 2문장으로 짚기\n"
+        "3) 실무 인사이트 3가지 bullet(구체적 액션)\n"
+        "주의: 문장 중간에 끊지 말고 완결된 문장으로 끝내세요.\n"
+        f"데이터: {json.dumps(context, ensure_ascii=False)}"
     )
-    return (getattr(resp, "text", None) or "").strip()
+    
+    resp = gmodel.generate_content(
+        prompt,
+        generation_config={
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": 0.9,
+        }
+    )
+    
+    text = (getattr(resp, "text", None) or "").strip()
+    
+    # 문장 완결성 검사: 마침표/물음표/느낌표/종결문자 없이 끝나면 후속 요청 한 번 더
+    if text and not re.search(r"[\.!?]$|[다요음]\s*$", text):
+        cont = gmodel.generate_content(
+            "방금 작성한 응답의 마지막 문장부터 이어서 3~5문장으로 마무리해줘. 반복은 피하고 결론을 명확히.",
+            generation_config={"max_output_tokens": 384, "temperature": temperature}
+        )
+        cont_text = (getattr(cont, "text", None) or "").strip()
+    
+        if cont_text:
+            text = text + ("\n" if not text.endswith("\n") else "") + cont_text
+    
+    return text
 
-# ------------------------------------------------------------
-# 메인
-# ------------------------------------------------------------
 
 def main():
-    t0 = dt.datetime.utcnow()
-
-    # 1) 데이터 로드
-    rows = load_warehouse_rows()
-    log_info("warehouse 로드", files=len(glob.glob(os.path.join(WAREHOUSE_DIR, '*.jsonl'))), rows=len(rows))
-
-    # 2) 시계열 + 그림
-    ts_json = make_articles_per_day(rows)
-    save_json(os.path.join(OUTPUT_DIR, "trend_timeseries.json"), ts_json)
-
-    # 3) 토픽 추출
-    cfg = load_config()
-    k = int(cfg.get("topics", {}).get("k", 6))
-    topn = int(cfg.get("topics", {}).get("topn", 10))
-    texts = build_corpus_for_topics(rows)
-    topics_json = extract_topics(texts, k=k, topn=topn)
-    save_json(os.path.join(OUTPUT_DIR, "topics.json"), topics_json)
-
-    # 4) 인사이트(LM 요약) + trend_insights.json 저장(검증 스키마 충족)
-    kw_json = load_keywords_json()
-    prev_hint = load_insight_hint()
-    insight_text = generate_insight_text(cfg, prev_hint, kw_json, topics_json)
+    t0 = time.time()
     
-    # 상위 키워드/토픽 압축(없어도 빈 리스트로 저장)
-    top_keywords = [ (k.get("keyword") or "") for k in (kw_json.get("keywords") or []) ][:15]
-    top_topics_compact = []
-    for t in (topics_json.get("topics") or [])[:5]:
-        words = [ (w.get("word") or "") for w in (t.get("top_words") or []) ][:8]
-        top_topics_compact.append({
-            "topic_id": t.get("topic_id"),
-            "top_words": words
-        })
+    docs, dates = load_warehouse(days=30)
+    if not docs:
+        docs, dates = load_today_meta()
     
-    # evidence 생성(기간/일수/최대치, 키워드 샘플, 토픽 샘플)
-    evidence = build_evidence(ts_json, top_keywords, top_topics_compact)
+    if not docs:
+        print("[ERROR] 사용할 문서가 없습니다.")
+        raise SystemExit(1)
     
-    save_json(os.path.join(OUTPUT_DIR, "trend_insights.json"), {
-        "summary": insight_text or "",
-        "top_keywords": top_keywords,
-        "top_topics": top_topics_compact,
-        "evidence": evidence,  # ← 추가
-        "updated_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    })
+    k = 6  # 5~8 권장
+    lda = lda_topics(docs, k=k, topn=8, min_cf=2, iters=150)
+    ts = timeseries_by_date(dates)
     
-    # 저장 직후 readback(안전 확인)
-    try:
-        with open(os.path.join(OUTPUT_DIR, "trend_insights.json"), "r", encoding="utf-8") as f:
-            _d = json.load(f)
-        print(f"[INFO] trend_insights.json saved | keys={list(_d.keys())} "
-              f"top_topics_len={len(_d.get('top_topics', []))} evidence_len={len(_d.get('evidence', []))}")
-    except Exception as e:
-        print(f"[WARN] trend_insights.json readback failed: {e}")
+    os.makedirs("outputs", exist_ok=True)
+    
+    with open("outputs/topics.json", "w", encoding="utf-8") as f:
+        json.dump(lda, f, ensure_ascii=False, indent=2)
+    
+    with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
+        json.dump(ts, f, ensure_ascii=False, indent=2)
+    
+    insight_text = "DRY RUN: 키 미설정으로 요약 생략."
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    
+    if api_key and len(api_key.strip()) > 20:
+        try:
+            # 컨텍스트를 더 가볍게: 토픽 5개, 각 토픽 상위 6~8개 단어만, 시계열 최근 30개 지점
+            raw_topics = lda.get("topics", [])[:5]
+            compact_topics = []
+            
+            for t in raw_topics:
+                words = t.get("top_words", [])[:8]
+                compact_topics.append({
+                    "topic_id": t.get("topic_id"),
+                    "top_words": [w["word"] for w in words]
+                })
+            
+            compact_ts = ts.get("daily", [])[-30:]
+            
+            context = {"topics": compact_topics, "timeseries": compact_ts}
+            
+            # config.json의 llm.max_output_tokens 있으면 반영
+            try:
+                with open("config.json", "r", encoding="utf-8") as f:
+                    cfg_all = json.load(f)
+                max_tokens = int(cfg_all.get("llm", {}).get("max_output_tokens", 2048))
+            except Exception:
+                max_tokens = 2048
+            
+            insight_text = gemini_insight(
+                api_key=api_key,
+                model="gemini-1.5-flash",
+                context=context,
+                max_tokens=max_tokens,
+                temperature=0.6
+            )
+            
+        except Exception as e:
+            print(f"[WARN] Gemini 요약 실패: {e}")
+            insight_text = "요약 생성 실패(로그 참조)."
+    else:
+        print("[WARN] GEMINI_API_KEY 비어있거나 비정상 길이 — 요약 생략")
+        
+        
+    insights = {
+        "summary": insight_text,
+        "top_topics": lda.get("topics", [])[:5],
+        "evidence": {"timeseries": ts.get("daily", [])[-14:]}  # 최근 2주
+    }
+    
+    with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
+        json.dump(insights, f, ensure_ascii=False, indent=2)
+    
+    print(
+        f"[INFO] 모듈 C 완료 | topics={len(lda.get('topics', []))} | "
+        f"ts_days={len(ts.get('daily', []))} | "
+        f"경과(초)={round(time.time()-t0, 2)}"
+    )
 
-    # 5) 요약 로그(F1)
-    days = len(ts_json.get("daily", []))
-    tmin = ts_json.get("daily", [{}])[0].get("date") if days else "-"
-    tmax = ts_json.get("daily", [{}])[-1].get("date") if days else "-"
-    topic_k = len(topics_json.get("topics", []))
-    elapsed = (dt.datetime.utcnow() - t0).total_seconds()
-    print(f"[INFO] SUMMARY | C | topics={topic_k} ts_days={days} range=({tmin}~{tmax}) insight_len={len(insight_text)} elapsed={round(elapsed,2)}s")
 
 if __name__ == "__main__":
     main()
+    
