@@ -18,7 +18,7 @@ import datetime as dt
 from typing import List, Dict, Any
 
 import pandas as pd
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt import os, shutil
 
 # tomotopy는 선택(없어도 파이프라인은 계속 동작)
 try:
@@ -209,7 +209,27 @@ def load_warehouse_rows() -> List[Dict[str, Any]]:
 # ------------------------------------------------------------
 
 def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:    
-    SAVE_IMG = os.path.join(FIG_DIR, "timeseries.png")  # 리포트 템플릿 호환 파일명
+    ART_IMG = os.path.join(FIG_DIR, "articles_per_day.png")  # 렌더링은 항상 이 이름으로
+    FINAL_IMG = os.path.join(FIG_DIR, "timeseries.png")      # 최종 산출물 파일명(리포트 호환)
+    
+    def _finalize_save(fig, *, tight=False):
+        try:
+            if tight:
+                fig.savefig(ART_IMG, dpi=150, bbox_inches="tight")
+            else:
+                fig.savefig(ART_IMG, dpi=150)
+        finally:
+            plt.close(fig)
+        # 파일명만 교체(그림 비트 동일)
+        try:
+            os.replace(ART_IMG, FINAL_IMG)
+        except Exception:
+            try:
+                shutil.copyfile(ART_IMG, FINAL_IMG)
+                os.remove(ART_IMG)
+            except Exception as e:
+                log_warn("image finalize 실패", err=repr(e))
+        print(f"[INFO] FIG | saved={os.path.basename(FINAL_IMG)} (renamed from {os.path.basename(ART_IMG)})")
     
     df = pd.DataFrame(rows)
     
@@ -218,8 +238,7 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
         ax.axis("off")
-        plt.savefig(SAVE_IMG, dpi=150, bbox_inches="tight")
-        plt.close()
+        _finalize_save(fig, tight=True)
         return {"daily": [], "ma7": []}
     
     # 문자열 → datetime
@@ -238,17 +257,16 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
         ax.axis("off")
-        plt.savefig(SAVE_IMG, dpi=150, bbox_inches="tight")
-        plt.close()
+        _finalize_save(fig, tight=True)
         return {"daily": [], "ma7": []}
     
     # 연속 날짜로 재색인(빈 날 0)
     full_range = pd.date_range(base.index.min(), base.index.max(), freq="D")
     daily = base.reindex(full_range).fillna(0.0)["count"].astype(int)
-    # 7일 이동평균(데이터가 적어도 보이게)
+    # 7일 이동평균(데이터 적어도 보이게)
     ma7 = daily.rolling(window=7, min_periods=1).mean()
     
-    # 방어형 시각화
+    # 방어형 시각화(현재 스타일 유지)
     fig, ax = plt.subplots(figsize=(12, 4.2))
     ax.plot(daily.index, daily.values, "-o", color="#1f77b4", linewidth=1.8, markersize=3, label="Daily")
     ax.plot(ma7.index, ma7.values, "-", color="#ff7f0e", linewidth=1.6, label="7d MA")
@@ -273,10 +291,8 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     ax.legend(loc="upper right")
     plt.tight_layout()
     
-    # 최종 저장: timeseries.png로 통일
-    plt.savefig(SAVE_IMG, dpi=150)
-    plt.close()
-    print(f"[INFO] FIG | saved={os.path.basename(SAVE_IMG)}")
+    # 저장(항상 articles_per_day.png로 만든 뒤 → timeseries.png로 이름만 변경)
+    _finalize_save(fig, tight=False)
     
     # JSON 변환
     daily_out = [{"date": d.strftime("%Y-%m-%d"), "count": int(c)} for d, c in zip(daily.index, daily.values)]
