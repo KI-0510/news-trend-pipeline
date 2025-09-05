@@ -65,8 +65,16 @@ def fetch_naver_news(query, display=30, pages=2):
             "start": start,
             "sort": "date"
         }
-        r = http_get(NAVER_API, params=params, headers=naver_headers(), timeout=10, max_retry=3)
-        data = r.json()
+        r = http_get_with_retry(
+            NAVER_API,
+            params=params,
+            headers=naver_headers(),
+            timeout=10,
+            max_attempts=4,
+            hard_timeout=45,
+            label="naver.search"
+        )
+        data = json_from_response(r)
         batch = data.get("items", [])
         if not batch:
             break
@@ -96,7 +104,7 @@ def expand_with_og(url):
         "published_time": None
     }
     try:
-        r = http_get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_retry=2)
+        r = http_get_with_retry(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_attempts=3, hard_timeout=45, label="og.fetch")
         soup = BeautifulSoup(r.text, "lxml")
         def og(name):
             tag = soup.find("meta", property=name)
