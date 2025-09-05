@@ -1,13 +1,8 @@
 import os
 import json
 import re
-import csv
 import time
 import google.generativeai as genai
-from utils import (
-    log_info, log_warn, log_error, abort,
-    call_with_retry, http_get_with_retry, json_from_response
-)
 
 # ---------- 유틸 ----------
 
@@ -229,32 +224,21 @@ def build_prompt_array(ctx):
     )
 
 # ---------- LLM 호출 ----------
+
 def call_gemini_array(api_key, prompt, max_tokens=1400, temperature=0.15):
     genai.configure(api_key=api_key)
-
-    def _gen():
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        return model.generate_content(
-            prompt,
-            generation_config={
-                "max_output_tokens": max_tokens,
-                "temperature": temperature,
-                "top_p": 0.8,
-                "response_mime_type": "application/json"
-            }
-        )
-
-    resp = call_with_retry(
-        _gen,
-        max_attempts=4,
-        base=0.6,
-        max_backoff=6,
-        hard_timeout=55,
-        label="gemini.d.array"
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    # JSON MIME 지정(응답을 배열로 유도)
+    resp = model.generate_content(
+        prompt,
+        generation_config={
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": 0.8,
+            "response_mime_type": "application/json"
+        }
     )
-
     return (getattr(resp, "text", None) or "").strip()
-    
 
 # ---------- 후처리 ----------
 
@@ -352,23 +336,10 @@ def main():
 
     os.makedirs("outputs", exist_ok=True)
     out_path = "outputs/biz_opportunities.json"
-    with open("outputs/opportunities.csv", "w", encoding="utf-8", newline="") as cf:
-        w = csv.writer(cf)
-        w.writerow(["idea", "target_customer", "value_prop", "priority_score"])
-        for it in ideas:
-            w.writerow([
-                it.get("idea", ""),
-                it.get("target_customer", ""), 
-                (it.get("value_prop", "") or "").replace("\n", " "),
-                it.get("priority_score", "")  
-            ]) 
-    print(f"[INFO] CSV 저장: outputs/opportunities.csv")
-
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"ideas": ideas}, f, ensure_ascii=False, indent=2)
 
     print(f"[INFO] 모듈 D 완료 | ideas={len(ideas)} | 출력={out_path} | 경과(초)={round(time.time()-t0,2)}")
-    print(f"[INFO] SUMMARY | D | ideas={len(ideas)} titles={[ (it.get('idea') or '')[:12] for it in ideas[:3] ]}")
 
 if __name__ == "__main__":
     main()
