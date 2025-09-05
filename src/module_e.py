@@ -243,8 +243,11 @@ def build_report_md(keywords: Dict[str, Any],
     lines.append("## Topics")
     lines.append("![Topics](outputs/fig/topics.png)")
     lines.append("")
-    lines.append("## Insight Summary")
-    lines.append((insights.get("summary") or "").strip() or "_요약 없음_")
+    lines.append("## Executive Summary")
+    summary_txt = (insights.get("summary") or "").strip()
+        if not summary_txt:
+            summary_txt = "요약 없음"
+    lines.append(summary_txt)
     lines.append("")
 
     ev = insights.get("evidence") or []
