@@ -27,11 +27,8 @@ jobs:
       - name: Show pip cache dir
         run: |
           python -m site
-          python - << 'PY'
-            import os
-            print("PIP_CACHE_DIR =", os.getenv("PIP_CACHE_DIR"))
-          PY
-          python -m pip cache dir ||true
+          python -c 'import os; print("PIP_CACHE_DIR =", os.getenv("PIP_CACHE_DIR"))'
+          python -m pip cache dir || true
         shell: bash
 
       - name: Install dependencies
@@ -41,7 +38,6 @@ jobs:
           source .venv/bin/activate
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          # 확인용(선택)
           python -m pip cache info ||true
         shell: bash
 
