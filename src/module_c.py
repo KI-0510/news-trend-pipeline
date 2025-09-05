@@ -160,16 +160,19 @@ def gemini_insight(api_key: str, model: str, context: dict, max_tokens=2048, tem
         "주의: 문장 중간에 끊지 말고 완결된 문장으로 끝내세요.\n"
         f"데이터: {json.dumps(context, ensure_ascii=False)}"
     )
+
     
-    resp = gmodel.generate_content(
-        prompt,
-        generation_config={
-            "max_output_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-        }
-    )
+    def _gen():
+        return gmodel.generate_content(
+            prompt,
+            generation_config={
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": 0.9,
+            }
+        )
     
+    resp = call_with_retry(_gen, max_attempts=4, base=0.6, max_backoff=6, hard_timeout=50, label="gemini.c.insight")
     text = (getattr(resp, "text", None) or "").strip()
     
     # 문장 완결성 검사: 마침표/물음표/느낌표/종결문자 없이 끝나면 후속 요청 한 번 더
