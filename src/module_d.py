@@ -4,7 +4,7 @@ import re
 import csv
 import time
 import google.generativeai as genai
-from src.utils import (
+from utils import (
     log_info, log_warn, log_error, abort,
     call_with_retry, http_get_with_retry, json_from_response
 )
@@ -229,21 +229,32 @@ def build_prompt_array(ctx):
     )
 
 # ---------- LLM 호출 ----------
-
 def call_gemini_array(api_key, prompt, max_tokens=1400, temperature=0.15):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    # JSON MIME 지정(응답을 배열로 유도)
-    resp = model.generate_content(
-        prompt,
-        generation_config={
-            "max_output_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.8,
-            "response_mime_type": "application/json"
-        }
+
+    def _gen():
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        return model.generate_content(
+            prompt,
+            generation_config={
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": 0.8,
+                "response_mime_type": "application/json"
+            }
+        )
+
+    resp = call_with_retry(
+        _gen,
+        max_attempts=4,
+        base=0.6,
+        max_backoff=6,
+        hard_timeout=55,
+        label="gemini.d.array"
     )
+
     return (getattr(resp, "text", None) or "").strip()
+    
 
 # ---------- 후처리 ----------
 
