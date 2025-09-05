@@ -2,7 +2,7 @@ import os
 import json
 import glob
 import re
-import datetime
+import datetime as dt
 from pathlib import Path
 from utils import (
     log_info, log_warn, log_error, abort,
@@ -320,7 +320,7 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
     summary = insights.get("summary", "").strip()
 
     ideas = opps.get("ideas", [])[:5]
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    today = dt.datetime.utcnow().strftime("%Y-%m-%d")
     lines =[]
 
     lines.append(f"# Weekly/New Biz Report ({today})\n")
