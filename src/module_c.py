@@ -4,7 +4,7 @@ import re
 import glob
 import unicodedata
 import time
-import datetime
+import datetime as dtt
 import tomotopy as tp
 import google.generativeai as genai
 from email.utils import parsedate_to_datetime
@@ -20,25 +20,25 @@ def latest(globpat: str):
 
 
 def to_date(s: str) -> str:
-    today = datetime.date.today()
+    today = dt.date.today()
     if not s or not isinstance(s, str):
         return today.strftime("%Y-%m-%d")
     s = s.strip()
     
     try:
         iso = s.replace("Z", "+00:00")
-        dt = datetime.datetime.fromisoformat(iso)
-        d = dt.date()
+        dtt = dt.datetime.fromisoformat(iso)
+        d = dtt.date()
     except Exception:
         try:
-            dt = parsedate_to_datetime(s)
-            d = dt.date()
+            dtt = parsedate_to_datetime(s)
+            d = dtt.date()
         except Exception:
             m = re.search(r"(\d{4}).*?(\d{1,2}).*?(\d{1,2})", s)
             if m:
                 y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
                 try:
-                    d = datetime.date(y, mm, dd)
+                    d = dt.date(y, mm, dd)
                 except Exception:
                     d = today
             else:
