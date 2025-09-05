@@ -4,6 +4,10 @@ import re
 import csv
 import time
 import google.generativeai as genai
+from src.utils import (
+    log_info, log_warn, log_error, abort,
+    call_with_retry, http_get_with_retry, json_from_response
+)
 
 # ---------- 유틸 ----------
 
