@@ -208,18 +208,21 @@ def load_warehouse_rows() -> List[Dict[str, Any]]:
 # 시계열(Articles per Day)
 # ------------------------------------------------------------
 
-def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:    
+    SAVE_IMG = os.path.join(FIG_DIR, "timeseries.png")  # 리포트 템플릿 호환 파일명
+    
     df = pd.DataFrame(rows)
-    out_img = os.path.join(FIG_DIR, "articles_per_day.png")
-
+    
+    # 빈 데이터 처리 1
     if df.empty or "published" not in df.columns:
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
         ax.axis("off")
-        plt.savefig(out_img, dpi=150, bbox_inches="tight")
+        plt.savefig(SAVE_IMG, dpi=150, bbox_inches="tight")
         plt.close()
         return {"daily": [], "ma7": []}
-
+    
+    # 문자열 → datetime
     df["published"] = pd.to_datetime(df["published"], errors="coerce")
     base = (
         df.dropna(subset=["published"])
@@ -229,26 +232,27 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
           .to_frame()
     )
     base.index = pd.to_datetime(base.index)
-
+    
+    # 빈 데이터 처리 2
     if base.empty:
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
         ax.axis("off")
-        plt.savefig(out_img, dpi=150, bbox_inches="tight")
+        plt.savefig(SAVE_IMG, dpi=150, bbox_inches="tight")
         plt.close()
         return {"daily": [], "ma7": []}
-
-    # 연속 날짜로 재색인(빈 날은 0)
+    
+    # 연속 날짜로 재색인(빈 날 0)
     full_range = pd.date_range(base.index.min(), base.index.max(), freq="D")
     daily = base.reindex(full_range).fillna(0.0)["count"].astype(int)
     # 7일 이동평균(데이터가 적어도 보이게)
     ma7 = daily.rolling(window=7, min_periods=1).mean()
-
+    
     # 방어형 시각화
     fig, ax = plt.subplots(figsize=(12, 4.2))
     ax.plot(daily.index, daily.values, "-o", color="#1f77b4", linewidth=1.8, markersize=3, label="Daily")
     ax.plot(ma7.index, ma7.values, "-", color="#ff7f0e", linewidth=1.6, label="7d MA")
-
+    
     # x축 확대(하루만 있어도 보이게)
     if daily.index.min() == daily.index.max():
         start = daily.index.min() - pd.Timedelta(days=3)
@@ -257,23 +261,29 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         start = daily.index.min() - pd.Timedelta(days=1)
         end = daily.index.max() + pd.Timedelta(days=1)
     ax.set_xlim(start, end)
-
+    
     # y축 0부터 + 20% 패딩
     ymax = max(5, int(daily.max() * 1.2))
     ax.set_ylim(0, ymax)
-
+    
     ax.set_title("Articles per Day")
     ax.set_xlabel("Date")
     ax.set_ylabel("Count")
     ax.grid(alpha=0.25, linestyle=":")
     ax.legend(loc="upper right")
     plt.tight_layout()
-    plt.savefig(out_img, dpi=150)
+    
+    # 최종 저장: timeseries.png로 통일
+    plt.savefig(SAVE_IMG, dpi=150)
     plt.close()
-
+    print(f"[INFO] FIG | saved={os.path.basename(SAVE_IMG)}")
+    
+    # JSON 변환
     daily_out = [{"date": d.strftime("%Y-%m-%d"), "count": int(c)} for d, c in zip(daily.index, daily.values)]
     ma7_out = [{"date": d.strftime("%Y-%m-%d"), "count": float(round(v, 3))} for d, v in zip(ma7.index, ma7.values)]
     return {"daily": daily_out, "ma7": ma7_out}
+
+
 
 # ------------------------------------------------------------
 # 토픽 추출(옵션: tomotopy)
