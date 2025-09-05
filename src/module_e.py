@@ -9,8 +9,7 @@ import datetime as dt
 from typing import List, Dict, Any
 
 from utils import (
-    log_info, log_warn, log_error, abort,
-    call_with_retry, http_get_with_retry, json_from_response
+    log_info, log_warn
 )
 
 # ---------- 공통 로더 ----------
@@ -32,6 +31,7 @@ def load_data():
     keywords = load_json("outputs/keywords.json", {"keywords": [], "stats": {}})
     topics   = load_json("outputs/topics.json", {"topics": []})
     ts       = load_json("outputs/trend_timeseries.json", {"daily": []})
+    # insights: evidence는 리스트로 가정
     insights = load_json("outputs/trend_insights.json", {"summary": "", "top_topics": [], "evidence": []})
     opps     = load_json("outputs/biz_opportunities.json", {"ideas": []})
 
@@ -40,10 +40,27 @@ def load_data():
 
     return keywords, topics, ts, insights, opps, meta_items
 
-# ---------- 폰트/플레이스홀더 ----------
+# ---------- 간단 토크나이저/메타 문서 ----------
+def simple_tokenize_ko(text: str):
+    toks = re.findall(r"[가-힣A-Za-z0-9]+", text or "")
+    toks = [t.lower() for t in toks if len(t) >= 2]
+    return toks
+
+def build_docs_from_meta(meta_items):
+    docs = []
+    for it in meta_items:
+        title = (it.get("title") or it.get("title_og") or "").strip()
+        desc  = (it.get("description") or it.get("description_og") or "").strip()
+        doc = (title + " " + desc).strip()
+        if doc:
+            docs.append(doc)
+    return docs
+
+# ---------- 폰트 ----------
 def ensure_fonts():
     import matplotlib
     from matplotlib import font_manager
+
     candidates = [
         "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
@@ -51,6 +68,7 @@ def ensure_fonts():
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     ]
     font_path = next((p for p in candidates if os.path.exists(p)), None)
+
     if font_path:
         font_manager.fontManager.addfont(font_path)
         font_name = font_manager.FontProperties(fname=font_path).get_name()
@@ -66,28 +84,16 @@ def ensure_fonts():
         fm._rebuild()
     except Exception:
         pass
+
     return font_name
 
-def ensure_placeholder_image(path: str, text: str):
-    if os.path.exists(path):
-        return
-    import matplotlib.pyplot as plt
-    ensure_fonts()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    plt.figure(figsize=(8, 4))
-    plt.text(0.5, 0.5, text, ha="center", va="center")
-    plt.axis("off")
-    plt.tight_layout()
-    plt.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close()
-    log_warn("플레이스홀더 이미지 생성", path=path)
-
-# ---------- 플롯(키워드/토픽) ----------
+# ---------- 플롯 ----------
 def plot_top_keywords(keywords: Dict[str, Any], out_path="outputs/fig/top_keywords.png", topn=15):
     import matplotlib.pyplot as plt
     import seaborn as sns
     ensure_fonts()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
     data = (keywords.get("keywords") or [])[:topn]
     if not data:
         plt.figure(figsize=(8, 5))
@@ -96,8 +102,10 @@ def plot_top_keywords(keywords: Dict[str, Any], out_path="outputs/fig/top_keywor
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return
+
     labels = [d.get("keyword", "") for d in data][::-1]
     scores = [d.get("score", 0) for d in data][::-1]
+
     plt.figure(figsize=(10, 6))
     sns.barplot(x=scores, y=labels, color="#3b82f6")
     plt.title("Top Keywords")
@@ -113,6 +121,7 @@ def plot_topics(topics: Dict[str, Any], out_path="outputs/fig/topics.png", topn_
     import seaborn as sns
     ensure_fonts()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
     tps = topics.get("topics") or []
     if not tps:
         plt.figure(figsize=(8, 5))
@@ -121,11 +130,13 @@ def plot_topics(topics: Dict[str, Any], out_path="outputs/fig/topics.png", topn_
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return
+
     k = len(tps)
     cols = 2
     rows = math.ceil(k / cols)
     fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
     axes = axes.flatten() if k > 1 else [axes]
+
     for i, t in enumerate(tps):
         ax = axes[i]
         words = (t.get("top_words") or [])[:topn_words]
@@ -135,23 +146,27 @@ def plot_topics(topics: Dict[str, Any], out_path="outputs/fig/topics.png", topn_
         ax.set_title(f"Topic #{t.get('topic_id')}")
         ax.set_xlabel("Prob.")
         ax.set_ylabel("")
+
     for j in range(i + 1, len(axes)):
         axes[j].axis("off")
+
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
 
 def plot_timeseries(ts: Dict[str, Any], out_path="outputs/fig/timeseries.png", overwrite=False):
     """
-    기본값(overwrite=False): module_c 산출물 보존
+    기본값(overwrite=False): module_c가 만든 timeseries.png 보존
     """
     import matplotlib.pyplot as plt
     import pandas as pd
     ensure_fonts()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
     if os.path.exists(out_path) and not overwrite:
         log_info("timeseries.png 이미 존재 → 덮어쓰기 생략", path=out_path)
         return
+
     daily = ts.get("daily") or []
     if not daily:
         plt.figure(figsize=(10, 4))
@@ -160,13 +175,16 @@ def plot_timeseries(ts: Dict[str, Any], out_path="outputs/fig/timeseries.png", o
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return
+
     idx = pd.to_datetime([d.get("date") for d in daily])
     vals = [int(d.get("count", 0)) for d in daily]
     s = pd.Series(vals, index=idx).sort_index()
     ma7 = s.rolling(window=7, min_periods=1).mean()
+
     fig, ax = plt.subplots(figsize=(12, 4.2))
     ax.plot(s.index, s.values, "-o", color="#1f77b4", linewidth=1.8, markersize=3, label="Daily")
     ax.plot(ma7.index, ma7.values, "-", color="#ff7f0e", linewidth=1.6, label="7d MA")
+
     if s.index.min() == s.index.max():
         start = s.index.min() - pd.Timedelta(days=3)
         end   = s.index.max() + pd.Timedelta(days=3)
@@ -174,8 +192,10 @@ def plot_timeseries(ts: Dict[str, Any], out_path="outputs/fig/timeseries.png", o
         start = s.index.min() - pd.Timedelta(days=1)
         end   = s.index.max() + pd.Timedelta(days=1)
     ax.set_xlim(start, end)
+
     ymax = max(5, int(s.max() * 1.2))
     ax.set_ylim(0, ymax)
+
     ax.set_title("Articles per Day")
     ax.set_xlabel("Date")
     ax.set_ylabel("Count")
@@ -186,11 +206,44 @@ def plot_timeseries(ts: Dict[str, Any], out_path="outputs/fig/timeseries.png", o
     plt.close()
     log_info("timeseries 렌더링 완료(모듈E)", path=out_path, overwrite=overwrite)
 
-# ---------- 요구 이미지 확보 ----------
-def ensure_required_images():
-    # keyword_network.png 없으면 플레이스홀더 생성
-    ensure_placeholder_image("outputs/fig/keyword_network.png", "keyword_network.png")
-    # Trend 섹션은 fig/timeseries.png 를 사용(경로만 'fig/'로 쓸 거라, 실제 파일은 outputs/fig/timeseries.png 그대로 두면 됨)
+# ---------- 이미지/필드 유틸 ----------
+def file_exists(path: str) -> bool:
+    try:
+        return os.path.exists(path)
+    except Exception:
+        return False
+
+def md_image_if_exists(rel_path: str, alt: str) -> str:
+    """
+    report.html이 outputs/ 경로에 생성되므로,
+    마크다운에는 fig/xxx.png처럼 상대경로를 넣고,
+    실제 존재 여부는 outputs/fig/xxx.png로 확인한다.
+    """
+    abs_path = os.path.join("outputs", rel_path)
+    if file_exists(abs_path):
+        return f"![{alt}]({rel_path})"
+    else:
+        log_warn("이미지 없음 → 삽입 생략", path=abs_path)
+        return ""
+
+def normalize_idea_row(it: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    다양한 스키마(title/idea/name, desc/description/value/value_prop, target/segment/...)
+    를 너그럽게 수용해 표가 비지 않도록 정규화
+    """
+    title = it.get("title") or it.get("idea") or it.get("name") or ""
+    target = it.get("target") or it.get("target_customer") or it.get("audience") or it.get("segment") or ""
+    desc = it.get("desc") or it.get("description") or it.get("value") or it.get("value_prop") or ""
+    try:
+        score = float(it.get("score") or it.get("priority_score") or 0)
+    except Exception:
+        score = 0.0
+
+    title = str(title).replace("|", "-").strip()
+    target = str(target).replace("|", "-").strip()
+    desc = str(desc).replace("\n", " ").replace("|", "-").strip()
+
+    return {"title": title, "target": target, "desc": desc, "score": score}
 
 # ---------- Key Metrics ----------
 def make_key_metrics(ts: Dict[str, Any],
@@ -201,23 +254,15 @@ def make_key_metrics(ts: Dict[str, Any],
     if daily:
         dates = [d.get("date") for d in daily if d.get("date")]
         counts = [int(d.get("count", 0)) for d in daily]
-        date_min = dates[0]
-        date_max = dates[-1]
         days = len(dates)
         total = sum(counts)
-        avg = round(total / max(1, days), 2)
-        maxv = max(counts) if counts else 0
-        minv = min(counts) if counts else 0
     else:
-        date_min = date_max = "-"
         days = 0
-        total = avg = maxv = minv = 0
+        total = 0
 
     tp_cnt = len(topics.get("topics") or [])
     kw_cnt = len(keywords.get("keywords") or [])
-    idea_cnt = len(opps.get("ideas") or [])
 
-    # 샘플 HTML 톤에 맞춘 간단 지표 4~6개
     return [
         f"문서 수: {total}",
         f"키워드 수(상위): {min(15, kw_cnt)}",
@@ -242,10 +287,7 @@ def build_report_md(keywords: Dict[str, Any],
     os.makedirs(os.path.dirname(out_md), exist_ok=True)
 
     report_date = pick_report_date(ts)
-    daily = ts.get("daily", [])
-    # Top Keywords 테이블용 데이터
     kw_list = (keywords.get("keywords") or [])[:15]
-    # Topics 리스트용 단어 샘플
     topic_items = topics.get("topics") or []
 
     lines: List[str] = []
@@ -255,12 +297,9 @@ def build_report_md(keywords: Dict[str, Any],
 
     # Executive Summary
     lines.append("## Executive Summary")
-    summary_txt = (insights.get("summary") or "").strip()
-    if not summary_txt:
-        summary_txt = "_요약 없음_"
-    # 한 줄 안내(샘플과 톤 맞춤)
     lines.append("- 이번 기간 핵심 토픽과 키워드, 주요 시사점을 요약합니다.")
     lines.append("")
+    summary_txt = (insights.get("summary") or "").strip() or "_요약 없음_"
     lines.append(summary_txt)
     lines.append("")
 
@@ -270,7 +309,7 @@ def build_report_md(keywords: Dict[str, Any],
         lines.append(f"- {m}")
     lines.append("")
 
-    # Top Keywords (표 + 이미지 2개)
+    # Top Keywords (표 + 이미지)
     lines.append("## Top Keywords")
     lines.append("")
     lines.append("| Rank | Keyword | Score |")
@@ -281,11 +320,16 @@ def build_report_md(keywords: Dict[str, Any],
         for i, it in enumerate(kw_list, 1):
             k = it.get("keyword", "")
             s = it.get("score", 0)
+            try:
+                s = float(s)
+            except Exception:
+                s = 0.0
             lines.append(f"| {i} | {k} | {s:.3f} |")
     lines.append("")
-    # 이미지 경로는 fig/… (report.html이 outputs/에 있으므로 상대경로)
-    lines.append("![Top Keywords](fig/top_keywords.png)")
-    lines.append("![Keyword Network](fig/keyword_network.png)")
+    img_kw = md_image_if_exists("fig/top_keywords.png", "Top Keywords")
+    if img_kw: lines.append(img_kw)
+    img_kw_net = md_image_if_exists("fig/keyword_network.png", "Keyword Network")
+    if img_kw_net: lines.append(img_kw_net)
     lines.append("")
 
     # Topics (리스트 + 이미지)
@@ -298,41 +342,46 @@ def build_report_md(keywords: Dict[str, Any],
             words = [w.get("word", "") for w in (t.get("top_words") or [])][:6]
             lines.append(f"- Topic #{tid}: " + ", ".join(words))
     lines.append("")
-    lines.append("![Topics](fig/topics.png)")
+    img_topics = md_image_if_exists("fig/topics.png", "Topics")
+    if img_topics: lines.append(img_topics)
     lines.append("")
 
-    # Trend (timeseries.png)
+    # Trend
     lines.append("## Trend")
     lines.append("- 최근 14~30일 기사 수 추세와 7일 이동평균선을 제공합니다.")
     lines.append("")
-    lines.append("![Timeseries](fig/timeseries.png)")
+    img_ts = md_image_if_exists("fig/timeseries.png", "Timeseries")
+    if img_ts:
+        lines.append(img_ts)
+    else:
+        lines.append("_timeseries 이미지 없음_")
     lines.append("")
 
-    # Insights (evidence만 간단 노출)
+    # Insights (요약 → Evidence)
     lines.append("## Insights")
+    insight_body = (insights.get("summary") or "").strip()
+    lines.append(insight_body if insight_body else "_요약 없음_")
     ev = insights.get("evidence") or []
     if isinstance(ev, list) and ev:
+        lines.append("")
         for e in ev[:6]:
             lines.append(f"- {e}")
-    else:
-        lines.append("- _추가 인사이트 없음_")
     lines.append("")
 
-    # Opportunities (Top 5) — 표 헤더 일치
+    # Opportunities (Top 5)
     lines.append("## Opportunities (Top 5)")
     lines.append("")
     lines.append("| Idea | Target | Value Prop | Score |")
     lines.append("|---|---|---|---:|")
-    ideas = (opps.get("ideas") or [])[:5]
-    if not ideas:
+    ideas_raw = opps.get("ideas") or []
+    ideas_norm = [normalize_idea_row(it) for it in ideas_raw]
+    ideas_norm.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+    top5 = ideas_norm[:5]
+    if not top5:
         lines.append("| (없음) | - | - | 0 |")
     else:
-        for it in ideas:
-            idea = (it.get("title") or it.get("idea") or "").replace("|", "-")
-            target = (it.get("target") or "").replace("|", "-")
-            value = (it.get("desc") or it.get("description") or "").replace("\n", " ").replace("|", "-")
-            score = it.get("score", 0)
-            lines.append(f"| {idea} | {target} | {value} | {score} |")
+        for it in top5:
+            lines.append(f"| {it['title']} | {it['target']} | {it['desc']} | {it['score']:.1f} |")
     lines.append("")
 
     # Appendix
@@ -417,16 +466,11 @@ if __name__ == "__main__":
     if not os.path.exists("outputs/fig/topics.png"):
         plot_topics(topics)
 
-    # timeseries는 module C 산출물 유지
-    from pathlib import Path
-    if not Path("outputs/fig/timeseries.png").exists():
-        # 없으면 생성만 시도
+    # 타임시리즈는 모듈 C 산출물 유지(없으면 한 번 생성)
+    if not os.path.exists("outputs/fig/timeseries.png"):
         plot_timeseries(ts, overwrite=True)
     else:
         plot_timeseries(ts, overwrite=False)
-
-    # 요구 이미지 확보(플레이스홀더 포함)
-    ensure_required_images()
 
     # 리포트 생성
     build_report_md(keywords, topics, ts, insights, opps, out_md="outputs/report.md")
