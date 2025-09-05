@@ -3,53 +3,52 @@ import json
 import glob
 import re
 import sys
-import datetime
+import datetime as dt # ← 모듈 별칭 고정
 from email.utils import parsedate_to_datetime
-from datetime import datetime, timezone, timedelta
-from utils import (
-    log_info, log_warn, log_error, abort,
-    call_with_retry, http_get_with_retry, json_from_response
-)
+from utils import ( log_info, log_warn, log_error, abort, call_with_retry, http_get_with_retry, json_from_response )
+
 
 def now_kst_str():
-    kst = timezone(timedelta(hours=9))
-    return datetime.now(kst).strftime("%Y%m%dT%H%M%S")  # 예: 20250905T112233
+    kst = dt.timezone(dt.timedelta(hours=9))
+    return dt.datetime.now(kst).strftime("%Y%m%dT%H%M%S") # 예: 20250905T112233
     
 def latest(globpat):
     files = sorted(glob.glob(globpat))
     return files[-1] if files else None
 
 def to_date(s: str) -> str:
-    today = datetime.date.today()
+    today = dt.date.today()
     if not s or not isinstance(s, str):
         return today.strftime("%Y-%m-%d")
+
     s = s.strip()
-    
+
     # 1) ISO-8601
     try:
         iso = s.replace("Z", "+00:00")
-        dt = datetime.datetime.fromisoformat(iso)
-        d = dt.date()
+        dtt = dt.datetime.fromisoformat(iso)
+        d = dtt.date()
     except Exception:
-        # 2) RFC2822 (예: Wed, 03 Sep 2025 11:22:33 +0900)
+        # 2) RFC2822
         try:
-            dt = parsedate_to_datetime(s)
-            d = dt.date()
+            dtt = parsedate_to_datetime(s)
+            d = dtt.date()
         except Exception:
             # 3) 정규식 추출 + 실제 달력 검증
             m = re.search(r"(\d{4}).*?(\d{1,2}).*?(\d{1,2})", s)
             if m:
                 y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
                 try:
-                    d = datetime.date(y, mm, dd)
+                    d = dt.date(y, mm, dd)
                 except Exception:
                     d = today
             else:
                 d = today
-    
+
     # 미래 날짜 방지
     if d > today:
         d = today
+    
     return d.strftime("%Y-%m-%d")
 
 def ensure_dir(p):
@@ -94,14 +93,14 @@ def main():
         
         d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
         published = to_date(d_raw)
-        
+
         row = {
             "url": url,
             "title": it.get("title"),
             "site_name": it.get("site_name"),
             "_query": it.get("_query") or it.get("query"),
             "published": published,
-            "created_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+            "created_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
         }
         
         run_kst = now_kst_str()
