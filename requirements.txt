@@ -2,14 +2,14 @@
 requests>=2.31.0
 beautifulsoup4>=4.12.2
 lxml>=4.9.3
-pandas>=2.2.2  # NLP / ML
+pandas>=2.2.2
 
 # NLP / ML 
 scikit-learn>=1.4.0
 soynlp>=0.0.493
 krwordrank>=1.0.3
 networkx>=3.2.1
-tomotopy>=0.12.6  # LLM
+tomotopy>=0.12.6
 
 # LLM
 google-generativeai>=0.7.2
