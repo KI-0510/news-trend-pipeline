@@ -4,17 +4,12 @@ import glob
 import re
 import unicodedata
 import time
-import csv
 import string
 from collections import defaultdict
 from soynlp.normalizer import normalize, repeat_normalize, emoticon_normalize
 from krwordrank.word import KRWordRank
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from utils import (
-    log_info, log_warn, log_error, abort,
-    call_with_retry, http_get_with_retry, json_from_response
-)
 
 # [추가] 조사 제거 함수
 def strip_korean_particle(word: str) -> str:
@@ -219,19 +214,8 @@ def main():
             "stats": {"num_docs": len(docs)},
             "keywords": keywords
         }, f, ensure_ascii=False, indent=2)
-
-    # [CSV 추가 코드 삽입 위치]
-    with open("outputs/keywords.csv", "w", encoding="utf-8", newline="") as cf:
-        w = csv.writer(cf)
-        w.writerow(["rank", "keyword", "score"])
-        for i, k in enumerate(keywords, 1):
-            w.writerow([i, k.get("keyword", ""), k.get("score", "")])
-    print(f"[INFO] CSV 저장: outputs/keywords.csv")
-
     
     print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(keywords)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
-    print(f"[INFO] SUMMARY | B | docs={len(docs)} unique_kws={len({k['keyword'] for k in keywords})} top3={[k['keyword'] for k in keywords[:3]]}")
-
 
 if __name__ == "__main__":
     main()  # 이 줄이 올바른 위치에서 호출되도록 수정됨
