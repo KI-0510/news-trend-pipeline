@@ -1,0 +1,22 @@
+# Core
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+lxml>=4.9.3
+pandas>=2.2.2  # NLP / ML
+
+# NLP / ML 
+scikit-learn>=1.4.0
+soynlp>=0.0.493
+krwordrank>=1.0.3
+networkx>=3.2.1
+tomotopy>=0.12.6  # LLM
+
+# LLM
+google-generativeai>=0.7.2
+
+# Viz / Report
+matplotlib>=3.8.4
+seaborn>=0.13.2
+markdown>=3.6
+wordcloud>=1.9.3
+pillow>=10.3.0
