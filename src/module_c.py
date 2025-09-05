@@ -226,32 +226,37 @@ def build_corpus_for_topics(rows: List[Dict[str, Any]]) -> List[str]:
     return texts
 
 def extract_topics(texts: List[str], k: int = 6, topn: int = 10) -> Dict[str, Any]:
+    # 입력 검증
     if not texts:
         return {"topics": []}
     if tp is None:
         log_warn("tomotopy 미설치 → 토픽 스킵")
         return {"topics": []}
 
-    # 매우 가벼운 토큰화(공백+기호 제거)
+    # 매우 가벼운 토큰화
     docs = []
     for t in texts:
         toks = re.findall(r"[가-힣A-Za-z0-9]+", t.lower())
         if toks:
             docs.append(toks)
-    if not docs:
+
+    n_docs = len(docs)
+    if n_docs < 2:
+        # 문서가 1개 이하이면 토픽 추출 의미 없음
         return {"topics": []}
 
-    # LDA
-    mdl = tp.LDAModel(k=k, alpha=0.1, eta=0.01, min_df=3)
+    # k 보정: 문서 수보다 큰 k를 요구하지 않도록
+    k_eff = max(2, min(k, n_docs))  # 최소 2, 최대 n_docs
+    # 학습 횟수도 데이터 크기에 맞춰 가볍게
+    train_iters = min(200, max(60, 12 * k_eff))
+
+    # LDA 모델 1회만 생성
+    mdl = tp.LDAModel(k=k_eff, alpha=0.1, eta=0.01, min_df=3)
     for d in docs:
         mdl.add_doc(d)
-    if mdl.num_docs < k:
-        k = max(2, min(4, mdl.num_docs))
-        mdl = tp.LDAModel(k=k, alpha=0.1, eta=0.01, min_df=3)
-        for d in docs:
-            mdl.add_doc(d)
 
-    for i in range(200):
+    # 학습
+    for _ in range(train_iters // 10):
         mdl.train(10)
 
     topics = []
