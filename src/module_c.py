@@ -102,6 +102,50 @@ def load_insight_hint() -> str:
     except Exception:
         return ""
 
+def build_evidence(ts_json: Dict[str, Any],
+                   top_keywords: List[str],
+                   top_topics_compact: List[Dict[str, Any]]) -> List[str]:
+    """
+    검증용 'evidence' 필드(문장 리스트) 생성:
+    - 기간/일수/최대치 요약
+    - 키워드 샘플
+    - 토픽 샘플(단어)
+    """
+    evid = []
+
+    # 기간/일수/최대치
+    daily = ts_json.get("daily", [])
+    if daily:
+        dates = [d.get("date") for d in daily if d.get("date")]
+        counts = [int(d.get("count", 0)) for d in daily]
+        if dates:
+            start, end = dates[0], dates[-1]
+            total_days = len(dates)
+            max_val = max(counts) if counts else 0
+            evid.append(f"분석 기간: {start} ~ {end} (총 {total_days}일), 일별 최대 기사 수: {max_val}건")
+    else:
+        evid.append("분석 기간 데이터가 부족합니다(일별 집계 없음).")
+
+    # 키워드 샘플
+    if top_keywords:
+        sample_kw = ", ".join(top_keywords[:8])
+        evid.append(f"상위 키워드 샘플: {sample_kw}")
+    else:
+        evid.append("상위 키워드가 충분하지 않습니다.")
+
+    # 토픽 샘플
+    if top_topics_compact:
+        parts = []
+        for t in top_topics_compact[:3]:
+            tid = t.get("topic_id")
+            wds = ", ".join((t.get("top_words") or [])[:6])
+            parts.append(f"Topic#{tid}: {wds}")
+        evid.append("토픽 샘플: " + " | ".join(parts))
+    else:
+        evid.append("토픽 추출 결과가 비어 있습니다.")
+
+    return evid[:6]
+                       
 # ------------------------------------------------------------
 # 날짜 처리/로딩
 # ------------------------------------------------------------
@@ -371,7 +415,7 @@ def main():
     kw_json = load_keywords_json()
     prev_hint = load_insight_hint()
     insight_text = generate_insight_text(cfg, prev_hint, kw_json, topics_json)
-
+    
     # 상위 키워드/토픽 압축(없어도 빈 리스트로 저장)
     top_keywords = [ (k.get("keyword") or "") for k in (kw_json.get("keywords") or []) ][:15]
     top_topics_compact = []
@@ -381,19 +425,24 @@ def main():
             "topic_id": t.get("topic_id"),
             "top_words": words
         })
-
+    
+    # evidence 생성(기간/일수/최대치, 키워드 샘플, 토픽 샘플)
+    evidence = build_evidence(ts_json, top_keywords, top_topics_compact)
+    
     save_json(os.path.join(OUTPUT_DIR, "trend_insights.json"), {
         "summary": insight_text or "",
         "top_keywords": top_keywords,
         "top_topics": top_topics_compact,
+        "evidence": evidence,  # ← 추가
         "updated_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
     })
-
+    
     # 저장 직후 readback(안전 확인)
     try:
         with open(os.path.join(OUTPUT_DIR, "trend_insights.json"), "r", encoding="utf-8") as f:
             _d = json.load(f)
-        print(f"[INFO] trend_insights.json saved | keys={list(_d.keys())} top_topics_len={len(_d.get('top_topics', []))}")
+        print(f"[INFO] trend_insights.json saved | keys={list(_d.keys())} "
+              f"top_topics_len={len(_d.get('top_topics', []))} evidence_len={len(_d.get('evidence', []))}")
     except Exception as e:
         print(f"[WARN] trend_insights.json readback failed: {e}")
 
