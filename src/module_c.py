@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Module C
-- warehouse 읽어서 시계열(Articles per Day) 생성/그림 저장
-- 간단 토픽(키워드 기반 LDA) 추출 → topics.json
-- 인사이트 요약(LLM) → trend_insights.json
+- warehouse 읽어 시계열(Articles per Day) 생성/그림 저장
+- 간단 토픽 추출(tomotopy 사용 가능 시)
+- 인사이트 요약(LLM) 생성
 - 견고성: utils.call_with_retry / 표준 로그 사용
 - 날짜 처리: datetime as dt 통일
 """
@@ -13,7 +13,6 @@ import re
 import json
 import glob
 import math
-import csv
 import random
 import datetime as dt
 from typing import List, Dict, Any
@@ -21,7 +20,7 @@ from typing import List, Dict, Any
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# 외부 라이브러리(선택/권장): tomotopy 사용
+# tomotopy는 선택(없어도 파이프라인은 계속 동작)
 try:
     import tomotopy as tp
 except Exception:
@@ -47,7 +46,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # ------------------------------------------------------------
-# 공용 함수
+# 설정/입출력 유틸
 # ------------------------------------------------------------
 
 def load_config() -> Dict[str, Any]:
@@ -77,6 +76,36 @@ def load_config() -> Dict[str, Any]:
         }
     return cfg
 
+def save_json(path: str, data: Dict[str, Any]):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_keywords_json() -> Dict[str, Any]:
+    fp = os.path.join(OUTPUT_DIR, "keywords.json")
+    if not os.path.exists(fp):
+        return {"keywords": []}
+    try:
+        with open(fp, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"keywords": []}
+
+def load_insight_hint() -> str:
+    fp = os.path.join(OUTPUT_DIR, "trend_insights.json")
+    if not os.path.exists(fp):
+        return ""
+    try:
+        with open(fp, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return (data.get("summary") or "").strip()
+    except Exception:
+        return ""
+
+# ------------------------------------------------------------
+# 날짜 처리/로딩
+# ------------------------------------------------------------
+
 def to_date(s: str) -> str:
     """여러 형태의 날짜 문자열 → YYYY-MM-DD"""
     from email.utils import parsedate_to_datetime
@@ -96,7 +125,7 @@ def to_date(s: str) -> str:
             dtt = parsedate_to_datetime(s)
             d = dtt.date()
         except Exception:
-            # 3) 단순 정규식
+            # 3) 단순 정규식 YYYY[-/. ]MM[-/. ]DD
             m = re.search(r"(\d{4}).*?(\d{1,2}).*?(\d{1,2})", s)
             if m:
                 y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -123,7 +152,6 @@ def load_warehouse_rows() -> List[Dict[str, Any]]:
                         continue
                     try:
                         obj = json.loads(line)
-                        # published 정규화
                         obj["published"] = to_date(obj.get("published"))
                         rows.append(obj)
                     except Exception:
@@ -138,18 +166,16 @@ def load_warehouse_rows() -> List[Dict[str, Any]]:
 
 def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     df = pd.DataFrame(rows)
+    out_img = os.path.join(FIG_DIR, "articles_per_day.png")
+
     if df.empty or "published" not in df.columns:
-        # 빈 데이터
-        # 그래프: '데이터 없음'
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
         ax.axis("off")
-        out_img = os.path.join(FIG_DIR, "articles_per_day.png")
         plt.savefig(out_img, dpi=150, bbox_inches="tight")
         plt.close()
         return {"daily": [], "ma7": []}
 
-    # 문자열 → datetime
     df["published"] = pd.to_datetime(df["published"], errors="coerce")
     base = (
         df.dropna(subset=["published"])
@@ -164,14 +190,14 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center", fontsize=12, transform=ax.transAxes)
         ax.axis("off")
-        out_img = os.path.join(FIG_DIR, "articles_per_day.png")
         plt.savefig(out_img, dpi=150, bbox_inches="tight")
         plt.close()
         return {"daily": [], "ma7": []}
 
-    # 연속 날짜 재색인(빈 날 0)
+    # 연속 날짜로 재색인(빈 날은 0)
     full_range = pd.date_range(base.index.min(), base.index.max(), freq="D")
     daily = base.reindex(full_range).fillna(0.0)["count"].astype(int)
+    # 7일 이동평균(데이터가 적어도 보이게)
     ma7 = daily.rolling(window=7, min_periods=1).mean()
 
     # 방어형 시각화
@@ -179,6 +205,7 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     ax.plot(daily.index, daily.values, "-o", color="#1f77b4", linewidth=1.8, markersize=3, label="Daily")
     ax.plot(ma7.index, ma7.values, "-", color="#ff7f0e", linewidth=1.6, label="7d MA")
 
+    # x축 확대(하루만 있어도 보이게)
     if daily.index.min() == daily.index.max():
         start = daily.index.min() - pd.Timedelta(days=3)
         end = daily.index.max() + pd.Timedelta(days=3)
@@ -187,6 +214,7 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         end = daily.index.max() + pd.Timedelta(days=1)
     ax.set_xlim(start, end)
 
+    # y축 0부터 + 20% 패딩
     ymax = max(5, int(daily.max() * 1.2))
     ax.set_ylim(0, ymax)
 
@@ -196,23 +224,15 @@ def make_articles_per_day(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     ax.grid(alpha=0.25, linestyle=":")
     ax.legend(loc="upper right")
     plt.tight_layout()
-    out_img = os.path.join(FIG_DIR, "articles_per_day.png")
     plt.savefig(out_img, dpi=150)
     plt.close()
 
-    # JSON용 구조
-    daily_out = [
-        {"date": d.strftime("%Y-%m-%d"), "count": int(c)}
-        for d, c in zip(daily.index, daily.values)
-    ]
-    ma7_out = [
-        {"date": d.strftime("%Y-%m-%d"), "count": float(round(v, 3))}
-        for d, v in zip(ma7.index, ma7.values)
-    ]
+    daily_out = [{"date": d.strftime("%Y-%m-%d"), "count": int(c)} for d, c in zip(daily.index, daily.values)]
+    ma7_out = [{"date": d.strftime("%Y-%m-%d"), "count": float(round(v, 3))} for d, v in zip(ma7.index, ma7.values)]
     return {"daily": daily_out, "ma7": ma7_out}
 
 # ------------------------------------------------------------
-# 간단 토픽(옵션: tomotopy)
+# 토픽 추출(옵션: tomotopy)
 # ------------------------------------------------------------
 
 def build_corpus_for_topics(rows: List[Dict[str, Any]]) -> List[str]:
@@ -245,17 +265,15 @@ def extract_topics(texts: List[str], k: int = 6, topn: int = 10) -> Dict[str, An
         # 문서가 1개 이하이면 토픽 추출 의미 없음
         return {"topics": []}
 
-    # k 보정: 문서 수보다 큰 k를 요구하지 않도록
-    k_eff = max(2, min(k, n_docs))  # 최소 2, 최대 n_docs
-    # 학습 횟수도 데이터 크기에 맞춰 가볍게
+    # k 보정: 문서 수를 넘지 않도록
+    k_eff = max(2, min(k, n_docs))
+    # 학습 횟수도 크기에 맞춰 조절
     train_iters = min(200, max(60, 12 * k_eff))
 
-    # LDA 모델 1회만 생성
+    # 모델 학습
     mdl = tp.LDAModel(k=k_eff, alpha=0.1, eta=0.01, min_df=3)
     for d in docs:
         mdl.add_doc(d)
-
-    # 학습
     for _ in range(train_iters // 10):
         mdl.train(10)
 
@@ -266,7 +284,6 @@ def extract_topics(texts: List[str], k: int = 6, topn: int = 10) -> Dict[str, An
             "topic_id": ti,
             "top_words": [{"word": w, "prob": float(round(p, 4))} for w, p in words]
         })
-
     return {"topics": topics}
 
 # ------------------------------------------------------------
@@ -278,7 +295,6 @@ def build_insight_prompt(summary_hint: str, top_keywords: List[str], top_topics:
     for t in top_topics[:3]:
         words = [w["word"] for w in (t.get("top_words") or [])][:8]
         tw.append(f"Topic#{t.get('topic_id')}: " + ", ".join(words))
-
     kw = ", ".join(top_keywords[:12])
     hint = (summary_hint or "").strip()
     return (
@@ -329,36 +345,6 @@ def generate_insight_text(cfg: Dict[str, Any], summary_hint: str, keywords_json:
     return (getattr(resp, "text", None) or "").strip()
 
 # ------------------------------------------------------------
-# 파일 입출력
-# ------------------------------------------------------------
-
-def save_json(path: str, data: Dict[str, Any]):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_keywords_json() -> Dict[str, Any]:
-    fp = os.path.join(OUTPUT_DIR, "keywords.json")
-    if not os.path.exists(fp):
-        return {"keywords": []}
-    try:
-        with open(fp, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {"keywords": []}
-
-def load_insight_hint() -> str:
-    fp = os.path.join(OUTPUT_DIR, "trend_insights.json")
-    if not os.path.exists(fp):
-        return ""
-    try:
-        with open(fp, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return (data.get("summary") or "").strip()
-    except Exception:
-        return ""
-
-# ------------------------------------------------------------
 # 메인
 # ------------------------------------------------------------
 
@@ -373,7 +359,7 @@ def main():
     ts_json = make_articles_per_day(rows)
     save_json(os.path.join(OUTPUT_DIR, "trend_timeseries.json"), ts_json)
 
-    # 3) 토픽 추출(가벼운 LDA)
+    # 3) 토픽 추출
     cfg = load_config()
     k = int(cfg.get("topics", {}).get("k", 6))
     topn = int(cfg.get("topics", {}).get("topn", 10))
@@ -381,29 +367,35 @@ def main():
     topics_json = extract_topics(texts, k=k, topn=topn)
     save_json(os.path.join(OUTPUT_DIR, "topics.json"), topics_json)
 
-    # 4) 인사이트(LM 요약)
+    # 4) 인사이트(LM 요약) + trend_insights.json 저장(검증 스키마 충족)
     kw_json = load_keywords_json()
     prev_hint = load_insight_hint()
     insight_text = generate_insight_text(cfg, prev_hint, kw_json, topics_json)
-    
-    # 4-1) 상위 키워드/토픽 압축 요약 생성(검증 스키마 충족용)
-    top_keywords = [k.get("keyword", "") for k in (kw_json.get("keywords") or [])][:15]
-    
+
+    # 상위 키워드/토픽 압축(없어도 빈 리스트로 저장)
+    top_keywords = [ (k.get("keyword") or "") for k in (kw_json.get("keywords") or []) ][:15]
     top_topics_compact = []
     for t in (topics_json.get("topics") or [])[:5]:
-        words = [w.get("word", "") for w in (t.get("top_words") or [])][:8]
+        words = [ (w.get("word") or "") for w in (t.get("top_words") or []) ][:8]
         top_topics_compact.append({
             "topic_id": t.get("topic_id"),
             "top_words": words
         })
-    
-    # 4-2) trend_insights.json 저장
+
     save_json(os.path.join(OUTPUT_DIR, "trend_insights.json"), {
         "summary": insight_text or "",
-        "top_keywords": top_keywords,  # 검증에서 기대하는 필드
-        "top_topics": top_topics_compact,  # 검증에서 기대하는 필드
+        "top_keywords": top_keywords,
+        "top_topics": top_topics_compact,
         "updated_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
     })
+
+    # 저장 직후 readback(안전 확인)
+    try:
+        with open(os.path.join(OUTPUT_DIR, "trend_insights.json"), "r", encoding="utf-8") as f:
+            _d = json.load(f)
+        print(f"[INFO] trend_insights.json saved | keys={list(_d.keys())} top_topics_len={len(_d.get('top_topics', []))}")
+    except Exception as e:
+        print(f"[WARN] trend_insights.json readback failed: {e}")
 
     # 5) 요약 로그(F1)
     days = len(ts_json.get("daily", []))
