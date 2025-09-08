@@ -12,7 +12,6 @@ on:
         description: "드라이 런"
         required: true
         default: "true"
-
 jobs:
   pipeline:
     runs-on: ubuntu-latest
