@@ -157,6 +157,7 @@ def main():
         json.dump(meta_list, f, ensure_ascii=False, indent=2)
 
     print(f"[INFO] 저장 완료: {raw_path}, {meta_path} | 총 수집(중복 제거 후): {len(clean_items)} | 경과(초): {round(time.time()-t0,2)}")
-
+    print("[INFO] SUMMARY | A | clean=%d meta=%d elapsed=%.2fs" % (n_clean, n_meta, sec))
+    
 if __name__ == "__main__":
     main()
