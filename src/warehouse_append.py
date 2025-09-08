@@ -5,6 +5,7 @@ import re
 import sys
 import datetime
 from email.utils import parsedate_to_datetime
+from timeutil import now_kst, kst_date_str, kst_run_suffix
 
 def latest(globpat):
     files = sorted(glob.glob(globpat))
@@ -94,8 +95,10 @@ def main():
             "published": published,
             "created_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
         }
-        
-        out_path = f"data/warehouse/{published}.jsonl"
+
+        date_part = kst_date_str()            # 예: 2025-09-08
+        run_part  = kst_run_suffix()          # 예: 0712-KST
+        out_path = f"data/warehouse/{date_part}-{run_part}.jsonl"
         existing = load_existing_urls(out_path)
         
         if url in existing:
