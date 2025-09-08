@@ -632,7 +632,31 @@ def build_html_from_md(md_path="outputs/report.md", out_html="outputs/report.htm
         with open(md_path, "r", encoding="utf-8") as f:
             md = f.read()
         html = markdown.markdown(md, extensions=["extra", "tables", "toc"])
-        html_tpl = f"""<!doctype html><html lang="ko"><head> <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"> <title>Auto Report</title> <link rel="preconnect" href="https://fonts.gstatic.com"><style> body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif; line-height:1.6; padding:24px; }} img {{ max-width:100%; height:auto; }} table {{ border-collapse: collapse; width:100%; }} th,td {{ border:1px solid #ddd; padding:8px; }} th {{ background:#f7f7f7; }} code {{ background:#f1f5f9; padding:2px 4px; border-radius:4px; }} </style></head><body>{html}</body></html>"""
+
+        html_tpl = f"""<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Report</title>
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif; line-height: 1.6; padding: 24px; color: #222; }}
+  img {{ max-width: 100%; height: auto; }}
+  table {{ border-collapse: collapse; width: 100%; }}
+  th, td {{ border: 1px solid #ddd; padding: 8px; vertical-align: top; }}
+  th {{ background: #f7f7f7; }}
+  code {{ background: #f1f5f9; padding: 2px 4px; border-radius: 4px; }}
+
+  /* 긴 문장도 표 셀 안에서 자연스럽게 줄바꿈되도록 처리 */
+  td, th {{ overflow-wrap: anywhere; word-break: break-word; white-space: normal; }}
+</style>
+</head>
+<body>
+{html}
+</body>
+</html>"""
+
         with open(out_html, "w", encoding="utf-8") as f:
             f.write(html_tpl)
     except Exception as e:
