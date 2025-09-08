@@ -12,7 +12,7 @@ on:
         description: "드라이 런"
         required: true
         default: "true"
-
+        
 jobs:
   pipeline:
     runs-on: ubuntu-latest
@@ -21,7 +21,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
 
       # ✅ Python 환경 설정 (pip 캐시 활성화)
       - name: Set up Python 3.11
