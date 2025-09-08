@@ -83,6 +83,49 @@ def ensure_fonts():
     
     return font_name
 
+def plot_wordcloud_from_keywords(keywords_obj, out_path="outputs/fig/wordcloud.png"):
+    import os
+    from wordcloud import WordCloud
+    import matplotlib.pyplot as plt
+
+    ensure_fonts()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    items = (keywords_obj or {}).get("keywords") or []
+    if not items:
+        # 데이터 없으면 안내 이미지
+        plt.figure(figsize=(8, 5))
+        plt.text(0.5, 0.5, "워드클라우드 데이터 없음", ha="center", va="center")
+        plt.axis("off")
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        return
+
+    # 단어:가중치 딕셔너리 만들기
+    freqs = {}
+    for it in items[:200]:  # 상위 200개까지만
+        w = (it.get("keyword") or "").strip()
+        s = float(it.get("score", 0) or 0)
+        if w:
+            freqs[w] = freqs.get(w, 0.0) + max(s, 0.0)
+
+    # 한글 폰트 경로(ensure_fonts에서 등록한 후보)
+    candidates = [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    font_path = next((p for p in candidates if os.path.exists(p)), None)
+
+    wc = WordCloud(
+        width=1200, height=600, background_color="white",
+        font_path=font_path, colormap="tab20",
+        prefer_horizontal=0.9, min_font_size=8, max_words=200,
+        normalize_plurals=False
+    ).generate_from_frequencies(freqs)
+
+    wc.to_file(out_path)
 
 def plot_top_keywords(keywords, out_path="outputs/fig/top_keywords.png", topn=15):
     import os
@@ -475,6 +518,7 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
         lines.append("- (데이터 없음)")
     lines.append(f"\n![Top Keywords]({fig_dir}/top_keywords.png)\n")
     lines.append(f"![Keyword Network]({fig_dir}/keyword_network.png)\n")
+    lines.append(f"![Word Cloud]({fig_dir}/wordcloud.png)\n")
 
     lines.append("## Topics\n")
     if tlist:
@@ -530,6 +574,54 @@ def build_html_from_md(md_path="outputs/report.md", out_html="outputs/report.htm
     except Exception as e:
         print("[WARN] HTML 변환 실패:", e)
 
+def export_csvs(ts_obj, keywords_obj, topics_obj, out_dir="outputs/export"):
+    import pandas as pd
+    import os
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    # timeseries
+    daily = (ts_obj or {}).get("daily", [])
+    if daily:
+        df_ts = pd.DataFrame(daily)
+        # 컬럼 보정
+        if "date" in df_ts.columns and "count" in df_ts.columns:
+            df_ts.to_csv(
+                os.path.join(out_dir, "timeseries_daily.csv"),
+                index=False,
+                encoding="utf-8"
+            )
+
+    # keywords top20
+    kws = (keywords_obj or {}).get("keywords", [])[:20]
+    if kws:
+        pd.DataFrame(kws).to_csv(
+            os.path.join(out_dir, "keywords_top20.csv"),
+            index=False,
+            encoding="utf-8"
+        )
+
+    # topics top words (토픽별 상위 단어 펼쳐 저장)
+    topics = (topics_obj or {}).get("topics", [])
+    rows = []
+    for t in topics:
+        tid = t.get("topic_id")
+        for w in (t.get("top_words") or [])[:10]:
+            rows.append({
+                "topic_id": tid,
+                "word": w.get("word", ""),
+                "prob": w.get("prob", 0)
+            })
+
+    if rows:
+        pd.DataFrame(rows).to_csv(
+            os.path.join(out_dir, "topics_top_words.csv"),
+            index=False,
+            encoding="utf-8"
+        )
+
+
+
 def main():
     keywords, topics, ts, insights, opps, meta_items = load_data()
     os.makedirs("outputs/fig", exist_ok=True)
@@ -544,6 +636,11 @@ def main():
     except Exception as e:
         print("[WARN] topics 그림 실패:", e)
 
+    try:
+        plot_wordcloud_from_keywords(keywords)
+    except Exception as e:
+        print("[WARN] wordcloud 생성 실패:", e)
+        
     try:
         plot_timeseries(ts)
     except Exception as e:
@@ -566,6 +663,11 @@ def main():
     except Exception as e:
         print("[WARN] 키워드 네트워크 실패:", e)
     
+    try:
+        export_csvs(ts, keywords, topics)
+    except Exception as e:
+        print("[WARN] CSV 내보내기 실패:", e)
+        
     try:
         build_markdown(keywords, topics, ts, insights, opps)
         build_html_from_md()
