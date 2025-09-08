@@ -586,17 +586,34 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
             key=lambda it: float(it.get("priority_score", it.get("score", 0)) or 0),
             reverse=True
         )[:5]
+    
+        # 잘림 옵션: 기본 False, 환경변수로 true/1/yes/y 주면 활성화
+        import os
+        _do_trunc = os.getenv("TRUNCATE_OPP", "").lower() in ("1", "true", "yes", "y")
+    
         lines.append("| Idea | Target | Value Prop | Score |")
         lines.append("|---|---|---|---:|")
         for it in ideas_sorted:
-            idea = _truncate((it.get('idea', '') or it.get('title', '') or ''), 80).replace("|", r"\|")
-            tgt  = _truncate(it.get('target_customer', ''), 40).replace("|", r"\|")
-            vp   = _truncate((it.get('value_prop', '') or '').replace("\n", " "), 100).replace("|", r"\|")
+            idea_raw = (it.get('idea', '') or it.get('title', '') or '')
+            tgt_raw  = it.get('target_customer', '') or ''
+            vp_raw   = (it.get('value_prop', '') or '').replace("\n", " ")
+    
+            if _do_trunc:
+                idea = _truncate(idea_raw, 120).replace("|", r"\|")
+                tgt  = _truncate(tgt_raw, 80).replace("|", r"\|")
+                vp   = _truncate(vp_raw, 280).replace("|", r"\|")
+            else:
+                # 기본: 잘림 없음
+                idea = idea_raw.replace("|", r"\|")
+                tgt  = tgt_raw.replace("|", r"\|")
+                vp   = vp_raw.replace("|", r"\|")
+    
             sc_raw = it.get('priority_score', it.get('score', ''))
             if isinstance(sc_raw, (int, float)) or (isinstance(sc_raw, str) and sc_raw.replace('.', '', 1).isdigit()):
                 sc = _fmt_score(sc_raw, nd=2)
             else:
                 sc = str(sc_raw)
+    
             lines.append(f"| {idea} | {tgt} | {vp} | {sc} |")
     else:
         lines.append("- (아이디어 없음)")
@@ -622,50 +639,30 @@ def build_html_from_md(md_path="outputs/report.md", out_html="outputs/report.htm
         print("[WARN] HTML 변환 실패:", e)
 
 def export_csvs(ts_obj, keywords_obj, topics_obj, out_dir="outputs/export"):
-    import pandas as pd
-    import os
-
+    import pandas as pd, os
     os.makedirs(out_dir, exist_ok=True)
 
     # timeseries
     daily = (ts_obj or {}).get("daily", [])
-    if daily:
-        df_ts = pd.DataFrame(daily)
-        # 컬럼 보정
-        if "date" in df_ts.columns and "count" in df_ts.columns:
-            df_ts.to_csv(
-                os.path.join(out_dir, "timeseries_daily.csv"),
-                index=False,
-                encoding="utf-8"
-            )
+    df_ts = pd.DataFrame(daily) if daily else pd.DataFrame(columns=["date","count"])
+    df_ts.to_csv(os.path.join(out_dir, "timeseries_daily.csv"), index=False, encoding="utf-8")
 
     # keywords top20
     kws = (keywords_obj or {}).get("keywords", [])[:20]
-    if kws:
-        pd.DataFrame(kws).to_csv(
-            os.path.join(out_dir, "keywords_top20.csv"),
-            index=False,
-            encoding="utf-8"
-        )
+    df_kw = pd.DataFrame(kws) if kws else pd.DataFrame(columns=["keyword","score"])
+    df_kw.to_csv(os.path.join(out_dir, "keywords_top20.csv"), index=False, encoding="utf-8")
 
-    # topics top words (토픽별 상위 단어 펼쳐 저장)
+    # topics top words
     topics = (topics_obj or {}).get("topics", [])
     rows = []
     for t in topics:
         tid = t.get("topic_id")
         for w in (t.get("top_words") or [])[:10]:
-            rows.append({
-                "topic_id": tid,
-                "word": w.get("word", ""),
-                "prob": w.get("prob", 0)
-            })
+            rows.append({"topic_id": tid, "word": w.get("word", ""), "prob": w.get("prob", 0)})
+    df_tw = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["topic_id","word","prob"])
+    df_tw.to_csv(os.path.join(out_dir, "topics_top_words.csv"), index=False, encoding="utf-8")
 
-    if rows:
-        pd.DataFrame(rows).to_csv(
-            os.path.join(out_dir, "topics_top_words.csv"),
-            index=False,
-            encoding="utf-8"
-        )
+    print("[INFO] export CSVs -> outputs/export/*.csv")
 
 
 
@@ -709,11 +706,6 @@ def main():
         )
     except Exception as e:
         print("[WARN] 키워드 네트워크 실패:", e)
-    
-    try:
-        export_csvs(ts, keywords, topics)
-    except Exception as e:
-        print("[WARN] CSV 내보내기 실패:", e)
         
     try:
         build_markdown(keywords, topics, ts, insights, opps)
@@ -721,6 +713,11 @@ def main():
     except Exception as e:
         print("[WARN] 리포트 생성 실패:", e)
 
+    try:
+        export_csvs(ts, keywords, topics)
+    except Exception as e:
+        print("[WARN] CSV 내보내기 실패:", e)
+        
     print("[INFO] Module E 완료 | report.md, report.html 생성")
 
 if __name__ == "__main__":
