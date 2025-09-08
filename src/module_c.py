@@ -17,6 +17,7 @@ CFG = load_config()
 LLM = llm_config(CFG)
 
 from utils import log_info, log_warn, log_error, retry
+from timeutil import to_kst_date_str
 
 # ------------- 파일 유틸 -------------
 def latest(globpat: str):
@@ -113,7 +114,7 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
         if doc:
             docs.append(doc)
             d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
-            dates.append(to_date(d_raw))
+            dates.append(to_kst_date_str(d_raw))
     return docs, dates
 
 # ------------- 토크나이저 -------------
@@ -155,12 +156,18 @@ def lda_topics(docs: List[str],
     return {"topics": topics, "doc_topics": doc_topics}
 
 # ------------- 시계열 집계 -------------
-def timeseries_by_date(dates: List[str]) -> Dict[str, Any]:
+def timeseries_by_date(dates):
     counts = {}
     for d in dates:
         if not d:
             continue
-        counts[d] = counts.get(d, 0) + 1
+        # d가 원시 문자열(ISO/헤더)일 수 있으니 KST yyyy-mm-dd로 표준화
+        try:
+            kst_d = to_kst_date_str(d)
+        except Exception:
+            # 이미 표준 yyyy-mm-dd면 그대로
+            kst_d = d
+        counts[kst_d] = counts.get(kst_d, 0) + 1
     daily = [{"date": k, "count": v} for k, v in sorted(counts.items())]
     return {"daily": daily}
 
