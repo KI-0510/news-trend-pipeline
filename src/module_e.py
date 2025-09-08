@@ -4,6 +4,9 @@ import glob
 import re
 import datetime
 from pathlib import Path
+import pandas as pd
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 
 # ---------- 공통 로더 ----------
 def load_json(path, default=None):
@@ -152,45 +155,80 @@ def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
     plt.savefig(out_path, dpi=150)
     plt.close()
 
-def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
-    import os
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    ensure_fonts()
+
+def plot_timeseries(ts: dict,
+                    out_path: str = "outputs/fig/timeseries.png",
+                    window: int = 7,
+                    focus_days: int = 90):
+    """
+    ts는 module_c가 만든 dict 형태({"daily":[{"date":"YYYY-MM-DD","count":N}, ...]})라고 가정.
+    1) 날짜 파싱(yyyy-mm-dd) → 2) 정렬 → 3) 연속 날짜로 보간(빈 날=0) → 4) 7일 이동평균 → 5) 최근 N일만
+    """
+    try:
+        daily = ts.get("daily", []) if isinstance(ts, dict) else []
+    except Exception:
+        daily = []
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    daily = ts.get("daily", [])
     if not daily:
-        plt.figure(figsize=(8,4))
-        plt.text(0.5,0.5,"시계열 데이터 없음", ha="center")
-        plt.axis("off")
-        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.figure(figsize=(12, 4.5))
+        plt.title("Articles per Day")
+        plt.xlabel("Date")
+        plt.ylabel("Count")
+        plt.tight_layout()
+        plt.savefig(out_path, bbox_inches="tight", dpi=150)
         plt.close()
         return
 
+    # DataFrame 변환 + 날짜형 파싱 + 정렬
     df = pd.DataFrame(daily)
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna().sort_values("date")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce", format="%Y-%m-%d")
+    df = df.dropna(subset=["date"]).sort_values("date")
+    df["count"] = pd.to_numeric(df["count"], errors="coerce").fillna(0).astype(int)
 
     if df.empty:
-        plt.figure(figsize=(8,4))
-        plt.text(0.5,0.5,"시계열 데이터 없음", ha="center")
-        plt.axis("off")
-        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.figure(figsize=(12, 4.5))
+        plt.title("Articles per Day")
+        plt.xlabel("Date")
+        plt.ylabel("Count")
+        plt.tight_layout()
+        plt.savefig(out_path, bbox_inches="tight", dpi=150)
         plt.close()
         return
 
-    df["ma7"] = df["count"].rolling(7, min_periods=1).mean()
+    # 연속 날짜 인덱스 만들어 빈 날짜는 0으로 채우기
+    df = df.set_index("date")
+    full_idx = pd.date_range(df.index.min(), df.index.max(), freq="D")
+    df = df.reindex(full_idx).fillna(0)
+    df.index.name = "date"
+    df["count"] = df["count"].astype(int)
 
-    plt.figure(figsize=(10,5))
-    plt.plot(df["date"], df["count"], label="Daily", color="#6366f1")
-    plt.plot(df["date"], df["ma7"], label="7d MA", color="#f59e0b")
+    # 이동평균
+    df["ma"] = df["count"].rolling(window=window, min_periods=1).mean()
+
+    # 최근 N일만 포커스(축 과확대 방지)
+    if focus_days and len(df) > focus_days:
+        df = df.iloc[-focus_days:]
+
+    # 플롯
+    plt.figure(figsize=(12, 4.5))
+    plt.plot(df.index, df["count"], label="Daily", color="tab:blue", linewidth=1.6)
+    plt.plot(df.index, df["ma"], label=f"{window}d MA", color="tab:orange", linewidth=1.6)
+
+    ax = plt.gca()
+    locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+
     plt.title("Articles per Day")
     plt.xlabel("Date")
     plt.ylabel("Count")
-    plt.legend()
+    plt.legend(loc="upper right")
+    plt.grid(alpha=0.25, linestyle="--", linewidth=0.6)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
+    plt.savefig(out_path, bbox_inches="tight", dpi=150)
     plt.close()
 
 
