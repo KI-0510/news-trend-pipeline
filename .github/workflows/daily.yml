@@ -5,14 +5,14 @@ permissions:
 
 on:
   schedule:
-    - cron: "0 22 * * *" # UTC 22:00 = KST 07:00
+    - cron: "0 22 * * *"  # UTC 22:00 = KST 07:00
   workflow_dispatch:
     inputs:
       dry_run:
         description: "드라이 런"
         required: true
         default: "true"
-        
+
 jobs:
   pipeline:
     runs-on: ubuntu-latest
@@ -31,6 +31,7 @@ jobs:
 
       # ✅ 의존성 설치 및 가상환경 활성화
       - name: Install dependencies
+        shell: bash
         run: |
           python -m venv .venv
           source .venv/bin/activate
@@ -38,10 +39,10 @@ jobs:
           pip install requests beautifulsoup4 lxml
           pip install scikit-learn krwordrank soynlp networkx
           pip install tomotopy google-generativeai
-        shell: bash
 
       # ✅ 시각화/폰트 관련 설치
       - name: Install viz deps
+        shell: bash
         run: |
           source .venv/bin/activate
           pip install matplotlib seaborn markdown
@@ -49,20 +50,20 @@ jobs:
           sudo apt-get install -y fonts-nanum fonts-noto-cjk
           fc-list | grep -i -E "Nanum|Noto|CJK" || true
           fc-cache -f -v
-        shell: bash
 
       # ✅ 사전 점검: 필수 시크릿 검사(빠른 실패)
       - name: Preflight | Check secrets
+        shell: bash
         run: |
           test -n "${{ secrets.GEMINI_API_KEY }}" || (echo "GEMINI_API_KEY 없음"; exit 1)
           # 네이버 키는 선택 사항이면 경고만 출력
           if [ -z "${{ secrets.NAVER_CLIENT_ID }}" ] || [ -z "${{ secrets.NAVER_CLIENT_SECRET }}" ]; then
             echo "[WARN] NAVER API 키가 없습니다(옵션?)."
           fi
-        shell: bash
 
       # ✅ Module A - Fetch & Preprocess
       - name: Module A - Fetch & Preprocess
+        shell: bash
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
@@ -71,120 +72,102 @@ jobs:
         run: |
           source .venv/bin/activate
           python src/module_a.py
-        shell: bash
-      
+
       # ✅ Check A - Validate Output
       - name: Check A - Validate Output
+        shell: bash
         run: |
           source .venv/bin/activate
-          # 파일 존재 여부 확인
           if ! ls data/news_clean_*.json 1> /dev/null 2>&1 || ! ls data/news_meta_*.json 1> /dev/null 2>&1; then
             echo "필수 파일이 생성되지 않았습니다."
             exit 1
           fi
-          # 파일 목록 출력
           ls data/
-          # 검증 스크립트 실행
           python src/check_a.py
-        shell: bash
-        
-      # ✅ Warehouse 누적 + 커밋
+
+      # ✅ Warehouse 누적 실행(파일 생성만)
       - name: Warehouse Append
+        shell: bash
         run: |
           source .venv/bin/activate
           python src/warehouse_append.py
-        shell: bash
 
-      - name: Commit & Push Warehouse
-      on:
-        workflow_dispatch:
-        push:
-          branches:
-            - main        
-      jobs:
-        commit-and-push:
-          if: github.ref_name == 'main'
-          runs-on: ubuntu-latest
-          steps:
-            - name: Checkout repository
-              uses: actions/checkout@v3
-      
-            - name: Commit & Push Warehouse
-              run: |
-                git config user.name "github-actions[bot]"
-                git config user.email "github-actions[bot]@users.noreply.github.com"
-                git add data/warehouse
-                git commit -m "chore: warehouse append $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes to commit"
-                git pull --rebase --autostash origin ${{ github.ref_name }} || true
-                git push origin HEAD:${{ github.ref_name }} || true
+      # ✅ Warehouse 커밋/푸시 (main에서만)
+      - name: Commit & Push Warehouse (main only)
+        if: github.ref_name == 'main'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/warehouse
+          git commit -m "chore: warehouse append $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "no changes"
+          git pull --rebase --autostash origin ${{ github.ref_name }} || true
+          git push origin HEAD:${{ github.ref_name }} || true
 
       # ✅ Module B 실행 및 검증 단계
       - name: Module B - Keywords
+        shell: bash
         run: |
           source .venv/bin/activate
           python src/module_b.py
-        shell: bash
-      
+
       - name: Check B - Validate Keywords
+        shell: bash
         run: |
           source .venv/bin/activate
           python src/check_b.py
-        shell: bash
-      
+
       # ✅ Module C 실행 및 검증 단계
       - name: Module C - Topics/Timeseries/Insight
+        shell: bash
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           source .venv/bin/activate
           python src/module_c.py
-        shell: bash
 
       - name: Check C - Validate Insights
+        shell: bash
         run: |
           source .venv/bin/activate
           python src/check_c.py
-        shell: bash
-        
+
       # ✅ Module D 실행 및 검증 단계
       - name: Module D - Biz Opportunities
+        shell: bash
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           source .venv/bin/activate
           python src/module_d.py
-        shell: bash
-      
+
       - name: Check D - Validate Biz Opportunities
+        shell: bash
         run: |
           source .venv/bin/activate
           python src/check_d.py
-        shell: bash
 
       # ✅ Module E 실행 및 검증 단계
       - name: Module E - Build Report
+        shell: bash
         run: |
           source .venv/bin/activate
           python src/module_e.py
-        shell: bash
-      
+
       - name: Check E - Validate Report
+        shell: bash
         run: |
           source .venv/bin/activate
           python src/check_e.py
+
+      # ✅ 산출물 보관(브랜치에서도 생성)
+      - name: Prepare outputs daily folder
         shell: bash
-      
-      # ✅ 산출물 보관(브랜치별 커밋)
-      - name: Commit & Push outputs
         run: |
           set -e
           ts=$(date -u +'%Y%m%dT%H%M%SZ')
-
-          # 일자별 폴더 생성
           mkdir -p outputs/daily/$ts/fig
           mkdir -p outputs/daily/$ts/debug
-
-          # 리포트/분석 산출물 복사
           cp outputs/topics.json             outputs/daily/$ts/ || true
           cp outputs/trend_timeseries.json   outputs/daily/$ts/ || true
           cp outputs/trend_insights.json     outputs/daily/$ts/ || true
@@ -192,30 +175,31 @@ jobs:
           cp outputs/biz_opportunities.json  outputs/daily/$ts/ || true
           cp outputs/report.md               outputs/daily/$ts/ || true
           cp outputs/report.html             outputs/daily/$ts/ || true
-
-          # 그림 복사
           cp outputs/fig/*.png               outputs/daily/$ts/fig/ || true
-
-          # 디버그 덤프 복사
           cp -r outputs/debug/*              outputs/daily/$ts/debug/ || true
 
+      # ✅ outputs 커밋/푸시 (main에서만)
+      - name: Commit & Push outputs (main only)
+        if: github.ref_name == 'main'
+        shell: bash
+        run: |
+          set -e
+          ts=$(date -u +'%Y%m%dT%H%M%SZ')
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add outputs/daily
           git commit -m "chore: outputs $ts" || echo "no changes"
-
           git pull --rebase --autostash origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref_name }} || true
-        shell: bash
 
-      # ✅ 결과 확인을 위한 아티팩트 업로드
+      # ✅ 아티팩트 이름 안전화(브랜치명 정제)
       - name: Sanitize artifact name
+        shell: bash
         run: |
           CLEAN=$(echo '${{ github.ref_name }}' | tr '/:*?"<>|\\ ' '-')
           echo "ARTIFACT_NAME=report-${CLEAN}" >> $GITHUB_ENV
-        shell: bash
 
+      # ✅ 결과 확인용 아티팩트 업로드
       - name: Upload report artifacts
         if: success()
         uses: actions/upload-artifact@v4
