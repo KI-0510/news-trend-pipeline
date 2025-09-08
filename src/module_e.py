@@ -485,79 +485,126 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
                              
 
+def _fmt_int(x):
+    try:
+        return f"{int(x):,}"
+    except Exception:
+        return str(x)
+
+def _fmt_score(x, nd=3):
+    try:
+        return f"{float(x):.{nd}f}"
+    except Exception:
+        return str(x)
+
+def _truncate(s, n=80):
+    s = (s or "").strip().replace("\n", " ")
+    return s if len(s) <= n else s[:n-1] + "…"
+    
 # ---------- 리포트 생성 ----------
 def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="outputs/report.md"):
     klist = keywords.get("keywords", [])[:15]
     tlist = topics.get("topics", [])
     daily = ts.get("daily", [])
-    summary = insights.get("summary", "").strip()
+    summary = (insights.get("summary", "") or "").strip()
 
-    ideas = opps.get("ideas", [])[:5]
+    # 기간/총 기사 수 계산(표시는 깔끔하게)
+    n_days = len(daily)
+    total_cnt = sum(int(x.get("count", 0)) for x in daily)
+    if n_days > 0:
+        date_range = f"{daily[0].get('date','?')} ~ {daily[-1].get('date','?')}"
+    else:
+        date_range = "-"
+
+    # 오늘 날짜
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    lines =[]
+    lines = []
 
+    # 타이틀/요약
     lines.append(f"# Weekly/New Biz Report ({today})\n")
     lines.append("## Executive Summary\n")
     lines.append("- 이번 기간 핵심 토픽과 키워드, 주요 시사점을 요약합니다.\n")
     if summary:
         lines.append(summary + "\n")
 
+    # Key Metrics(숫자 포맷 보강)
     lines.append("## Key Metrics\n")
-    lines.append(f"- 문서 수: {keywords.get('stats', {}).get('num_docs', 'N/A')}")
+    num_docs = keywords.get("stats", {}).get("num_docs", "N/A")
+    num_docs_disp = _fmt_int(num_docs) if isinstance(num_docs, (int, float)) or str(num_docs).isdigit() else str(num_docs)
+    lines.append(f"- 기간: {date_range}")
+    lines.append(f"- 총 기사 수: {_fmt_int(total_cnt)}")
+    lines.append(f"- 문서 수: {num_docs_disp}")
     lines.append(f"- 키워드 수(상위): {len(klist)}")
     lines.append(f"- 토픽 수: {len(tlist)}")
-    lines.append(f"- 시계열 데이터 일자 수: {len(daily)}\n")
+    lines.append(f"- 시계열 데이터 일자 수: {n_days}\n")
 
+    # Top Keywords(정렬 + 점수 자릿수 + 파이프 이스케이프)
     lines.append("## Top Keywords\n")
     lines.append(f"![Word Cloud]({fig_dir}/wordcloud.png)\n")
     if klist:
+        # 원본 전체를 점수 기준 정렬 후 표는 상위 15개로 표시
+        kw_all = sorted((keywords.get("keywords") or []), key=lambda x: x.get("score", 0), reverse=True)
         lines.append("| Rank | Keyword | Score |")
         lines.append("|---:|---|---:|")
-        for i, k in enumerate(klist, 1):
-            lines.append(f"| {i} | {k['keyword']} | {round(float(k['score']), 3)} |")
+        for i, k in enumerate(kw_all[:15], 1):
+            kw = (k.get("keyword", "") or "").replace("|", r"\|")
+            sc = _fmt_score(k.get("score", 0), nd=3)
+            lines.append(f"| {i} | {kw} | {sc} |")
     else:
         lines.append("- (데이터 없음)")
     lines.append(f"\n![Top Keywords]({fig_dir}/top_keywords.png)\n")
     lines.append(f"![Keyword Network]({fig_dir}/keyword_network.png)\n")
 
+    # Topics(그대로, 안전 접근만)
     lines.append("## Topics\n")
     if tlist:
         for t in tlist:
-            words = ", ".join([w["word"] for w in t.get("top_words", [])[:6]])
+            words = ", ".join([w.get("word", "") for w in t.get("top_words", [])[:6]])
             lines.append(f"- Topic #{t.get('topic_id')}: {words}")
     else:
         lines.append("- (데이터 없음)")
     lines.append(f"\n![Topics]({fig_dir}/topics.png)\n")
 
+    # Trend(그대로)
     lines.append("## Trend\n")
     lines.append("- 최근 14~30일 기사 수 추세와 7일 이동평균선을 제공합니다.")
     lines.append(f"\n![Timeseries]({fig_dir}/timeseries.png)\n")
 
+    # Insights(그대로)
     lines.append("## Insights\n")
     if summary:
         lines.append(summary + "\n")
     else:
         lines.append("- (요약 없음)\n")
 
+    # Opportunities(점수 정렬 + 텍스트 길이 제한 + 포맷)
     lines.append("## Opportunities (Top 5)\n")
-    ideas = opps.get("ideas", [])[:5]
-    if ideas:
+    ideas_all = (opps.get("ideas", []) or [])
+    if ideas_all:
+        ideas_sorted = sorted(
+            ideas_all,
+            key=lambda it: float(it.get("priority_score", it.get("score", 0)) or 0),
+            reverse=True
+        )[:5]
         lines.append("| Idea | Target | Value Prop | Score |")
         lines.append("|---|---|---|---:|")
-        for it in ideas:
-            idea = (it.get('idea','') or '').replace('|', r'\|').strip()
-            tgt  = (it.get('target_customer','') or '').replace('|', r'\|').strip()
-            vp   = (it.get('value_prop','') or '').replace('\n',' ').replace('|', r'\|').strip()
-            # 완전 원문 사용(잘림 제거) — 길면 아래 300자 제한 주석 해제
-            vp_disp = vp
-            # vp_disp = (vp[:300] + "…") if len(vp) > 300 else vp
-            score = it.get('priority_score','')
-            lines.append(f"| {idea} | {tgt} | {vp_disp} | {score} |")
+        for it in ideas_sorted:
+            idea = _truncate((it.get('idea', '') or it.get('title', '') or ''), 80).replace("|", r"\|")
+            tgt  = _truncate(it.get('target_customer', ''), 40).replace("|", r"\|")
+            vp   = _truncate((it.get('value_prop', '') or '').replace("\n", " "), 100).replace("|", r"\|")
+            sc_raw = it.get('priority_score', it.get('score', ''))
+            if isinstance(sc_raw, (int, float)) or (isinstance(sc_raw, str) and sc_raw.replace('.', '', 1).isdigit()):
+                sc = _fmt_score(sc_raw, nd=2)
+            else:
+                sc = str(sc_raw)
+            lines.append(f"| {idea} | {tgt} | {vp} | {sc} |")
     else:
         lines.append("- (아이디어 없음)")
 
+    # Appendix(그대로)
     lines.append("\n## Appendix\n")
     lines.append("- 데이터: keywords.json, topics.json, trend_timeseries.json, trend_insights.json, biz_opportunities.json")
+
     Path(out_md).parent.mkdir(parents=True, exist_ok=True)
     with open(out_md, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
