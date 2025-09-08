@@ -232,6 +232,7 @@ jobs:
           cp outputs/biz_opportunities.json  "${OUTDIR}/" || true
           cp outputs/report.md               "${OUTDIR}/" || true
           cp outputs/report.html             "${OUTDIR}/" || true
+          cp outputs/*.csv                   "${OUTDIR}/" || true
           cp outputs/fig/*.png               "${OUTDIR}/fig/" || true
           cp -r outputs/debug/*              "${OUTDIR}/debug/" || true
           echo "OUTDIR=${OUTDIR}" >> $GITHUB_ENV
@@ -302,4 +303,5 @@ jobs:
             outputs/report.html
             outputs/report.md
             outputs/fig/*.png
+            outputs/*.csv            
           if-no-files-found: warn
