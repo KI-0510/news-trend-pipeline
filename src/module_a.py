@@ -7,20 +7,12 @@ import glob
 import html
 import requests
 from bs4 import BeautifulSoup
+from config import load_config, llm_config
+CFG = load_config()
+LLM = llm_config(CFG)
 
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
-def load_config():
-    try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {
-            "queries": ["AI"],
-            "dry_run": True,
-            "per_query_display": 10,
-            "pages": 1
-        }
 
 def naver_headers():
     return {

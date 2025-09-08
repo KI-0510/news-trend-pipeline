@@ -1,17 +1,32 @@
+# -*- coding: utf-8 -*-
 import os
 import json
 import re
 import time
+from typing import List, Dict, Any, Optional
+
 import google.generativeai as genai
+
+# D1: 설정 일원화 적용
+from config import load_config, llm_config
+CFG = load_config()
+LLM = llm_config(CFG)
 
 # ---------- 유틸 ----------
 
-def load_json(path):
+def load_json(path: str, default=None):
+    if default is None:
+        default = None
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return None
+        return default
+
+def save_json(path: str, obj: Any):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
 
 def strip_code_fence(text: str) -> str:
     t = (text or "").strip()
@@ -167,8 +182,8 @@ def extract_ideas_any(text: str, want=5):
 
 # ---------- 스키마/프롬프트(필드 축소 버전 유지) ----------
 
-def build_schema_hint():
-    # PoC, 3개월 로드맵, KPI 제거(길이 절약)
+def build_schema_hint() -> Dict[str, Any]:
+    # 길이 최소화한 축소 스키마(롤백 기준)
     return {
         "idea": "아이디어 한 줄 제목",
         "problem": "해결하려는 문제(2-3문장, 220자 이내)",
@@ -176,170 +191,180 @@ def build_schema_hint():
         "value_prop": "핵심 가치제안(차별점, 180자 이내)",
         "solution": ["핵심 기능 bullet 최대 4개"],
         "risks": ["리스크/규제 bullet 3개 내"],
-        "priority_score": 3.5
+        "priority_score": "우선순위 점수(0.0~5.0, 숫자)"
     }
 
-def compact_context():
-    topics = load_json("outputs/topics.json") or {}
-    keywords = load_json("outputs/keywords.json") or {}
-    ts = load_json("outputs/trend_timeseries.json") or {}
-    insights = load_json("outputs/trend_insights.json") or {}
-
-    raw_topics = (topics.get("topics") or [])[:5]
-    compact_topics = []
-    for t in raw_topics:
-        words = (t.get("top_words") or [])[:8]
-        compact_topics.append({
-            "topic_id": t.get("topic_id"),
-            "top_words": [w["word"] for w in words if "word" in w][:8]
-        })
-
-    kw_list = (keywords.get("keywords") or [])[:20]
-    compact_kws = [k["keyword"] for k in kw_list if "keyword" in k][:20]
-    compact_ts = (ts.get("daily") or [])[-30:]
-
-    summary = (insights.get("summary") or "").strip()
-    if summary:
-        summary = re.sub(r"\s+", " ", summary)[:400]
-
-    return {
-        "topics": compact_topics,
-        "keywords": compact_kws,
-        "timeseries": compact_ts,
-        "insight_hint": summary
-    }
-
-def build_prompt_array(ctx):
-    schema_hint = build_schema_hint()
+def build_prompt(context: Dict[str, Any], want: int = 5) -> str:
+    schema = build_schema_hint()
     return (
-        "아래 맥락(토픽/키워드/시계열/요약)을 바탕으로 '디스플레이 및 인접 산업' 중심 신사업 아이디어를 정확히 5개 생성해.\n"
-        "- 반드시 순수 JSON만 반환. 코드펜스/설명/서문/후문 금지.\n"
-        "- 출력 형식: JSON 배열([])로, 각 원소는 JSON 객체.\n"
-        "- 필드 제한: idea, problem, target_customer, value_prop, solution, risks, priority_score (그 외 금지)\n"
-        "- 각 아이디어는 서로 다른 타깃·도메인·채널·BM을 반영. 중복/유사 금지.\n"
-        "- 길이 제한 준수. null/빈 문자열 금지.\n"
-        f"맥락: {json.dumps(ctx, ensure_ascii=False)}\n"
-        f"스키마: {json.dumps(schema_hint, ensure_ascii=False)}\n"
-        "출력: JSON 배열([])만"
+        "다음 컨텍스트(키워드/토픽/요약)를 기반으로 신사업 아이디어를 제안해 주세요.\n"
+        f"- 아이디어 개수: 최대 {want}개\n"
+        "- JSON 배열 형식만 출력하세요. 배열 이외의 텍스트를 출력하지 마세요.\n"
+        "- 각 아이템은 아래 스키마 키를 정확히 사용하세요.\n"
+        f"스키마: {json.dumps(schema, ensure_ascii=False)}\n"
+        "- solution, risks는 리스트로 주세요.\n"
+        "- priority_score는 0.0~5.0의 숫자(float)로 주세요.\n"
+        "컨텍스트:\n"
+        f"{json.dumps(context, ensure_ascii=False)}"
     )
 
 # ---------- LLM 호출 ----------
 
-def call_gemini_array(api_key, prompt, max_tokens=1400, temperature=0.15):
+def call_gemini(prompt: str) -> str:
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY 환경 변수가 없습니다.")
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    # JSON MIME 지정(응답을 배열로 유도)
+    model_name = str(LLM.get("model", "gemini-1.5-flash"))
+    max_tokens = int(LLM.get("max_output_tokens", 2048))
+    temperature = float(LLM.get("temperature", 0.3))
+
+    model = genai.GenerativeModel(model_name)
     resp = model.generate_content(
         prompt,
         generation_config={
             "max_output_tokens": max_tokens,
             "temperature": temperature,
-            "top_p": 0.8,
-            "response_mime_type": "application/json"
+            "top_p": 0.9,
         }
     )
-    return (getattr(resp, "text", None) or "").strip()
+    text = (getattr(resp, "text", None) or "").strip()
+    return text
 
-# ---------- 후처리 ----------
+# ---------- 아이디어 정규화/검증 ----------
 
-def normalize_list_field(v):
-    if v is None:
+def as_list(x, max_len=4) -> List[str]:
+    if isinstance(x, list):
+        out = []
+        for v in x[:max_len]:
+            if v is None:
+                continue
+            s = str(v).strip()
+            if s:
+                out.append(s)
+        return out
+    if x is None:
         return []
-    if isinstance(v, list):
-        return v
-    if isinstance(v, str):
-        s = v.strip()
-        if not s:
-            return []
-        parts = [p.strip("-•* \t") for p in re.split(r"[\n;,]+|•|-|\*", s) if p.strip()]
-        return parts if parts else [s]
-    return [str(v)]
+    s = str(x).strip()
+    return [s] if s else []
 
-def postprocess_ideas(ideas):
-    # 축소 스키마에 맞게 필수/타입 보정
-    required = ["idea", "problem", "target_customer", "value_prop", "solution", "risks", "priority_score"]
-    out, seen = [], set()
-    for it in ideas or []:
-        if not isinstance(it, dict):
-            continue
-        # 허용 필드만 남기고 기본값 채우기
-        clean = {k: it.get(k) for k in required}
-        for k in required:
-            if k not in clean or clean[k] is None:
-                clean[k] = [] if k in ("solution", "risks") else (3.0 if k == "priority_score" else "")
-        clean["solution"] = normalize_list_field(clean.get("solution"))
-        clean["risks"] = normalize_list_field(clean.get("risks"))
-        # 점수 정규화
-        try:
-            s = float(clean.get("priority_score", 3))
-        except Exception:
-            s = 3.0
-        clean["priority_score"] = max(1.0, min(5.0, round(s, 1)))
-        # 중복 타이틀 제거(간단)
-        title = (clean.get("idea") or "").strip()
-        if not title:
-            continue
-        key = title.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(clean)
-    # 우선순위 점수로 정렬
-    out = sorted(out, key=lambda x: x.get("priority_score", 0), reverse=True)
+def clip_text(s: Optional[str], max_chars: int) -> str:
+    s = (s or "").strip()
+    if len(s) <= max_chars:
+        return s
+    return s[:max_chars].rstrip() + "…"
+
+def to_float(x, default=0.0) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return float(default)
+
+def normalize_item(it: Dict[str, Any]) -> Dict[str, Any]:
+    # 다양한 키 관대하게 흡수하되, 축소 스키마로 정규화
+    idea = it.get("idea") or it.get("title") or it.get("name") or ""
+    problem = it.get("problem") or it.get("pain") or ""
+    target = it.get("target_customer") or it.get("target") or it.get("audience") or ""
+    value = it.get("value_prop") or it.get("value") or it.get("description") or ""
+    solution = it.get("solution") or it.get("solutions") or []
+    risks = it.get("risks") or it.get("risk") or []
+
+    score = it.get("priority_score", it.get("score", 0))
+    score = max(0.0, min(5.0, to_float(score, 0.0)))
+
+    # 길이 제한(샘플 톤)
+    idea = clip_text(idea, 100)
+    problem = clip_text(problem, 300)
+    target = clip_text(target, 120)
+    value = clip_text(value, 220)
+    solution = as_list(solution, max_len=4)
+    risks = as_list(risks, max_len=3)
+
+    out = {
+        "idea": idea,
+        "problem": problem,
+        "target_customer": target,
+        "value_prop": value,
+        "solution": solution,
+        "risks": risks,
+        "priority_score": round(score, 1)
+    }
+    # 호환성 위해 title/score도 같이 둠(리포트 테이블 생성 시 유용)
+    out["title"] = idea
+    out["score"] = out["priority_score"]
     return out
+
+def postprocess_ideas(raw_list: List[Dict[str, Any]], want=5) -> List[Dict[str, Any]]:
+    items = []
+    for it in (raw_list or []):
+        try:
+            norm = normalize_item(it)
+            # 최소 요건: 아이디어 제목, 가치제안은 있어야 유의미
+            if norm["idea"] and norm["value_prop"]:
+                items.append(norm)
+        except Exception:
+            continue
+
+    # 상위 5개만 (점수 내림차순)
+    items.sort(key=lambda x: x.get("priority_score", 0.0), reverse=True)
+    return items[:want]
+
+# ---------- 컨텍스트 로딩 ----------
+
+def load_context() -> Dict[str, Any]:
+    keywords = load_json("outputs/keywords.json", default={"keywords": []}) or {"keywords": []}
+    topics = load_json("outputs/topics.json", default={"topics": []}) or {"topics": []}
+    insights = load_json("outputs/trend_insights.json", default={"summary": "", "top_topics": [], "evidence": {}}) or {"summary": "", "top_topics": [], "evidence": {}}
+
+    # 요약 길이 제한(프롬프트 과도 길이 방지)
+    summary = (insights.get("summary") or "").strip()
+    if len(summary) > 1200:
+        summary = summary[:1200] + "…"
+
+    # 키워드 상위 20개만
+    kw_simple = [{"keyword": k.get("keyword", ""), "score": k.get("score", 0)} for k in (keywords.get("keywords") or [])[:20]]
+
+    # 토픽은 단어만 간추림
+    tp_simple = []
+    for t in (topics.get("topics") or [])[:6]:
+        words = [w.get("word", "") for w in (t.get("top_words") or [])][:6]
+        tp_simple.append({"topic_id": t.get("topic_id"), "words": words})
+
+    return {
+        "summary": summary,
+        "keywords": kw_simple,
+        "topics": tp_simple
+    }
 
 # ---------- 메인 ----------
 
 def main():
     t0 = time.time()
-    api_key = (os.getenv("GEMINI_API_KEY", "") or "").strip()
-    ctx = compact_context()
-    ideas = []
+    want = 5
 
-    # 토큰 제한: 필드 축소했으니 1400 정도면 안전
+    context = load_context()
+    prompt = build_prompt(context, want=want)
+
     try:
-        cfg_all = json.load(open("config.json", "r", encoding="utf-8"))
-        max_tokens_cfg = int(cfg_all.get("llm", {}).get("max_output_tokens", 1400))
-    except Exception:
-        max_tokens_cfg = 1400
+        raw_text = call_gemini(prompt)
+    except Exception as e:
+        # LLM 호출 실패 시에도 빈 구조로 저장하여 파이프라인 계속
+        print(f"[ERROR] Gemini 호출 실패: {e}")
+        save_json("outputs/biz_opportunities.json", {"ideas": []})
+        print("[INFO] SUMMARY | D | ideas=0 elapsed=%.2fs" % (time.time() - t0))
+        return
 
-    if api_key and len(api_key) > 20:
-        # 1차: 배열 모드(예전 파싱 전제)
-        try:
-            text1 = call_gemini_array(api_key, build_prompt_array(ctx), max_tokens=max_tokens_cfg, temperature=0.15)
-            dump_debug(text1, tag="array_try1")
-            arr1 = extract_ideas_any(text1, want=5)
-            if isinstance(arr1, list) and arr1:
-                ideas = arr1
-        except Exception as e:
-            print(f"[WARN] 배열 호출 실패(1차): {e}")
+    dump_debug(raw_text, tag="gen")
 
-        # 2차: 그래도 파싱 실패 시 동일 프롬프트로 재시도(단, 폴백 생성 없음)
-        if not ideas:
-            try:
-                text2 = call_gemini_array(api_key, build_prompt_array(ctx), max_tokens=max_tokens_cfg, temperature=0.12)
-                dump_debug(text2, tag="array_try2")
-                arr2 = extract_ideas_any(text2, want=5)
-                if isinstance(arr2, list) and arr2:
-                    ideas = arr2
-            except Exception as e:
-                print(f"[WARN] 배열 호출 실패(2차): {e}")
-    else:
-        print("[WARN] GEMINI_API_KEY 비정상 → 생성 생략(빈 결과 허용)")
+    ideas = extract_ideas_any(raw_text, want=want) or []
+    if not isinstance(ideas, list):
+        ideas = []
 
-    # 후처리(필드 정리/정렬). 폴백 생성은 하지 않음(요청사항)
-    ideas = postprocess_ideas(ideas)
+    # 후처리/정규화 + 상위 5개
+    ideas_final = postprocess_ideas(ideas, want=want)
 
-    # 개수 제한: 최대 5개, 모자라면 그대로 둠(빈칸 허용)
-    if len(ideas) > 5:
-        ideas = ideas[:5]
-
-    os.makedirs("outputs", exist_ok=True)
-    out_path = "outputs/biz_opportunities.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"ideas": ideas}, f, ensure_ascii=False, indent=2)
-
-    print(f"[INFO] 모듈 D 완료 | ideas={len(ideas)} | 출력={out_path} | 경과(초)={round(time.time()-t0,2)}")
+    save_json("outputs/biz_opportunities.json", {"ideas": ideas_final})
+    print("[INFO] SUMMARY | D | ideas=%d elapsed=%.2fs" % (len(ideas_final), time.time() - t0))
 
 if __name__ == "__main__":
     main()
