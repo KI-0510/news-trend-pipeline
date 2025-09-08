@@ -16,7 +16,7 @@ on:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
