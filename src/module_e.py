@@ -83,12 +83,33 @@ def ensure_fonts():
     
     return font_name
 
+def apply_plot_style():
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update({
+        "figure.dpi": 150,
+        "savefig.dpi": 150,
+        "axes.titlesize": 12,
+        "axes.labelsize": 11,
+        "xtick.labelsize": 9,
+        "ytick.labelsize": 9,
+        "legend.fontsize": 9,
+        "axes.grid": True,
+        "grid.alpha": 0.25,
+        "grid.linestyle": "--",
+        "grid.linewidth": 0.6,
+        "axes.edgecolor": "#999",
+        "axes.linewidth": 0.8,
+    })
+
+
 def plot_wordcloud_from_keywords(keywords_obj, out_path="outputs/fig/wordcloud.png"):
     import os
     from wordcloud import WordCloud
     import matplotlib.pyplot as plt
 
     ensure_fonts()
+    apply_plot_style()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     items = (keywords_obj or {}).get("keywords") or []
@@ -121,7 +142,8 @@ def plot_wordcloud_from_keywords(keywords_obj, out_path="outputs/fig/wordcloud.p
     wc = WordCloud(
         width=1200, height=600, background_color="white",
         font_path=font_path, colormap="tab20",
-        prefer_horizontal=0.9, min_font_size=8, max_words=200,
+        prefer_horizontal=0.9, min_font_size=10, max_words=200,
+        relative_scaling=0.5,  # 단어 크기 대비 완화
         normalize_plurals=False
     ).generate_from_frequencies(freqs)
 
@@ -132,6 +154,7 @@ def plot_top_keywords(keywords, out_path="outputs/fig/top_keywords.png", topn=15
     import matplotlib.pyplot as plt
     import seaborn as sns
     ensure_fonts()
+    apply_plot_style()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     data = keywords.get("keywords", [])[:topn]
@@ -161,6 +184,7 @@ def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
     import matplotlib.pyplot as plt
     import seaborn as sns
     ensure_fonts()
+    apply_plot_style()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     tps = topics.get("topics", [])
@@ -204,6 +228,7 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     from datetime import datetime, timedelta
 
     ensure_fonts()
+    apply_plot_style()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     daily = ts.get("daily", [])
