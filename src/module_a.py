@@ -26,7 +26,7 @@ def naver_headers():
 def http_get(url, params=None, headers=None, timeout=10, max_retry=3):
     for i in range(max_retry):
         try:
-            r = http_get(url, headers=hdrs)
+            r = requests.get(url, params=params, headers=headers, timeout=timeout)
             if r.status_code == 429:
                 wait = 30 + i * 15
                 print(f"[WARN] 429 Too Many Requests, wait {wait}s")
