@@ -223,7 +223,8 @@ jobs:
           DATE_KST=$(TZ=Asia/Seoul date +'%Y-%m-%d')
           TIME_KST=$(TZ=Asia/Seoul date +'%H%M-KST')
           OUTDIR="outputs/daily/${DATE_KST}/${TIME_KST}"
-          mkdir -p "${OUTDIR}/fig" "${OUTDIR}/debug"
+          mkdir -p "${OUTDIR}/fig" "${OUTDIR}/debug" "${OUTDIR}/export"
+      
           # 산출물 복사
           cp outputs/topics.json             "${OUTDIR}/" || true
           cp outputs/trend_timeseries.json   "${OUTDIR}/" || true
@@ -232,9 +233,18 @@ jobs:
           cp outputs/biz_opportunities.json  "${OUTDIR}/" || true
           cp outputs/report.md               "${OUTDIR}/" || true
           cp outputs/report.html             "${OUTDIR}/" || true
-          cp outputs/*.csv                   "${OUTDIR}/" || true
+      
+          # CSV: export 폴더 전체 및 개별 CSV 복사(안전망)
+          if [ -d outputs/export ]; then
+            cp -r outputs/export/*           "${OUTDIR}/export/" || true
+          fi
+          cp outputs/*.csv                   "${OUTDIR}/export/" || true
+          cp outputs/export/*.csv            "${OUTDIR}/export/" || true
+      
+          # 이미지/디버그
           cp outputs/fig/*.png               "${OUTDIR}/fig/" || true
           cp -r outputs/debug/*              "${OUTDIR}/debug/" || true
+      
           echo "OUTDIR=${OUTDIR}" >> $GITHUB_ENV
 
       # ✅ outputs 커밋/푸시 (main에서만)
