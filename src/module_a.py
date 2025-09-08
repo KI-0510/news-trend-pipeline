@@ -11,6 +11,8 @@ from config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
+from utils import http_get, log_info, log_warn, log_error
+
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
 
@@ -24,7 +26,7 @@ def naver_headers():
 def http_get(url, params=None, headers=None, timeout=10, max_retry=3):
     for i in range(max_retry):
         try:
-            r = requests.get(url, params=params, headers=headers, timeout=timeout)
+            r = http_get(url, headers=hdrs)
             if r.status_code == 429:
                 wait = 30 + i * 15
                 print(f"[WARN] 429 Too Many Requests, wait {wait}s")
