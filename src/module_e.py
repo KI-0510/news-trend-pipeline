@@ -509,6 +509,7 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
     lines.append(f"- 시계열 데이터 일자 수: {len(daily)}\n")
 
     lines.append("## Top Keywords\n")
+    lines.append(f"![Word Cloud]({fig_dir}/wordcloud.png)\n")
     if klist:
         lines.append("| Rank | Keyword | Score |")
         lines.append("|---:|---|---:|")
@@ -518,7 +519,6 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
         lines.append("- (데이터 없음)")
     lines.append(f"\n![Top Keywords]({fig_dir}/top_keywords.png)\n")
     lines.append(f"![Keyword Network]({fig_dir}/keyword_network.png)\n")
-    lines.append(f"![Word Cloud]({fig_dir}/wordcloud.png)\n")
 
     lines.append("## Topics\n")
     if tlist:
