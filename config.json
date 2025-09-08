@@ -24,7 +24,9 @@
   "llm": {
     "provider": "gemini",
     "model": "gemini-1.5-flash",
-    "max_output_tokens": 2300
+    "max_output_tokens": 2048,
+    "temperature": 0.3
+  },
+  "timezone": "Asia/Seoul"
   }
 }
-
