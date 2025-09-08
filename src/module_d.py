@@ -12,6 +12,8 @@ from config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
+from utils import log_info, log_warn, log_error, retry
+
 # ---------- 유틸 ----------
 
 def load_json(path: str, default=None):
@@ -209,6 +211,16 @@ def build_prompt(context: Dict[str, Any], want: int = 5) -> str:
     )
 
 # ---------- LLM 호출 ----------
+@retry(max_attempts=3, backoff=0.8, exceptions=(Exception,), circuit_trip=4)
+def _gen_content(model, prompt, max_tokens, temperature):
+    return model.generate_content(
+        prompt,
+        generation_config={
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": 0.9,
+        }
+    )
 
 def call_gemini(prompt: str) -> str:
     api_key = os.getenv("GEMINI_API_KEY", "")
@@ -220,14 +232,7 @@ def call_gemini(prompt: str) -> str:
     temperature = float(LLM.get("temperature", 0.3))
 
     model = genai.GenerativeModel(model_name)
-    resp = model.generate_content(
-        prompt,
-        generation_config={
-            "max_output_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-        }
-    )
+    resp = _gen_content(model, prompt, max_tokens, temperature)
     text = (getattr(resp, "text", None) or "").strip()
     return text
 

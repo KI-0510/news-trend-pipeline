@@ -11,6 +11,8 @@ from config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
+from utils import http_get, log_info, log_warn, log_error
+
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
 
@@ -155,6 +157,6 @@ def main():
         json.dump(meta_list, f, ensure_ascii=False, indent=2)
 
     print(f"[INFO] 저장 완료: {raw_path}, {meta_path} | 총 수집(중복 제거 후): {len(clean_items)} | 경과(초): {round(time.time()-t0,2)}")
-
+    
 if __name__ == "__main__":
     main()

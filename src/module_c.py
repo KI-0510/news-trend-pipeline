@@ -16,6 +16,8 @@ from config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
+from utils import log_info, log_warn, log_error, retry
+
 # ------------- 파일 유틸 -------------
 def latest(globpat: str):
     files = sorted(glob.glob(globpat))
@@ -163,6 +165,18 @@ def timeseries_by_date(dates: List[str]) -> Dict[str, Any]:
     return {"daily": daily}
 
 # ------------- 인사이트 생성(Gemini) -------------
+# gemini_insight 내부에 아래 래퍼 추가
+@retry(max_attempts=3, backoff=0.8, exceptions=(Exception,), circuit_trip=4)
+def _gen_content(model, prompt, max_tokens, temperature):
+    return model.generate_content(
+        prompt,
+        generation_config={
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": 0.9,
+        }
+    )
+    
 def gemini_insight(api_key: str,
                    model: str,
                    context: Dict[str, Any],
@@ -190,19 +204,14 @@ def gemini_insight(api_key: str,
         f"데이터: {json.dumps(context, ensure_ascii=False)}"
     )
 
+    # 기존 호출 부분 교체
     try:
-        resp = gmodel.generate_content(
-            prompt,
-            generation_config={
-                "max_output_tokens": max_tokens,
-                "temperature": temperature,
-                "top_p": 0.9,
-            }
-        )
+        resp = _gen_content(gmodel, prompt, max_tokens, temperature)
         text = (getattr(resp, "text", None) or "").strip()
     except Exception as e:
+        log_error("gemini_insight.fail", err=repr(e))
         return f"(요약 생성 실패: {e})"
-
+        
     # 종결성 보완: 문장 부호로 끝나지 않으면 이어쓰기 한 번
     if text and not re.search(r"[\.!?]$|[다요요요]$|[다]$", text):
         follow = (
