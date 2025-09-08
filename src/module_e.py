@@ -153,45 +153,126 @@ def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
     plt.close()
 
 def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
-    import os
+    # 폰트/경로는 기존 방식을 그대로 사용
     import matplotlib.pyplot as plt
     import pandas as pd
+    import matplotlib.dates as mdates
+    from datetime import datetime
+
     ensure_fonts()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     daily = ts.get("daily", [])
     if not daily:
-        plt.figure(figsize=(8,4))
-        plt.text(0.5,0.5,"시계열 데이터 없음", ha="center")
-        plt.axis("off")
+        plt.figure(figsize=(10, 5))
+        plt.title("Articles per Day (no data)")
+        plt.xlabel("Date")
+        plt.ylabel("Count")
+        plt.tight_layout()
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return
 
-    df = pd.DataFrame(daily)
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna().sort_values("date")
+    # 1) DataFrame + 날짜 파싱(유연) + 정렬
+    df = pd.DataFrame(daily).copy()
+    # YYYY-MM-DD가 대부분이지만 혹시 혼재해도 흡수
+    df["date"] = pd.to_datetime(df["date"], errors="coerce", infer_datetime_format=True, utc=False)
+    df["count"] = pd.to_numeric(df.get("count", 0), errors="coerce").fillna(0).astype(int)
+    df = df.dropna(subset=["date"]).sort_values("date")
+
+    # 2) 이상치 연도 제거(현재연도-3 ~ 현재연도+1)
+    now_year = datetime.now().year
+    y_min, y_max = now_year - 3, now_year + 1
+    df = df[(df["date"].dt.year >= y_min) & (df["date"].dt.year <= y_max)]
 
     if df.empty:
-        plt.figure(figsize=(8,4))
-        plt.text(0.5,0.5,"시계열 데이터 없음", ha="center")
-        plt.axis("off")
+        plt.figure(figsize=(10, 5))
+        plt.title("Articles per Day (empty after filtering)")
+        plt.xlabel("Date")
+        plt.ylabel("Count")
+        plt.tight_layout()
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return
 
-    df["ma7"] = df["count"].rolling(7, min_periods=1).mean()
+    # 3) 연속 날짜 인덱스 만들고 빈 날짜는 0으로 채우기
+    df = df.set_index("date")
+    full_idx = pd.date_range(df.index.min().normalize(), df.index.max().normalize(), freq="D")
+    df = df.reindex(full_idx).fillna(0)
+    df.index.name = "date"
+    df["count"] = df["count"].astype(int)
+    
+    # 1일치만 있는 경우 전용 처리(축 여백 고정)
+    if len(df) == 1:
+        from datetime import timedelta
+        d0 = df.index[0]
+        y = float(df["count"].iloc[0])
+    
+        plt.figure(figsize=(12, 4.5))
+        plt.xlim(d0 - timedelta(days=1), d0 + timedelta(days=1))
+        plt.ylim(max(0, y - 1), y + 1)
+    
+        ax = plt.gca()
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    
+        plt.plot([d0], [y], marker="o", color="#6366f1", label="Daily")
+        plt.title(f"Articles per Day ({d0.strftime('%Y-%m-%d')})")
+        plt.xlabel("Date")
+        plt.ylabel("Count")
+        plt.legend(loc="upper right")
+        plt.grid(alpha=0.25, linestyle="--", linewidth=0.6)
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+    
+        try:
+            os.makedirs("outputs/debug", exist_ok=True)
+            df.reset_index().rename(columns={"index": "date"}) \
+              .to_csv("outputs/debug/timeseries_preview.csv", index=False, encoding="utf-8")
+        except Exception:
+            pass
+        return
+    
+    # 4) 이동평균(7일)
+    df["ma7"] = df["count"].rolling(window=7, min_periods=1).mean()
+  
+    # 5) 최근 90~120일만 포커스(축 과확장 방지)
+    focus_days = 120
+    if len(df) > focus_days:
+        df = df.iloc[-focus_days:]
 
-    plt.figure(figsize=(10,5))
-    plt.plot(df["date"], df["count"], label="Daily", color="#6366f1")
-    plt.plot(df["date"], df["ma7"], label="7d MA", color="#f59e0b")
-    plt.title("Articles per Day")
+    # 6) 플롯
+    plt.figure(figsize=(12, 4.5))
+    plt.plot(df.index, df["count"], label="Daily", color="#6366f1", linewidth=1.6)
+    plt.plot(df.index, df["ma7"], label="7d MA", color="#f59e0b", linewidth=1.6)
+
+    # 날짜 축 포맷러(가독성)
+    ax = plt.gca()
+    locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+
+    dmin = df.index.min().strftime("%Y-%m-%d")
+    dmax = df.index.max().strftime("%Y-%m-%d")
+    plt.title(f"Articles per Day ({dmin} ~ {dmax})")
     plt.xlabel("Date")
     plt.ylabel("Count")
-    plt.legend()
+    plt.legend(loc="upper right")
+    plt.grid(alpha=0.25, linestyle="--", linewidth=0.6)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
+
+    # 디버그 프리뷰(선택): x축 범위/E2 체크용
+    try:
+        os.makedirs("outputs/debug", exist_ok=True)
+        df.reset_index().rename(columns={"index": "date"}) \
+          .to_csv("outputs/debug/timeseries_preview.csv", index=False, encoding="utf-8")
+        print("[INFO] timeseries preview saved: outputs/debug/timeseries_preview.csv")
+    except Exception:
+        pass
 
 
 def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png",
