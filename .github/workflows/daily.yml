@@ -1,17 +1,13 @@
 name: Daily Pipeline
 
-permissions:
-  contents: write
-
 on:
-  schedule:
-    - cron: "0 22 * * *"  # UTC 22:00 = KST 07:00
   workflow_dispatch:
     inputs:
       dry_run:
         description: "드라이 런"
         required: true
         default: "true"
+
 jobs:
   pipeline:
     runs-on: ubuntu-latest
