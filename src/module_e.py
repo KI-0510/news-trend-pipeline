@@ -1,131 +1,253 @@
-# -*- coding: utf-8 -*-
-"""
-module_e.py
-- 리포트 생성(마크다운/HTML)
-- 시각화: Top Keywords, Topics (timeseries.png는 있으면 절대 덮어쓰지 않음)
-- 이미지 경로: 마크다운/HTML 모두 fig/… 상대경로 사용
-- 출력물:
-  - outputs/report.md
-  - outputs/report.html
-  - outputs/fig/top_keywords.png
-  - outputs/fig/topics.png
-  - outputs/fig/timeseries.png (없을 때만 생성; 있으면 스킵)
-"""
-
 import os
 import json
-import base64
-import mimetypes
-from typing import Any, Dict, List
+import glob
+import re
+import datetime
+from pathlib import Path
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from markdown import markdown
-
-
-# ---------------- 공통 유틸 ----------------
-def ensure_dir(path: str):
-    os.makedirs(path, exist_ok=True)
-
-def read_json(path: str, default=None):
+# ---------- 공통 로더 ----------
+def load_json(path, default=None):
     if default is None:
-        default = {}
+        default ={}
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return default
 
-def save_text(path: str, text: str):
-    ensure_dir(os.path.dirname(path))
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+def latest(globpat: str):
+    files = sorted(glob.glob(globpat))
+    return files[-1] if files else None
 
-def inline_images(html: str, root_dir="outputs") -> str:
-    """
-    src="fig/xxx.png" 패턴을 찾아 data URI로 인라인한다.
-    - 아티팩트로 받아 바로 열 때 경로 문제 방지.
-    - 기본은 끔. 필요 시 환경변수 INLINE_IMAGES=true 로 켜기.
-    """
-    import re
-    def repl(m):
-        src = m.group(1)
-        abs_path = os.path.join(root_dir, src)
-        if not os.path.exists(abs_path):
-            return m.group(0)
-        mime, _ = mimetypes.guess_type(abs_path)
-        mime = mime or "application/octet-stream"
-        with open(abs_path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("ascii")
-        return f'src="data:{mime};base64,{b64}"'
-    return re.sub(r'src="(fig/[^"]+)"', repl, html)
+# ---------- 데이터 준비 ----------
+def load_data():
+    keywords = load_json("outputs/keywords.json", {"keywords": [], "stats":{}})
+    topics   = load_json("outputs/topics.json", {"topics":[]})
+    ts       = load_json("outputs/trend_timeseries.json", {"daily":[]})
+    insights = load_json("outputs/trend_insights.json", {"summary": "", "top_topics": [], "evidence":{}})
+    opps     = load_json("outputs/biz_opportunities.json", {"ideas":[]})
+
+    meta_path = latest("data/news_meta_*.json")
+    meta_items = load_json(meta_path, []) if meta_path else[]
+
+    return keywords, topics, ts, insights, opps, meta_items
+
+# ---------- 간단 토크나이저 ----------
+def simple_tokenize_ko(text: str):
+    toks = re.findall(r"[가-힣A-Za-z0-9]+", text or "")
+    toks = [t.lower() for t in toks if len(t) >= 2]
+    return toks
+
+def build_docs_from_meta(meta_items):
+    docs =[]
+    for it in meta_items:
+        title = (it.get("title") or it.get("title_og") or "").strip()
+        desc  = (it.get("description") or it.get("description_og") or "").strip()
+        doc = (title + " " + desc).strip()
+        if doc:
+            docs.append(doc)
+    return docs
+
+# ---------- 시각화 ----------
+def ensure_fonts():
+    import os
+    import matplotlib
+    from matplotlib import font_manager
+
+    candidates = [
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    font_path = next((p for p in candidates if os.path.exists(p)), None)
+    
+    if font_path:
+        font_manager.fontManager.addfont(font_path)
+        font_name = font_manager.FontProperties(fname=font_path).get_name()
+    else:
+        # 폰트 파일 경로를 못 찾았을 때의 안전값
+        font_name = "NanumGothic"
+    
+    # rcParams에 확실히 반영
+    matplotlib.rcParams["font.family"] = font_name
+    matplotlib.rcParams["font.sans-serif"] = [font_name, "NanumGothic", "Noto Sans CJK KR", "Malgun Gothic", "AppleGothic", "DejaVu Sans"]
+    matplotlib.rcParams["axes.unicode_minus"] = False
+    
+    # 캐시 재생성(환경 바뀐 경우)
+    try:
+        from matplotlib import font_manager as fm
+        fm._rebuild()
+    except Exception:
+        pass
+    
+    return font_name
 
 
-# ---------------- 플롯: timeseries ----------------
-def plot_timeseries(ts_dict: Dict[str, Any],
-                    out_path: str = "outputs/fig/timeseries.png",
-                    window: int = 7,
-                    focus_days: int = 120):
-    """
-    안정형 타임시리즈 그리기:
-    - 날짜 파싱 → 정렬 → 연속 날짜 0 채우기 → 7일 이동평균 → 최근 N일만 표시
-    - 이상 연도(현재연도-3 ~ 현재연도+1) 필터링
-    """
-    ensure_dir(os.path.dirname(out_path))
+def plot_top_keywords(keywords, out_path="outputs/fig/top_keywords.png", topn=15):
+    import os
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    ensure_fonts()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    daily = (ts_dict or {}).get("daily", []) if isinstance(ts_dict, dict) else []
+    data = keywords.get("keywords", [])[:topn]
+    if not data:
+        plt.figure(figsize=(8,5))
+        plt.text(0.5,0.5,"키워드 데이터 없음", ha="center")
+        plt.axis("off")
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        return
+
+    labels = [d["keyword"] for d in data][::-1]
+    scores = [d["score"] for d in data][::-1]
+
+    plt.figure(figsize=(10,6))
+    sns.barplot(x=scores, y=labels, color="#3b82f6")
+    plt.title("Top Keywords")
+    plt.xlabel("Score")
+    plt.ylabel("")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+
+def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
+    import os
+    import math
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    ensure_fonts()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    tps = topics.get("topics", [])
+    if not tps:
+        plt.figure(figsize=(8,5))
+        plt.text(0.5,0.5,"토픽 데이터 없음", ha="center")
+        plt.axis("off")
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        return
+
+    k = len(tps)
+    cols = 2
+    rows = math.ceil(k / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
+    axes = axes.flatten() if k > 1 else [axes]
+
+    for i, t in enumerate(tps):
+        ax = axes[i]
+        words = t.get("top_words", [])[:topn_words]
+        labels = [w["word"] for w in words][::-1]
+        probs = [w["prob"] for w in words][::-1]
+        sns.barplot(x=probs, y=labels, ax=ax, color="#10b981")
+        ax.set_title(f"Topic #{t.get('topic_id')}")
+        ax.set_xlabel("Prob.")
+        ax.set_ylabel("")
+
+    for j in range(i + 1, len(axes)):
+        axes[j].axis("off")
+
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+
+def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
+    # 폰트/경로는 기존 방식을 그대로 사용
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import matplotlib.dates as mdates
+    from datetime import datetime
+
+    ensure_fonts()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    daily = ts.get("daily", [])
     if not daily:
-        plt.figure(figsize=(14, 4.5))
+        plt.figure(figsize=(10, 5))
         plt.title("Articles per Day (no data)")
         plt.xlabel("Date")
         plt.ylabel("Count")
         plt.tight_layout()
-        plt.savefig(out_path, bbox_inches="tight", dpi=150)
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return
 
-    df = pd.DataFrame(daily)
-    # 날짜 파싱(유연) + 정렬
+    # 1) DataFrame + 날짜 파싱(유연) + 정렬
+    df = pd.DataFrame(daily).copy()
+    # YYYY-MM-DD가 대부분이지만 혹시 혼재해도 흡수
     df["date"] = pd.to_datetime(df["date"], errors="coerce", infer_datetime_format=True, utc=False)
+    df["count"] = pd.to_numeric(df.get("count", 0), errors="coerce").fillna(0).astype(int)
     df = df.dropna(subset=["date"]).sort_values("date")
 
-    from datetime import datetime
+    # 2) 이상치 연도 제거(현재연도-3 ~ 현재연도+1)
     now_year = datetime.now().year
     y_min, y_max = now_year - 3, now_year + 1
     df = df[(df["date"].dt.year >= y_min) & (df["date"].dt.year <= y_max)]
 
-    df["count"] = pd.to_numeric(df.get("count", 0), errors="coerce").fillna(0).astype(int)
-
     if df.empty:
-        plt.figure(figsize=(14, 4.5))
+        plt.figure(figsize=(10, 5))
         plt.title("Articles per Day (empty after filtering)")
         plt.xlabel("Date")
         plt.ylabel("Count")
         plt.tight_layout()
-        plt.savefig(out_path, bbox_inches="tight", dpi=150)
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
         return
 
-    # 연속 날짜 인덱스 + 빈 날 0 채우기
+    # 3) 연속 날짜 인덱스 만들고 빈 날짜는 0으로 채우기
     df = df.set_index("date")
     full_idx = pd.date_range(df.index.min().normalize(), df.index.max().normalize(), freq="D")
     df = df.reindex(full_idx).fillna(0)
     df.index.name = "date"
     df["count"] = df["count"].astype(int)
-
-    # 이동평균
-    df["ma"] = df["count"].rolling(window=window, min_periods=1).mean()
-
-    # 최근 N일만
-    if focus_days and len(df) > focus_days:
+    
+    # 1일치만 있는 경우 전용 처리(축 여백 고정)
+    if len(df) == 1:
+        from datetime import timedelta
+        d0 = df.index[0]
+        y = float(df["count"].iloc[0])
+    
+        plt.figure(figsize=(12, 4.5))
+        plt.xlim(d0 - timedelta(days=1), d0 + timedelta(days=1))
+        plt.ylim(max(0, y - 1), y + 1)
+    
+        ax = plt.gca()
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    
+        plt.plot([d0], [y], marker="o", color="#6366f1", label="Daily")
+        plt.title(f"Articles per Day ({d0.strftime('%Y-%m-%d')})")
+        plt.xlabel("Date")
+        plt.ylabel("Count")
+        plt.legend(loc="upper right")
+        plt.grid(alpha=0.25, linestyle="--", linewidth=0.6)
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+    
+        try:
+            os.makedirs("outputs/debug", exist_ok=True)
+            df.reset_index().rename(columns={"index": "date"}) \
+              .to_csv("outputs/debug/timeseries_preview.csv", index=False, encoding="utf-8")
+        except Exception:
+            pass
+        return
+    
+    # 4) 이동평균(7일)
+    df["ma7"] = df["count"].rolling(window=7, min_periods=1).mean()
+  
+    # 5) 최근 90~120일만 포커스(축 과확장 방지)
+    focus_days = 120
+    if len(df) > focus_days:
         df = df.iloc[-focus_days:]
 
-    # 플롯
-    plt.figure(figsize=(14, 4.5))
-    plt.plot(df.index, df["count"], label="Daily", color="tab:blue", linewidth=1.6)
-    plt.plot(df.index, df["ma"], label=f"{window}d MA", color="tab:orange", linewidth=1.6)
+    # 6) 플롯
+    plt.figure(figsize=(12, 4.5))
+    plt.plot(df.index, df["count"], label="Daily", color="#6366f1", linewidth=1.6)
+    plt.plot(df.index, df["ma7"], label="7d MA", color="#f59e0b", linewidth=1.6)
 
+    # 날짜 축 포맷러(가독성)
     ax = plt.gca()
     locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
     formatter = mdates.ConciseDateFormatter(locator)
@@ -140,12 +262,12 @@ def plot_timeseries(ts_dict: Dict[str, Any],
     plt.legend(loc="upper right")
     plt.grid(alpha=0.25, linestyle="--", linewidth=0.6)
     plt.tight_layout()
-    plt.savefig(out_path, bbox_inches="tight", dpi=150)
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
 
-    # 디버그 프리뷰 남기기
+    # 디버그 프리뷰(선택): x축 범위/E2 체크용
     try:
-        ensure_dir("outputs/debug")
+        os.makedirs("outputs/debug", exist_ok=True)
         df.reset_index().rename(columns={"index": "date"}) \
           .to_csv("outputs/debug/timeseries_preview.csv", index=False, encoding="utf-8")
         print("[INFO] timeseries preview saved: outputs/debug/timeseries_preview.csv")
@@ -153,217 +275,251 @@ def plot_timeseries(ts_dict: Dict[str, Any],
         pass
 
 
-def ensure_timeseries_png(ts_dict: Dict[str, Any], out_path="outputs/fig/timeseries.png"):
-    # 이미 있으면 절대 재생성하지 않음(덮어쓰기 금지)
-    if os.path.exists(out_path):
-        print("[INFO] timeseries.png exists -> skip regenerate")
-        return
-    plot_timeseries(ts_dict, out_path=out_path)
+def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png",
+                         topn=50, min_cooccur=2, max_edges=200, label_top=None):
+    import os, math, re
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import networkx as nx
 
+    # 폰트 적용 + 폰트명 반환
+    font_name = ensure_fonts()
 
-# ---------------- 플롯: 키워드/토픽 ----------------
-def plot_top_keywords(keywords_obj: Dict[str, Any], out_path="outputs/fig/top_keywords.png", topn=20):
-    ensure_dir(os.path.dirname(out_path))
-    items = (keywords_obj or {}).get("keywords") or []
-    if not items:
-        # 빈 그래프라도 저장
-        plt.figure(figsize=(10, 6))
-        plt.title("Top Keywords (no data)")
-        plt.tight_layout()
-        plt.savefig(out_path, bbox_inches="tight", dpi=150)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    # 상위 키워드 집합
+    kw = [k["keyword"].lower() for k in (keywords.get("keywords", [])[:topn])]
+    vocab = set(kw)
+
+    # 데이터 부족 처리
+    if not docs or not vocab:
+        plt.figure(figsize=(8, 5))
+        plt.text(0.5, 0.5, "키워드 네트워크 생성 불가(데이터 부족)", ha="center", va="center")
+        plt.axis("off")
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
-        return
+        return {"nodes": 0, "edges": 0}
 
-    df = pd.DataFrame(items)
-    if "keyword" not in df.columns or "score" not in df.columns:
-        df = df.rename(columns={"word": "keyword", "weight": "score"})
-    df = df.dropna(subset=["keyword"]).copy()
-    df["score"] = pd.to_numeric(df.get("score", 0), errors="coerce").fillna(0)
-    df = df.sort_values("score", ascending=False).head(topn)
+    # 문서 토큰화(문서 내 중복 토큰 제거)
+    def _tok(x: str):
+        return re.findall(r"[가-힣A-Za-z0-9]+", x or "")
 
-    plt.figure(figsize=(10, 6))
-    plt.barh(df["keyword"][::-1], df["score"][::-1], color="tab:blue")
-    plt.title("Top Keywords")
-    plt.xlabel("Score")
+    token_docs = [[t.lower() for t in set(_tok(d)) if len(t) >= 2] for d in docs]
+
+    # 동시출현/빈도 계산
+    from collections import Counter
+    co = Counter()
+    freq = Counter()
+    for toks in token_docs:
+        toks_in = [t for t in toks if t in vocab]
+        for w in toks_in:
+            freq[w] += 1
+        for i in range(len(toks_in)):
+            for j in range(i + 1, len(toks_in)):
+                a, b = sorted((toks_in[i], toks_in[j]))
+                co[(a, b)] += 1
+
+    edges = [(a, b, c) for (a, b), c in co.items() if c >= min_cooccur]
+    edges = sorted(edges, key=lambda x: x[2], reverse=True)[:max_edges]
+
+    # 그래프 구성
+    G = nx.Graph()
+    for w, f in freq.items():
+        if f > 0 and w in vocab:  # vocab에 포함된 키워드만 노드
+            G.add_node(w, freq=f)
+    for a, b, c in edges:
+        if a in G.nodes and b in G.nodes:
+            G.add_edge(a, b, weight=c)
+
+    if G.number_of_nodes() == 0 or G.number_of_edges() == 0:
+        plt.figure(figsize=(8, 5))
+        plt.text(0.5, 0.5, "키워드 네트워크 생성 불가(엣지 없음)", ha="center", va="center")
+        plt.axis("off")
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        return {"nodes": 0, "edges": 0}
+
+    # 커뮤니티 색상
+    try:
+        comms = list(nx.algorithms.community.greedy_modularity_communities(G))
+        comm_map = {}
+        for ci, com in enumerate(comms):
+            for n in com:
+                comm_map[n] = ci
+        num_comm = max(comm_map.values()) + 1 if comm_map else 1
+    except Exception:
+        comm_map = {n: 0 for n in G.nodes()}
+        num_comm = 1
+
+    # 레이아웃(간격 조금 넉넉히)
+    pos = nx.spring_layout(G, seed=42, k=0.9)
+
+    # 스타일
+    palette = sns.color_palette("tab10", n_colors=max(10, num_comm))
+    node_sizes = [300 + 50 * math.sqrt(G.nodes[n].get("freq", 1)) for n in G.nodes()]
+    node_colors = [palette[comm_map.get(n, 0)] for n in G.nodes()]
+    edge_widths = [0.5 + 0.6 * G[u][v]["weight"] for u, v in G.edges()]
+
+    plt.figure(figsize=(10, 7))
+    nx.draw_networkx_edges(G, pos, alpha=0.25, width=edge_widths, edge_color="#666")
+    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors,
+                           alpha=0.9, linewidths=0.5, edgecolors="#333")
+
+    # 라벨: label_top=None이면 모든 노드에 라벨
+    if label_top is None:
+        label_nodes = list(G.nodes())
+    else:
+        label_nodes = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:label_top]]
+        label_nodes = [n for n in label_nodes if n in G.nodes()]
+
+    labels = {n: n for n in label_nodes}
+    nx.draw_networkx_labels(
+        G, pos, labels=labels,
+        font_size=8,
+        font_family=font_name,
+        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7)
+    )
+
+    plt.title("Keyword Co-occurrence Network")
+    plt.axis("off")
     plt.tight_layout()
-    plt.savefig(out_path, bbox_inches="tight", dpi=150)
+    plt.savefig(out_path, dpi=150)
     plt.close()
 
+    return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
+                             
 
-def plot_topics(topics_obj: Dict[str, Any], out_path="outputs/fig/topics.png", max_topics=6, words_per_topic=6):
-    ensure_dir(os.path.dirname(out_path))
-    topics = (topics_obj or {}).get("topics") or []
-    if not topics:
-        plt.figure(figsize=(10, 6))
-        plt.title("Topics (no data)")
-        plt.tight_layout()
-        plt.savefig(out_path, bbox_inches="tight", dpi=150)
-        plt.close()
-        return
+# ---------- 리포트 생성 ----------
+def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="outputs/report.md"):
+    klist = keywords.get("keywords", [])[:15]
+    tlist = topics.get("topics", [])
+    daily = ts.get("daily", [])
+    summary = insights.get("summary", "").strip()
 
-    # 간단히: 각 토픽 상위 단어들을 하나의 막대그래프로 나열
-    rows = []
-    for t in topics[:max_topics]:
-        tid = t.get("topic_id")
-        for w in (t.get("top_words") or [])[:words_per_topic]:
-            rows.append({"topic": f"T{tid}", "word": w.get("word", ""), "prob": float(w.get("prob", 0.0))})
-    if not rows:
-        plt.figure(figsize=(10, 6))
-        plt.title("Topics (no data)")
-        plt.tight_layout()
-        plt.savefig(out_path, bbox_inches="tight", dpi=150)
-        plt.close()
-        return
+    ideas = opps.get("ideas", [])[:5]
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    lines =[]
 
-    df = pd.DataFrame(rows)
-    # 토픽별로 그룹 막대
-    pivot = df.pivot_table(index="word", columns="topic", values="prob", fill_value=0)
-    # 상위 단어 선별(전체 기여도 기준)
-    pivot["sum"] = pivot.sum(axis=1)
-    pivot = pivot.sort_values("sum", ascending=True).drop(columns=["sum"]).tail(max_topics * 4)
+    lines.append(f"# Weekly/New Biz Report ({today})\n")
+    lines.append("## Executive Summary\n")
+    lines.append("- 이번 기간 핵심 토픽과 키워드, 주요 시사점을 요약합니다.\n")
+    if summary:
+        lines.append(summary + "\n")
 
-    plt.figure(figsize=(12, 7))
-    pivot.plot(kind="barh", ax=plt.gca(), stacked=False, alpha=0.85)
-    plt.title("Topics · Top Words")
-    plt.xlabel("Probability")
-    plt.tight_layout()
-    plt.savefig(out_path, bbox_inches="tight", dpi=150)
-    plt.close()
+    lines.append("## Key Metrics\n")
+    lines.append(f"- 문서 수: {keywords.get('stats', {}).get('num_docs', 'N/A')}")
+    lines.append(f"- 키워드 수(상위): {len(klist)}")
+    lines.append(f"- 토픽 수: {len(tlist)}")
+    lines.append(f"- 시계열 데이터 일자 수: {len(daily)}\n")
 
+    lines.append("## Top Keywords\n")
+    if klist:
+        lines.append("| Rank | Keyword | Score |")
+        lines.append("|---:|---|---:|")
+        for i, k in enumerate(klist, 1):
+            lines.append(f"| {i} | {k['keyword']} | {round(float(k['score']), 3)} |")
+    else:
+        lines.append("- (데이터 없음)")
+    lines.append(f"\n![Top Keywords]({fig_dir}/top_keywords.png)\n")
+    lines.append(f"![Keyword Network]({fig_dir}/keyword_network.png)\n")
 
-# ---------------- 마크다운/HTML ----------------
-def build_markdown(keywords_obj: Dict[str, Any],
-                   topics_obj: Dict[str, Any],
-                   ts_obj: Dict[str, Any],
-                   insights_obj: Dict[str, Any],
-                   opp_obj: Dict[str, Any]) -> str:
-    """
-    섹션 순서(기준선):
-    Weekly/New Biz Report → Executive Summary → Key Metrics → Top Keywords → Topics → Trend → Insights → Opportunities (Top 5) → Appendix
-    이미지 경로는 fig/… 상대경로로 고정
-    """
-    # Key Metrics
-    daily = (ts_obj or {}).get("daily", [])
-    n_days = len(daily)
-    total_cnt = sum(int(x.get("count", 0)) for x in daily)
-    date_range = "-"
-    if n_days > 0:
-        date_range = f"{daily[0].get('date','?')} ~ {daily[-1].get('date','?')}"
+    lines.append("## Topics\n")
+    if tlist:
+        for t in tlist:
+            words = ", ".join([w["word"] for w in t.get("top_words", [])[:6]])
+            lines.append(f"- Topic #{t.get('topic_id')}: {words}")
+    else:
+        lines.append("- (데이터 없음)")
+    lines.append(f"\n![Topics]({fig_dir}/topics.png)\n")
 
-    # Top Keywords (표)
-    kw_items = (keywords_obj or {}).get("keywords") or []
-    kw_rows = []
-    for i, it in enumerate(sorted(kw_items, key=lambda x: x.get("score", 0), reverse=True), 1):
-        if i > 20:
-            break
-        kw_rows.append(f"| {i} | {it.get('keyword','')} | {round(float(it.get('score', 0)), 4)} |")
-    if not kw_rows:
-        kw_rows.append("| - | - | - |")
+    lines.append("## Trend\n")
+    lines.append("- 최근 14~30일 기사 수 추세와 7일 이동평균선을 제공합니다.")
+    lines.append(f"\n![Timeseries]({fig_dir}/timeseries.png)\n")
 
-    # Opportunities (표)
-    ideas = (opp_obj or {}).get("ideas") or []
-    opp_rows = []
-    for it in ideas[:5]:
-        opp_rows.append(f"| {it.get('title') or it.get('idea') or ''} | {it.get('target_customer','')} | {it.get('value_prop','')} | {it.get('score') or it.get('priority_score') or 0} |")
-    if not opp_rows:
-        opp_rows.append("| (데이터 없음) | | | |")
+    lines.append("## Insights\n")
+    if summary:
+        lines.append(summary + "\n")
+    else:
+        lines.append("- (요약 없음)\n")
 
-    # Insights
-    summary = (insights_obj or {}).get("summary") or "_요약 없음_"
+    lines.append("## Opportunities (Top 5)\n")
+    ideas = opps.get("ideas", [])[:5]
+    if ideas:
+        lines.append("| Idea | Target | Value Prop | Score |")
+        lines.append("|---|---|---|---:|")
+        for it in ideas:
+            idea = (it.get('idea','') or '').replace('|', r'\|').strip()
+            tgt  = (it.get('target_customer','') or '').replace('|', r'\|').strip()
+            vp   = (it.get('value_prop','') or '').replace('\n',' ').replace('|', r'\|').strip()
+            # 완전 원문 사용(잘림 제거) — 길면 아래 300자 제한 주석 해제
+            vp_disp = vp
+            # vp_disp = (vp[:300] + "…") if len(vp) > 300 else vp
+            score = it.get('priority_score','')
+            lines.append(f"| {idea} | {tgt} | {vp_disp} | {score} |")
+    else:
+        lines.append("- (아이디어 없음)")
 
-    md = []
-    md.append("# Weekly/New Biz Report\n")
-    md.append("## Executive Summary\n")
-    md.append(summary + "\n")
+    lines.append("\n## Appendix\n")
+    lines.append("- 데이터: keywords.json, topics.json, trend_timeseries.json, trend_insights.json, biz_opportunities.json")
+    Path(out_md).parent.mkdir(parents=True, exist_ok=True)
+    with open(out_md, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
 
-    md.append("## Key Metrics\n")
-    md.append(f"- 기간: {date_range}\n- 총 기사 수: {total_cnt}\n- 집계 일수: {n_days}\n")
+def build_html_from_md(md_path="outputs/report.md", out_html="outputs/report.html"):
+    try:
+        import markdown
+        with open(md_path, "r", encoding="utf-8") as f:
+            md = f.read()
+        html = markdown.markdown(md, extensions=["extra", "tables", "toc"])
+        html_tpl = f"""<!doctype html><html lang="ko"><head> <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"> <title>Auto Report</title> <link rel="preconnect" href="https://fonts.gstatic.com"><style> body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif; line-height:1.6; padding:24px; }} img {{ max-width:100%; height:auto; }} table {{ border-collapse: collapse; width:100%; }} th,td {{ border:1px solid #ddd; padding:8px; }} th {{ background:#f7f7f7; }} code {{ background:#f1f5f9; padding:2px 4px; border-radius:4px; }} </style></head><body>{html}</body></html>"""
+        with open(out_html, "w", encoding="utf-8") as f:
+            f.write(html_tpl)
+    except Exception as e:
+        print("[WARN] HTML 변환 실패:", e)
 
-    md.append("## Top Keywords\n")
-    md.append("![Top Keywords](fig/top_keywords.png)\n\n")
-    md.append("| Rank | Keyword | Score |\n|---:|---|---:|\n")
-    md.append("\n".join(kw_rows) + "\n")
-
-    md.append("## Topics\n")
-    md.append("![Topics](fig/topics.png)\n\n")
-
-    md.append("## Trend\n")
-    md.append("![Articles per Day](fig/timeseries.png)\n\n")
-
-    md.append("## Insights\n")
-    md.append(summary + "\n")
-
-    md.append("## Opportunities (Top 5)\n")
-    md.append("| Title | Target | Value Prop | Score |\n|---|---|---|---:|\n")
-    md.append("\n".join(opp_rows) + "\n")
-
-    md.append("## Appendix\n")
-    md.append("- 데이터: keywords.json, topics.json, trend_timeseries.json, trend_insights.json, biz_opportunities.json\n")
-
-    return "\n".join(md)
-
-
-def md_to_html(md_text: str) -> str:
-    # 기본 마크다운 → HTML 변환
-    body = markdown(md_text, output_format="html5", extensions=["tables"])
-    # 심플 템플릿
-    html = f"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<title>Weekly/New Biz Report</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "맑은 고딕", Arial, sans-serif; line-height: 1.6; padding: 24px; color: #222; }}
-  h1, h2, h3 {{ margin-top: 1.4em; }}
-  table {{ border-collapse: collapse; width: 100%; }}
-  th, td {{ border: 1px solid #ddd; padding: 6px 8px; }}
-  th {{ background: #f5f5f7; }}
-  img {{ max-width: 100%; height: auto; }}
-  code {{ background: #f6f8fa; padding: 2px 4px; border-radius: 4px; }}
-</style>
-</head>
-<body>
-{body}
-</body>
-</html>"""
-    return html
-
-
-# ---------------- 메인 ----------------
 def main():
-    out_dir = "outputs"
-    fig_dir = os.path.join(out_dir, "fig")
-    ensure_dir(fig_dir)
+    keywords, topics, ts, insights, opps, meta_items = load_data()
+    os.makedirs("outputs/fig", exist_ok=True)
 
-    # 데이터 로드
-    keywords = read_json(os.path.join(out_dir, "keywords.json"), default={"keywords": []})
-    topics = read_json(os.path.join(out_dir, "topics.json"), default={"topics": []})
-    ts = read_json(os.path.join(out_dir, "trend_timeseries.json"), default={"daily": []})
-    insights = read_json(os.path.join(out_dir, "trend_insights.json"), default={"summary": ""})
-    opps = read_json(os.path.join(out_dir, "biz_opportunities.json"), default={"ideas": []})
+    try:
+        plot_top_keywords(keywords)
+    except Exception as e:
+        print("[WARN] top_keywords 그림 실패:", e)
 
-    # 시각화 생성
-    plot_top_keywords(keywords, out_path=os.path.join(fig_dir, "top_keywords.png"))
-    plot_topics(topics, out_path=os.path.join(fig_dir, "topics.png"))
+    try:
+        plot_topics(topics)
+    except Exception as e:
+        print("[WARN] topics 그림 실패:", e)
 
-    # timeseries.png는 있으면 스킵, 없으면 생성
-    ensure_timeseries_png(ts, out_path=os.path.join(fig_dir, "timeseries.png"))
+    try:
+        plot_timeseries(ts)
+    except Exception as e:
+        print("[WARN] timeseries 그림 실패:", e)
 
-    # 마크다운/HTML 생성
-    md_text = build_markdown(keywords, topics, ts, insights, opps)
-    save_text(os.path.join(out_dir, "report.md"), md_text)
+# 네트워크 생성 (module_e.py main 내부)
+    try:
+        docs = build_docs_from_meta(meta_items)
+        kw_list = keywords.get("keywords", [])
+        n_kw = len(kw_list)
+        label_cap = 25  # 노드 수가 적으면 전부, 많으면 최대 25개 라벨
+        plot_keyword_network(
+            keywords, docs,
+            out_path="outputs/fig/keyword_network.png",
+            topn=n_kw,                 # 상위 키워드 수만큼 노드
+            min_cooccur=1,             # 데이터 적은 날 안정성↑
+            max_edges=200,
+            label_top=(None if n_kw <= label_cap else label_cap)
+        )
+    except Exception as e:
+        print("[WARN] 키워드 네트워크 실패:", e)
+    
+    try:
+        build_markdown(keywords, topics, ts, insights, opps)
+        build_html_from_md()
+    except Exception as e:
+        print("[WARN] 리포트 생성 실패:", e)
 
-    html = md_to_html(md_text)
-    # 필요 시 이미지 인라인(기본 꺼짐)
-    if os.getenv("INLINE_IMAGES", "").lower() in ("1", "true", "yes", "y"):
-        html = inline_images(html, root_dir=out_dir)
-    save_text(os.path.join(out_dir, "report.html"), html)
-
-    # 요약 로그
-    img_ok = all(os.path.exists(os.path.join(fig_dir, p)) for p in ["top_keywords.png", "topics.png", "timeseries.png"])
-    print(f"[INFO] SUMMARY | E | report={'ok' if os.path.exists(os.path.join(out_dir,'report.html')) else 'fail'} images={img_ok} elapsed=?s")
-
+    print("[INFO] Module E 완료 | report.md, report.html 생성")
 
 if __name__ == "__main__":
     main()
