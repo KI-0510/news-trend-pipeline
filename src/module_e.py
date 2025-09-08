@@ -154,10 +154,11 @@ def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
 
 def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     # 폰트/경로는 기존 방식을 그대로 사용
+    import os
     import matplotlib.pyplot as plt
     import pandas as pd
     import matplotlib.dates as mdates
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
     ensure_fonts()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -201,22 +202,34 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     df = df.reindex(full_idx).fillna(0)
     df.index.name = "date"
     df["count"] = df["count"].astype(int)
-    
-    # 1일치만 있는 경우 전용 처리(축 여백 고정)
+
+    # 1일치만 있는 경우 전용 처리(축 여백 고정 + 값 라벨)
     if len(df) == 1:
-        from datetime import timedelta
         d0 = df.index[0]
         y = float(df["count"].iloc[0])
-    
+
         plt.figure(figsize=(12, 4.5))
         plt.xlim(d0 - timedelta(days=1), d0 + timedelta(days=1))
-        plt.ylim(max(0, y - 1), y + 1)
-    
+        # y축 여백(값에 비례), 0부터 시작
+        ypad = max(1, y * 0.15)
+        plt.ylim(0, y + ypad)
+
         ax = plt.gca()
         ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    
+
         plt.plot([d0], [y], marker="o", color="#6366f1", label="Daily")
+        # 값 라벨
+        plt.annotate(
+            f"{int(y)}",
+            (d0, y),
+            textcoords="offset points",
+            xytext=(0, -14),
+            ha="center",
+            fontsize=9,
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7)
+        )
+
         plt.title(f"Articles per Day ({d0.strftime('%Y-%m-%d')})")
         plt.xlabel("Date")
         plt.ylabel("Count")
@@ -225,7 +238,7 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
         plt.tight_layout()
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
-    
+
         try:
             os.makedirs("outputs/debug", exist_ok=True)
             df.reset_index().rename(columns={"index": "date"}) \
@@ -233,6 +246,46 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
         except Exception:
             pass
         return
+
+    # 4) 이동평균(7일)
+    df["ma7"] = df["count"].rolling(window=7, min_periods=1).mean()
+
+    # 5) 최근 90~120일만 포커스(축 과확장 방지)
+    focus_days = 120
+    if len(df) > focus_days:
+        df = df.iloc[-focus_days:]
+
+    # 6) 플롯
+    plt.figure(figsize=(12, 4.5))
+    plt.plot(df.index, df["count"], label="Daily", color="#6366f1", linewidth=1.6)
+    plt.plot(df.index, df["ma7"], label="7d MA", color="#f59e0b", linewidth=1.6)
+
+    # 날짜 축 포맷러(가독성)
+    ax = plt.gca()
+    locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+
+    dmin = df.index.min().strftime("%Y-%m-%d")
+    dmax = df.index.max().strftime("%Y-%m-%d")
+    plt.title(f"Articles per Day ({dmin} ~ {dmax})")
+    plt.xlabel("Date")
+    plt.ylabel("Count")
+    plt.legend(loc="upper right")
+    plt.grid(alpha=0.25, linestyle="--", linewidth=0.6)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # 디버그 프리뷰(선택): x축 범위/E2 체크용
+    try:
+        os.makedirs("outputs/debug", exist_ok=True)
+        df.reset_index().rename(columns={"index": "date"}) \
+          .to_csv("outputs/debug/timeseries_preview.csv", index=False, encoding="utf-8")
+        print("[INFO] timeseries preview saved: outputs/debug/timeseries_preview.csv")
+    except Exception:
+        pass
     
     # 4) 이동평균(7일)
     df["ma7"] = df["count"].rolling(window=7, min_periods=1).mean()
