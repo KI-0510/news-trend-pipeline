@@ -303,4 +303,5 @@ jobs:
             outputs/report.html
             outputs/report.md
             outputs/fig/*.png
+            outputs/*.csv            
           if-no-files-found: warn
