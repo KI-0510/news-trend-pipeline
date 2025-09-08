@@ -149,6 +149,17 @@ jobs:
           source .venv/bin/activate
           python src/check_d.py
 
+      # ✅ Preflight Checks - 데이터 품질 사전 점검
+      - name: Preflight Checks
+        shell: bash
+        run: |
+          set -e
+          python scripts/preflight.py
+        env:
+          PREFLIGHT_MIN_DAILY: "1"     # 최소 일수(필요 시 2~7로 조정)
+          PREFLIGHT_MIN_TOTAL: "1"     # 최소 기사 수(필요 시 10~50으로 조정)
+          PREFLIGHT_MAX_SPAN:  "400"   # 날짜 범위 상한
+
       # ✅ Module E 실행 및 검증 단계
       - name: Module E - Build Report
         shell: bash
