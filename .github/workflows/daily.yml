@@ -96,7 +96,7 @@ jobs:
 
       # ✅ Warehouse 커밋/푸시 (main에서만)
       - name: Commit & Push Warehouse (main only)
-        if: github.ref_name == 'main'
+       #임시 테스트용 주석 처리  if: github.ref_name == 'main'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
