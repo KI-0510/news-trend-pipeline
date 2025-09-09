@@ -12,14 +12,50 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # [추가] 조사 제거 함수
+def _has_jongseong(ch: str) -> bool:
+    """한글 음절에 받침이 있는지 여부"""
+    code = ord(ch)
+    if 0xAC00 <= code <= 0xD7A3:
+        return ((code - 0xAC00) % 28) != 0
+    return False
+
 def strip_korean_particle(word: str) -> str:
-    """단어 끝의 흔한 조사를 1회 제거합니다."""
-    return re.sub(r"(은|는|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)$", "", word)
+    """
+    조사 제거를 보수적으로 수행.
+    
+    - '이'는 절대 제거하지 않음(디스플레이 보호)
+    - '의'도 제거하지 않음(협의/정의 등 보호)
+    - '가, 은, 는, 을, 를, 과, 와'만 받침 규칙이 맞을 때 1글자 제거
+    - 그 외(에, 에서, 으로/로, 도, 만, 보다, 부터, 까지)는 건드리지 않음
+    """
+    if not word or len(word) < 2:
+        return word
+
+    last = word[-1]
+    prev = word[-2]
+
+    if last in ("이", "의"):
+        return word
+
+    rules = {
+        "가": False,  # 앞 음절에 받침이 없어야 '가'
+        "은": True,   # 받침 있으면 '은'
+        "는": False,  # 받침 없으면 '는'
+        "을": True,   # 받침 있으면 '을'
+        "를": False,  # 받침 없으면 '를'
+        "과": True,   # 받침 있으면 '과'
+        "와": False,  # 받침 없으면 '와'
+    }
+
+    if last in rules and _has_jongseong(prev) == rules[last]:
+        return word[:-1]
+    return word
+
 
 # [추가] 용언 어미 제거 함수
 def strip_verb_ending(word: str) -> str:
     """흔한 동사/형용사 어말 처리 간단 컷(한 번만)"""
-    return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음)$", "", word)
+    return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음|또한)$", "", word)
 
 # [추가] 키워드 정규화 함수
 def normalize_keyword(w: str) -> str:
