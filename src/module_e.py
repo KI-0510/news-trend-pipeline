@@ -396,119 +396,124 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
         pass
 
 
-def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png",
-                         topn=50, min_cooccur=2, max_edges=200, label_top=None):
-    import os, math, re
+def plot_keyword_network(G, out_path="outputs/fig/keyword_network.png", title="Keyword Co-occurrence Network"):
+    """
+    - G: networkx.Graph (노드: 키워드 문자열 또는 dict가 붙은 노드)
+    """
+    import os, math
     import matplotlib.pyplot as plt
-    import seaborn as sns
     import networkx as nx
 
-    # 폰트 적용 + 폰트명 반환
-    font_name = ensure_fonts()
+    ensure_fonts()
+    # 선택: 스타일 통일 함수가 있다면 같이 호출
+    try:
+        apply_plot_style()
+    except Exception:
+        pass
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    # 상위 키워드 집합
-    kw = [k["keyword"].lower() for k in (keywords.get("keywords", [])[:topn])]
-    vocab = set(kw)
-
-    # 데이터 부족 처리
-    if not docs or not vocab:
-        plt.figure(figsize=(8, 5))
-        plt.text(0.5, 0.5, "키워드 네트워크 생성 불가(데이터 부족)", ha="center", va="center")
+    if G is None or G.number_of_nodes() == 0:
+        plt.figure(figsize=(12, 6))
+        plt.text(0.5, 0.5, "키워드 네트워크 데이터 없음", ha="center", va="center")
         plt.axis("off")
+        plt.tight_layout()
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
-        return {"nodes": 0, "edges": 0}
+        return
 
-    # 문서 토큰화(문서 내 중복 토큰 제거)
-    def _tok(x: str):
-        return re.findall(r"[가-힣A-Za-z0-9]+", x or "")
+    # 1) 라벨 확보: 모든 노드에 대해 안전한 라벨 만들기
+    labels = {}
+    drop_nodes = []
+    for n, data in G.nodes(data=True):
+        # 후보들: 노드 자체, data['label'], data['keyword']
+        cand = data.get("label") if isinstance(data, dict) else None
+        if not cand:
+            cand = data.get("keyword") if isinstance(data, dict) else None
+        if not cand:
+            cand = str(n) if (n is not None) else ""
+        cand = (str(cand) or "").strip()
+        if cand == "":
+            # 완전 빈 라벨이면 제거 후보
+            drop_nodes.append(n)
+        else:
+            labels[n] = cand
 
-    token_docs = [[t.lower() for t in set(_tok(d)) if len(t) >= 2] for d in docs]
+    # 2) 완전 빈 라벨 노드 제거(아예 동그라미만 남지 않게)
+    if drop_nodes:
+        G = G.copy()
+        G.remove_nodes_from(drop_nodes)
 
-    # 동시출현/빈도 계산
-    from collections import Counter
-    co = Counter()
-    freq = Counter()
-    for toks in token_docs:
-        toks_in = [t for t in toks if t in vocab]
-        for w in toks_in:
-            freq[w] += 1
-        for i in range(len(toks_in)):
-            for j in range(i + 1, len(toks_in)):
-                a, b = sorted((toks_in[i], toks_in[j]))
-                co[(a, b)] += 1
-
-    edges = [(a, b, c) for (a, b), c in co.items() if c >= min_cooccur]
-    edges = sorted(edges, key=lambda x: x[2], reverse=True)[:max_edges]
-
-    # 그래프 구성
-    G = nx.Graph()
-    for w, f in freq.items():
-        if f > 0 and w in vocab:  # vocab에 포함된 키워드만 노드
-            G.add_node(w, freq=f)
-    for a, b, c in edges:
-        if a in G.nodes and b in G.nodes:
-            G.add_edge(a, b, weight=c)
-
-    if G.number_of_nodes() == 0 or G.number_of_edges() == 0:
-        plt.figure(figsize=(8, 5))
-        plt.text(0.5, 0.5, "키워드 네트워크 생성 불가(엣지 없음)", ha="center", va="center")
+    if G.number_of_nodes() == 0:
+        plt.figure(figsize=(12, 6))
+        plt.text(0.5, 0.5, "표시 가능한 키워드가 없습니다", ha="center", va="center")
         plt.axis("off")
+        plt.tight_layout()
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
-        return {"nodes": 0, "edges": 0}
+        return
 
-    # 커뮤니티 색상
-    try:
-        comms = list(nx.algorithms.community.greedy_modularity_communities(G))
-        comm_map = {}
-        for ci, com in enumerate(comms):
-            for n in com:
-                comm_map[n] = ci
-        num_comm = max(comm_map.values()) + 1 if comm_map else 1
-    except Exception:
-        comm_map = {n: 0 for n in G.nodes()}
-        num_comm = 1
+    # 3) 레이아웃 계산
+    pos = nx.spring_layout(G, seed=42, k=None)  # k는 데이터 규모에 따라 자동
 
-    # 레이아웃(간격 조금 넉넉히)
-    pos = nx.spring_layout(G, seed=42, k=0.9)
+    # 4) 색/크기 스타일(기존 팔레트 유지 가능)
+    #    degree나 커뮤니티 기반으로 색을 지정하고 있다면 그대로 사용
+    node_sizes = []
+    for n in G.nodes():
+        deg = G.degree(n)
+        node_sizes.append(300 + 80 * math.sqrt(max(deg, 1)))
 
-    # 스타일
-    palette = sns.color_palette("tab10", n_colors=max(10, num_comm))
-    node_sizes = [300 + 50 * math.sqrt(G.nodes[n].get("freq", 1)) for n in G.nodes()]
-    node_colors = [palette[comm_map.get(n, 0)] for n in G.nodes()]
-    edge_widths = [0.5 + 0.6 * G[u][v]["weight"] for u, v in G.edges()]
+    edge_alpha = 0.35
+    edge_color = "#9aa5b1"
 
-    plt.figure(figsize=(10, 7))
-    nx.draw_networkx_edges(G, pos, alpha=0.25, width=edge_widths, edge_color="#666")
-    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors,
-                           alpha=0.9, linewidths=0.5, edgecolors="#333")
+    plt.figure(figsize=(12, 7))
+    ax = plt.gca()
+    ax.set_axis_off()
 
-    # 라벨: label_top=None이면 모든 노드에 라벨
-    if label_top is None:
-        label_nodes = list(G.nodes())
-    else:
-        label_nodes = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:label_top]]
-        label_nodes = [n for n in label_nodes if n in G.nodes()]
-
-    labels = {n: n for n in label_nodes}
-    nx.draw_networkx_labels(
-        G, pos, labels=labels,
-        font_size=8,
-        font_family=font_name,
-        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7)
+    # 5) 엣지/노드 먼저
+    nx.draw_networkx_edges(G, pos, ax=ax, width=1.0, alpha=edge_alpha, edge_color=edge_color)
+    nx.draw_networkx_nodes(
+        G, pos, ax=ax,
+        node_size=node_sizes,
+        node_color="#60a5fa",  # 팔레트 있으면 교체
+        linewidths=0.8, edgecolors="#ffffff"
     )
 
-    plt.title("Keyword Co-occurrence Network")
-    plt.axis("off")
+    # 6) 라벨은 맨 마지막, 항상 위(zorder) + 잘 보이는 색 + 흰 배경박스
+    #    draw_networkx_labels가 zorder를 잘 안 먹는 경우가 있어서 수동 text로 보장
+    for n, (x, y) in pos.items():
+        txt = labels.get(n, str(n))
+        ax.text(
+            x, y, txt,
+            ha="center", va="center",
+            fontsize=9, color="#111111",
+            zorder=5, clip_on=False,
+            bbox=dict(boxstyle="round,pad=0.18", fc="white", ec="none", alpha=0.85)
+        )
+
+    # 7) 라벨 잘림 방지: 좌표 패딩
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    if xs and ys:
+        pad_x = (max(xs) - min(xs)) * 0.08 + 0.05
+        pad_y = (max(ys) - min(ys)) * 0.08 + 0.05
+        ax.set_xlim(min(xs) - pad_x, max(xs) + pad_x)
+        ax.set_ylim(min(ys) - pad_y, max(ys) + pad_y)
+
+    plt.title(title)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
 
-    return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
-                             
+    # 디버그 로그
+    try:
+        if drop_nodes:
+            print(f"[INFO] network: dropped nodes with empty labels: {len(drop_nodes)}")
+        missing = [n for n in G.nodes() if n not in labels]
+        if missing:
+            print(f"[WARN] network: nodes without labels after cleanup: {len(missing)}")
+    except Exception:
+        pass                    
 
 def _fmt_int(x):
     try:
