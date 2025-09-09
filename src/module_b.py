@@ -55,7 +55,7 @@ def strip_korean_particle(word: str) -> str:
 # [추가] 용언 어미 제거 함수
 def strip_verb_ending(word: str) -> str:
     """흔한 동사/형용사 어말 처리 간단 컷(한 번만)"""
-    return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음)$", "", word)
+    return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음|또한)$", "", word)
 
 # [추가] 키워드 정규화 함수
 def normalize_keyword(w: str) -> str:
