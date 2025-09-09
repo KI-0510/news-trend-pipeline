@@ -14,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # [추가] 조사 제거 함수
 def strip_korean_particle(word: str) -> str:
     """단어 끝의 흔한 조사를 1회 제거합니다."""
-    return re.sub(r"(은|는|이|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)$", "", word)
+    return re.sub(r"(은|는|가|을|를|과|와|의|에|에서|으로|로|도|만|보다|부터|까지)$", "", word)
 
 # [추가] 용언 어미 제거 함수
 def strip_verb_ending(word: str) -> str:
