@@ -260,12 +260,16 @@ def gemini_insight(api_key: str,
 # ------------- 메인 파이프라인 -------------
 def main():
     os.makedirs("outputs", exist_ok=True)
-
+    # 오늘 데이터 로드
     docs_today, dates_today = load_today_meta()
-    dates_wh = load_warehouse(days=30)
-
-    docs  = docs_today
-    dates = (dates_today or []) + (dates_wh or [])
+    docs_wh, dates_wh = load_warehouse(days=30)
+    
+    # 리스트로 변환 (필요 시)
+    dates_today = list(dates_today) if dates_today else[]
+    dates_wh = list(dates_wh) if dates_wh else[]
+    
+    # 날짜 리스트 병합
+    dates = dates_today + dates_wh
     
     # 3) 토픽 모델링
     topics_obj = lda_topics(docs, k=6, topn=8, min_cf=2, iters=150)
