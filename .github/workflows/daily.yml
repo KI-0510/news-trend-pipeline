@@ -325,5 +325,6 @@ jobs:
             outputs/report.md
             outputs/fig/*.png
             outputs/export/*.csv
-            outputs/*.json
+            data/warehouse/*.json
+            data/warehouse/*.jsonl
           if-no-files-found: warn
