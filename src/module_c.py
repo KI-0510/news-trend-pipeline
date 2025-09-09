@@ -64,15 +64,19 @@ def clean_text(t: str) -> str:
     return t
 
 # ------------- 데이터 로더 -------------
-def load_warehouse(days=30) -> Tuple[List[str], List[str]]:
-    """
-    data/warehouse/*.jsonl 중 최근 days일치 파일에서 title만 수집.
-    반환: (docs, dates_raw)
-    """
+from typing import Tuple, List
+import glob
+import os
+import json
+
+def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
     files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
+    
     docs, dates = [], []
+    
     for fp in files:
         try:
+            file_day = os.path.basename(fp)[:10]  # 'YYYY-MM-DD'
             with open(fp, "r", encoding="utf-8") as f:
                 for line in f:
                     line = (line or "").strip()
@@ -83,12 +87,23 @@ def load_warehouse(days=30) -> Tuple[List[str], List[str]]:
                         title = clean_text((obj.get("title") or "").strip())
                         if not title:
                             continue
-                        docs.append(title)   # 간단: 제목만
-                        dates.append(obj.get("published"))
+                        
+                        # 날짜 원천: published > created_at > 파일명 날짜
+                        d_raw = obj.get("published") or obj.get("created_at") or file_day
+                        try:
+                            d_std = to_kst_date_str(d_raw)
+                        except Exception:
+                            d_std = to_date(d_raw)  # 안전 폴백
+                        
+                        docs.append(title)  # 토픽에 쓸 수도 있으니 유지
+                        dates.append(d_std)
+                    
                     except Exception:
                         continue
+        
         except Exception:
             continue
+    
     return docs, dates
 
 def load_today_meta() -> Tuple[List[str], List[str]]:
@@ -246,17 +261,12 @@ def gemini_insight(api_key: str,
 def main():
     os.makedirs("outputs", exist_ok=True)
 
-    # 1) 오늘 메타 기반 문서/날짜 로드 (필요 시 warehouse 병합 가능)
     docs_today, dates_today = load_today_meta()
+    dates_wh = load_warehouse(days=30)
 
-    # 2) 백업 데이터(warehouse)와 합쳐서 강건하게 하고 싶다면 아래 주석 해제
-    # docs_wh, dates_wh = load_warehouse(days=30)
-    # docs = (docs_today or []) + (docs_wh or [])
-    # dates = (dates_today or []) + (dates_wh or [])
-    # 우선 롤백 기준: 오늘 데이터 위주
-    docs = docs_today
-    dates = dates_today
-
+    docs  = docs_today
+    dates = (dates_today or []) + (dates_wh or [])
+    
     # 3) 토픽 모델링
     topics_obj = lda_topics(docs, k=6, topn=8, min_cf=2, iters=150)
 
