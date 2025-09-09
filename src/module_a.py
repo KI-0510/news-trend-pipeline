@@ -70,7 +70,7 @@ def dedup_by_url(items):
     seen, out = set(),[]
     for it in items:
         # 네이버 링크를 기준으로 중복 제거
-        url = it.get("link")
+        url = prefer_link(it)
         if "_query" not in it or it["_query"] is None:
             it["_query"] = "unknown"
         if url and url not in seen:
