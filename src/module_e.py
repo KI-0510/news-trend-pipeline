@@ -402,8 +402,8 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     import matplotlib.pyplot as plt
     import seaborn as sns
     import networkx as nx
+    import numpy as np
 
-    # 폰트 적용 + 폰트명 반환
     font_name = ensure_fonts()
     try:
         apply_plot_style()
@@ -412,7 +412,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    # 0) 키워드 정규화(빈 문자열/1글자 제거)
+    # 키워드 정규화(빈 문자열/1글자 제거)
     def norm_kw(w: str) -> str:
         w = (w or "").strip().lower()
         w = re.sub(r"\s+", " ", w)
@@ -424,6 +424,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
 
     # 데이터 부족 처리
     if not docs or not vocab:
+        import matplotlib.pyplot as plt
         plt.figure(figsize=(8, 5))
         plt.text(0.5, 0.5, "키워드 네트워크 생성 불가(데이터 부족)", ha="center", va="center")
         plt.axis("off")
@@ -431,9 +432,8 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
         plt.close()
         return {"nodes": 0, "edges": 0}
 
-    # 1) 문서 토큰화(문서 내 중복 토큰 제거) + 정규화
+    # 문서 토큰화(문서 내 중복 토큰 제거) + 정규화
     def _tok(x: str):
-        # 한글/영문/숫자만 추출
         return re.findall(r"[가-힣A-Za-z0-9]+", x or "")
 
     token_docs = []
@@ -442,7 +442,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
         toks = [t for t in toks if t and len(t) >= 2]
         token_docs.append(toks)
 
-    # 2) 동시출현/빈도 계산
+    # 동시출현/빈도 계산
     from collections import Counter
     co = Counter()
     freq = Counter()
@@ -458,7 +458,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     edges = [(a, b, c) for (a, b), c in co.items() if c >= min_cooccur]
     edges = sorted(edges, key=lambda x: x[2], reverse=True)[:max_edges]
 
-    # 3) 그래프 구성(빈 라벨/1글자 노드 차단)
+    # 그래프 구성
     G = nx.Graph()
     for w, f in freq.items():
         if f > 0 and (w in vocab) and (w and len(w) >= 2):
@@ -475,7 +475,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
         plt.close()
         return {"nodes": 0, "edges": 0}
 
-    # 4) 커뮤니티 색상(그대로)
+    # 커뮤니티 색상
     try:
         comms = list(nx.algorithms.community.greedy_modularity_communities(G))
         comm_map = {}
@@ -487,32 +487,47 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
         comm_map = {n: 0 for n in G.nodes()}
         num_comm = 1
 
-    # 5) 레이아웃(간격 조금 넉넉히)
+    # 레이아웃
     pos = nx.spring_layout(G, seed=42, k=0.9)
 
-    # 6) 스타일(기존 유지: 선 두께도 동일 방식 유지)
+    # 스타일(노드)
     palette = sns.color_palette("tab10", n_colors=max(10, num_comm))
     node_sizes = [300 + 50 * math.sqrt(G.nodes[n].get("freq", 1)) for n in G.nodes()]
     node_colors = [palette[comm_map.get(n, 0)] for n in G.nodes()]
-    edge_widths = [0.5 + 0.6 * G[u][v]["weight"] for u, v in G.edges()]
 
-    # 7) 그리기: 엣지 → 노드 → 라벨(항상 제일 위)
+    # 전역 정규화: 엣지 두께 고정 범위로 매핑(리포트 간 비교 용이)
+    edges_all = list(G.edges(data=True))
+    w_raw = np.array([float(d.get("weight", 1.0) or 1.0) for _, _, d in edges_all], dtype=float)
+    # 이상치 완화(선택)
+    if len(w_raw) > 5:
+        q95 = np.quantile(w_raw, 0.95)
+        w_raw = np.minimum(w_raw, q95)
+    W_MIN, W_MAX = 0.8, 2.2
+    den = (w_raw.max() - w_raw.min()) or 1.0
+    w_norm = (W_MIN + (W_MAX - W_MIN) * (w_raw - w_raw.min()) / den).tolist()
+
+    # 그리기: 엣지 → 노드 → 라벨
     plt.figure(figsize=(10, 7))
     ax = plt.gca()
     ax.set_axis_off()
 
-    nx.draw_networkx_edges(G, pos, alpha=0.25, width=edge_widths, edge_color="#666")
+    nx.draw_networkx_edges(
+        G, pos,
+        edgelist=[(u, v) for u, v, _ in edges_all],
+        width=w_norm,
+        edge_color="#666", alpha=0.25
+    )
     nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors,
                            alpha=0.9, linewidths=0.5, edgecolors="#333")
 
-    # 8) 라벨 대상: 기본(모두) 또는 상위 N
+    # 라벨 대상
     if label_top is None:
         label_nodes = list(G.nodes())
     else:
         label_nodes = [w for w, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:label_top]]
         label_nodes = [n for n in label_nodes if n in G.nodes()]
 
-    # 9) 라벨은 수동 텍스트로 렌더링(zorder↑, clip 끔, 박스 흰색)
+    # 라벨 수동 텍스트(겹침 방지 박스)
     for n in label_nodes:
         txt = (n or "").strip()
         if not txt:
@@ -527,7 +542,7 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
             bbox=dict(boxstyle="round,pad=0.20", fc="white", ec="none", alpha=0.80)
         )
 
-    # 10) 라벨 잘림 방지: 패딩 살짝
+    # 라벨 잘림 방지 패딩
     xs = [p[0] for p in pos.values()]
     ys = [p[1] for p in pos.values()]
     if xs and ys:
@@ -541,8 +556,8 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
 
-    return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}               
-
+    return {"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
+                             
 def _fmt_int(x):
     try:
         return f"{int(x):,}"
