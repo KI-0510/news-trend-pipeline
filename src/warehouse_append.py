@@ -90,6 +90,7 @@ def main():
         row = {
             "url": url,
             "title": it.get("title"),
+            "description": full_text, # 테스트 이후 주석 처리
             "site_name": it.get("site_name"),
             "_query": it.get("_query") or it.get("query"),
             "published": published,
