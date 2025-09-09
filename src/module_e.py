@@ -103,18 +103,73 @@ def apply_plot_style():
     })
 
 
-def plot_wordcloud_from_keywords(keywords_obj, out_path="outputs/fig/wordcloud.png"):
+def plot_wordcloud_from_keywords(
+    keywords_obj,
+    out_path="outputs/fig/wordcloud.png",
+    stopwords=None,              # 세트/리스트 가능
+    mask_path=None,              # 마스크 이미지 사용 시(선택)
+    max_words=200,
+    debug_csv=False,             # 디버그 CSV 저장 여부
+):
     import os
-    from wordcloud import WordCloud
+    import re
+    import math
+    import numpy as np
     import matplotlib.pyplot as plt
+    from wordcloud import WordCloud
+    from PIL import Image
 
     ensure_fonts()
-    apply_plot_style()
+    try:
+        apply_plot_style()
+    except Exception:
+        pass
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     items = (keywords_obj or {}).get("keywords") or []
-    if not items:
-        # 데이터 없으면 안내 이미지
+
+    # 0) 기본 불용어 + 사용자 불용어
+    base_stop = {
+        "관련", "기자", "사진", "영상", "뉴스", "기사", "오늘", "최근",
+        "대한", "및", "등", "것", "수", "중", "내", "또", "더", "각",
+    }
+    user_stop = set(stopwords or [])
+    stopset = base_stop | user_stop
+
+    # 1) 전처리: 공백 정규화, 양쪽 공백 제거, 영문은 소문자화
+    def norm_key(w: str) -> str:
+        w = (w or "").strip()
+        w = re.sub(r"\s+", " ", w)
+        if re.fullmatch(r"[A-Za-z0-9 _\-+/]+", w):
+            w = w.lower()
+        return w
+
+    # 2) 빈도 사전 구성(상위 max_words*2까지 후보 모음 후 필터)
+    raw = []
+    for it in items[: max_words * 2]:
+        w = norm_key(it.get("keyword"))
+        if not w:
+            continue
+        if len(w) == 1:  # 한 글자 토큰 제거(원하면 주석 처리)
+            continue
+        if w in stopset:
+            continue
+        try:
+            s = float(it.get("score", 0) or 0)
+        except Exception:
+            s = 0.0
+        if s <= 0:
+            continue
+        raw.append((w, s))
+
+    # 3) 동일 키워드 합산
+    freqs = {}
+    for w, s in raw:
+        freqs[w] = freqs.get(w, 0.0) + max(0.0, s)
+
+    # 4) 빈 경우 안내 이미지
+    if not freqs:
         plt.figure(figsize=(8, 5))
         plt.text(0.5, 0.5, "워드클라우드 데이터 없음", ha="center", va="center")
         plt.axis("off")
@@ -122,32 +177,64 @@ def plot_wordcloud_from_keywords(keywords_obj, out_path="outputs/fig/wordcloud.p
         plt.close()
         return
 
-    # 단어:가중치 딕셔너리 만들기
-    freqs = {}
-    for it in items[:200]:  # 상위 200개까지만
-        w = (it.get("keyword") or "").strip()
-        s = float(it.get("score", 0) or 0)
-        if w:
-            freqs[w] = freqs.get(w, 0.0) + max(s, 0.0)
+    # 5) 극단값 완화: 상위 95퍼센타일로 클리핑(너무 한 단어가 크지 않게)
+    vals = np.array(list(freqs.values()), dtype=float)
+    q95 = np.quantile(vals, 0.95) if len(vals) > 5 else max(vals)
+    if q95 > 0:
+        for k in list(freqs.keys()):
+            if freqs[k] > q95:
+                freqs[k] = q95
 
-    # 한글 폰트 경로(ensure_fonts에서 등록한 후보)
+    # 6) 폰트 경로 추정(ensure_fonts에서 깔린 후보 우선)
     candidates = [
         "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf",
     ]
     font_path = next((p for p in candidates if os.path.exists(p)), None)
 
+    # 7) 마스크(선택)
+    mask = None
+    if mask_path and os.path.exists(mask_path):
+        try:
+            mask = np.array(Image.open(mask_path).convert("L"))
+        except Exception:
+            mask = None
+
+    # 8) 워드클라우드 생성
     wc = WordCloud(
-        width=1200, height=600, background_color="white",
-        font_path=font_path, colormap="tab20",
-        prefer_horizontal=0.9, min_font_size=10, max_words=200,
-        relative_scaling=0.5,  # 단어 크기 대비 완화
-        normalize_plurals=False
+        width=1200,
+        height=600,
+        background_color="white",
+        font_path=font_path,
+        colormap="tab20",
+        prefer_horizontal=0.95,
+        min_font_size=10,
+        max_words=max_words,
+        relative_scaling=0.5,
+        normalize_plurals=False,
+        mask=mask,
+        random_state=42,          # 재현 가능한 배치
+        contour_width=0,          # 필요하면 1로 올려 윤곽 강조
+        contour_color="#e5e7eb",
     ).generate_from_frequencies(freqs)
 
     wc.to_file(out_path)
+
+    # 9) 디버그: 상위 100개 CSV 저장(선택)
+    if debug_csv:
+        try:
+            import pandas as pd
+            df = (
+                pd.DataFrame([{"keyword": k, "weight": v} for k, v in freqs.items()])
+                .sort_values("weight", ascending=False)
+                .head(100)
+            )
+            os.makedirs("outputs/debug", exist_ok=True)
+            df.to_csv("outputs/debug/wordcloud_freqs.csv", index=False, encoding="utf-8")
+        except Exception:
+            pass
 
 def plot_top_keywords(keywords, out_path="outputs/fig/top_keywords.png", topn=15):
     import os
