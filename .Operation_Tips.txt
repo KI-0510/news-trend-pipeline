@@ -1,4 +1,4 @@
-Keywords Co-occurence Network 그래프(키워드 네트워크 이미지)에서 라벨 겹치면, label_cap=25 → 20으로 낮추기 or spring_layout k=1.0
+- Keywords Co-occurence Network 그래프(키워드 네트워크 이미지)에서 라벨 겹치면, label_cap=25 → 20으로 낮추기 or spring_layout k=1.0
 
-Biz Oppourtinites 아이디어가 한 방향으로 쏠리면 stopwords나 domain_hints로 유도하면 확 좋아짐 or 프롬프트에 “서로 다른 타깃/채널/BM으로 다변화” 한 줄 추가 가능
+- Biz Oppourtinites 아이디어가 한 방향으로 쏠리면 stopwords나 domain_hints로 유도하면 확 좋아짐 or 프롬프트에 “서로 다른 타깃/채널/BM으로 다변화” 한 줄 추가 가능
 
