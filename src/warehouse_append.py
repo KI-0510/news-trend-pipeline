@@ -84,12 +84,19 @@ def main():
             skipped += 1
             continue
         
+        # description 값을 JSON 파일에서 직접 가져옵니다.
+        description_text = it.get("description", "")
+        if not description_text:
+             skipped += 1
+             continue
+        
         d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
         published = to_date(d_raw)
         
         row = {
             "url": url,
             "title": it.get("title"),
+            # "description": description_text, # 테스트 이후 주석 처리, 'full_text' 대신 JSON에서 읽은 'description'을 사용
             "site_name": it.get("site_name"),
             "_query": it.get("_query") or it.get("query"),
             "published": published,
