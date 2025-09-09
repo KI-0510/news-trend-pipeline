@@ -260,30 +260,31 @@ def gemini_insight(api_key: str,
 # ------------- 메인 파이프라인 -------------
 def main():
     os.makedirs("outputs", exist_ok=True)
-    # 오늘 데이터 로드
+   # 1) 오늘 메타 기반 문서/날짜 로드
     docs_today, dates_today = load_today_meta()
-    docs_wh, dates_wh = load_warehouse(days=30)
     
-    # 리스트로 변환 (필요 시)
-    dates_today = list(dates_today) if dates_today else[]
-    dates_wh = list(dates_wh) if dates_wh else[]
+    # 2) 과거 N일(warehouse): 날짜만 사용
+    wh_docs, wh_dates = load_warehouse(days=30)  # wh_docs는 여기선 사용 안 함
     
-    # 날짜 리스트 병합
-    dates = dates_today + dates_wh
+    # 3) 병합: 토픽/요약은 오늘만, 시계열은 오늘+과거
+    docs = docs_today
+    dates = (dates_today or []) + (wh_dates or [])
     
-    # 3) 토픽 모델링
+    # 4) 토픽 모델링
     topics_obj = lda_topics(docs, k=6, topn=8, min_cf=2, iters=150)
-
-    # 4) 시계열 집계
+    
+    # 5) 시계열 집계
     ts_obj = timeseries_by_date(dates)
-
-    # 5) 인사이트 요약
+    
+    # 6) 인사이트 요약
     api_key = os.getenv("GEMINI_API_KEY", "")
     model_name = str(LLM.get("model", "gemini-1.5-flash"))
+    
     context = {
         "topics": topics_obj.get("topics", []),
         "timeseries": ts_obj.get("daily", []),
     }
+    
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
@@ -291,43 +292,42 @@ def main():
         max_tokens=int(LLM.get("max_output_tokens", 2048)),
         temperature=float(LLM.get("temperature", 0.3)),
     )
-
-    # 6) top_topics 간단 구성(각 토픽 상위 단어 5개)
+    
+    # 7) top_topics
     top_topics = []
     for t in topics_obj.get("topics", []):
         words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
-        top_topics.append({
-            "topic_id": t.get("topic_id"),
-            "words": words
-        })
-
-    # 7) evidence를 dict 형태로 저장(롤백 기준)
-    # 최근 14일치만 잘라 넣기
+        top_topics.append({"topic_id": t.get("topic_id"), "words": words})
+    
+    # 8) evidence 저장(최근 14일)
     daily = ts_obj.get("daily", [])
     tail_14 = daily[-14:] if len(daily) > 14 else daily
+    
     insights_obj = {
         "summary": summary,
         "top_topics": top_topics,
-        "evidence": {
-            "timeseries": tail_14
-        }
+        "evidence": {"timeseries": tail_14},
     }
-
-    # 8) 저장
+    
+    # 9) 저장
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
-
+    
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
-
+    
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
-
-    print("[INFO] SUMMARY | C | topics_k=%d docs=%d ts_days=%d model=%s"
-          % (len(topics_obj.get("topics", [])),
-             len(docs),
-             len(ts_obj.get("daily", [])),
-             model_name))
+    
+    print(
+        "[INFO] SUMMARY | C | topics_k=%d docs=%d ts_days=%d model=%s"
+        % (
+            len(topics_obj.get("topics", [])),
+            len(docs),
+            len(ts_obj.get("daily", [])),
+            model_name,
+        )
+    )
 
 if __name__ == "__main__":
     main()
