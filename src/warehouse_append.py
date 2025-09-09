@@ -96,7 +96,7 @@ def main():
         row = {
             "url": url,
             "title": it.get("title"),
-            "description": description_text, # 테스트 이후 주석 처리, 'full_text' 대신 JSON에서 읽은 'description'을 사용
+            # "description": description_text, # 테스트 이후 주석 처리, 'full_text' 대신 JSON에서 읽은 'description'을 사용
             "site_name": it.get("site_name"),
             "_query": it.get("_query") or it.get("query"),
             "published": published,
