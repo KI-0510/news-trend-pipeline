@@ -80,18 +80,43 @@ def dedup_by_url(items):
 
 def get_full_text(url):
     """
-    네이버 뉴스 링크에서 기사 본문을 추출합니다.
+    네이버 뉴스 링크에서 기사 본문을 추출하고, 불필요한 요소를 제거합니다.
     """
     try:
         r = http_get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_retry=2)
         soup = BeautifulSoup(r.text, "lxml")
         
-        # 네이버 뉴스 본문이 담긴 div 태그의 ID는 'newsct_article'입니다.
         content_div = soup.find("div", {"id": "newsct_article"})
         
         if content_div:
-            # 추출한 텍스트에서 불필요한 공백을 제거하고 반환합니다.
-            text = ' '.join(content_div.get_text().split())
+            text = content_div.get_text().strip()
+            
+            # 1. "(사진)", "(영상)", "(그래픽)" 등 괄호 안의 '사진', '영상', '그래픽' 등의 단어 제거
+            #    이 패턴은 괄호 안에 이미지, 비디오, 그래픽 등의 설명이 오는 경우를 처리합니다.
+            text = re.sub(r'\s*\[.*?\]\s*', '', text) # 대괄호 안 내용 제거 (예: [서울신문 나우뉴스])
+            text = re.sub(r'\s*\(.*?(사진|영상|그래픽|자료)\)\s*', '', text) # 괄호 안의 특정 키워드 제거
+            
+            # 2. "(00기자)", "(00 특파원)" 등 기자 이름 패턴 제거
+            #    이 패턴은 한글로 된 이름 뒤에 '기자', '특파원', '편집자' 등이 붙는 경우를 처리합니다.
+            text = re.sub(r'\([가-힣]{2,3}( 기자| 특파원| 편집자)\)', '', text)
+            
+            # 3. "출처=XXX", "사진=XXX" 와 같은 출처 정보 제거
+            #    이 패턴은 '출처=' 또는 '사진=' 뒤에 오는 모든 문자를 제거합니다.
+            text = re.sub(r'(출처|사진|제공)=\s*.*?(?:\.|\s|$)', '', text)
+            
+            # 4. 이메일 주소 패턴 제거
+            text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', text)
+            
+            # 5. 특정 단어로 시작하는 줄 제거 (예: '인터뷰', '보도')
+            #    이는 기사 본문 시작 부분이나 각 문단의 시작 부분에 불필요한 텍스트가 있을 때 유용합니다.
+            text = re.sub(r'^(인터뷰|보도|사진|자료|영상|그래픽)\s*:', '', text, flags=re.MULTILINE)
+            
+            # 6. 연속된 여러 개의 공백, 탭, 줄바꿈 문자를 하나의 공백으로 통일
+            text = ' '.join(text.split())
+            
+            # 7. 줄바꿈 문자 (\n) 제거 (필요하다면)
+            text = text.replace('\n', ' ')
+            
             return text
         
     except Exception as e:
