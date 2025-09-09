@@ -69,13 +69,35 @@ def fetch_naver_news(query, display=30, pages=2):
 def dedup_by_url(items):
     seen, out = set(),[]
     for it in items:
-        url = prefer_link(it)
+        # 네이버 링크를 기준으로 중복 제거
+        url = it.get("link")
         if "_query" not in it or it["_query"] is None:
             it["_query"] = "unknown"
         if url and url not in seen:
             seen.add(url)
             out.append(it)
     return out
+
+def get_full_text(url):
+    """
+    네이버 뉴스 링크에서 기사 본문을 추출합니다.
+    """
+    try:
+        r = http_get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_retry=2)
+        soup = BeautifulSoup(r.text, "lxml")
+        
+        # 네이버 뉴스 본문이 담긴 div 태그의 ID는 'newsct_article'입니다.
+        content_div = soup.find("div", {"id": "newsct_article"})
+        
+        if content_div:
+            # 추출한 텍스트에서 불필요한 공백을 제거하고 반환합니다.
+            text = ' '.join(content_div.get_text().split())
+            return text
+        
+    except Exception as e:
+        # log_error(f"본문 추출 실패: {url}, 에러: {e}")
+        return None
+    return None
 
 def expand_with_og(url):
     meta = {
@@ -134,25 +156,37 @@ def main():
         batch = fetch_naver_news(q, display=display, pages=pages)
         all_items.extend(batch)
         print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
+    
+    # 네이버 링크를 기준으로 중복 제거
     clean_items = dedup_by_url(all_items)
     
     meta_list =[]
     for it in clean_items:
-        url = prefer_link(it)
+        url = it.get("link")
+        
+        # OG 메타데이터를 가져오는 기존 함수 호출
         meta = expand_with_og(url)
+        
+        # description 값을 본문 크롤링 결과로 덮어쓰기
+        full_text = get_full_text(url)
+        meta["description"] = full_text
+        
+        # 나머지 기존 값들 할당
         meta["title"] = clean_html(it.get("title"))
-        meta["description"] = clean_html(it.get("description"))
         meta["pubDate_raw"] = it.get("pubDate")
         meta["_query"] = it.get("_query")
+        
         meta_list.append(meta)
         time.sleep(0.15)
-
+    
     os.makedirs("data", exist_ok=True)
     ts = int(time.time())
     raw_path = f"data/news_clean_{ts}.json"
-    meta_path = f"data/news_meta_{ts}.json"  # 언더스코어 추가
+    meta_path = f"data/news_meta_{ts}.json"
+    
     with open(raw_path, "w", encoding="utf-8") as f:
         json.dump(clean_items, f, ensure_ascii=False, indent=2)
+    
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta_list, f, ensure_ascii=False, indent=2)
 
