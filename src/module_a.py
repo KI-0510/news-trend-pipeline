@@ -69,60 +69,13 @@ def fetch_naver_news(query, display=30, pages=2):
 def dedup_by_url(items):
     seen, out = set(),[]
     for it in items:
-        # 링크 중복 제거
-        url = prefer_link(it) # url =  it.get("link")
+        url = prefer_link(it)
         if "_query" not in it or it["_query"] is None:
             it["_query"] = "unknown"
         if url and url not in seen:
             seen.add(url)
             out.append(it)
     return out
-
-def get_full_text(url):
-    """
-    네이버 뉴스 링크에서 기사 본문을 추출하고, 불필요한 요소를 제거합니다.
-    """
-    try:
-        r = http_get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, max_retry=2)
-        soup = BeautifulSoup(r.text, "lxml")
-        
-        content_div = soup.find("div", {"id": "newsct_article"})
-        
-        if content_div:
-            text = content_div.get_text().strip()
-            
-            # 1. "(사진)", "(영상)", "(그래픽)" 등 괄호 안의 '사진', '영상', '그래픽' 등의 단어 제거
-            #    이 패턴은 괄호 안에 이미지, 비디오, 그래픽 등의 설명이 오는 경우를 처리합니다.
-            text = re.sub(r'\s*\[.*?\]\s*', '', text) # 대괄호 안 내용 제거 (예: [서울신문 나우뉴스])
-            text = re.sub(r'\s*\(.*?(사진|영상|그래픽|자료)\)\s*', '', text) # 괄호 안의 특정 키워드 제거
-            
-            # 2. "(00기자)", "(00 특파원)" 등 기자 이름 패턴 제거
-            #    이 패턴은 한글로 된 이름 뒤에 '기자', '특파원', '편집자' 등이 붙는 경우를 처리합니다.
-            text = re.sub(r'\([가-힣]{2,3}( 기자| 특파원| 편집자)\)', '', text)
-            
-            # 3. "출처=XXX", "사진=XXX" 와 같은 출처 정보 제거
-            #    이 패턴은 '출처=' 또는 '사진=' 뒤에 오는 모든 문자를 제거합니다.
-            text = re.sub(r'(출처|사진|제공)=\s*.*?(?:\.|\s|$)', '', text)
-            
-            # 4. 이메일 주소 패턴 제거
-            text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', text)
-            
-            # 5. 특정 단어로 시작하는 줄 제거 (예: '인터뷰', '보도')
-            #    이는 기사 본문 시작 부분이나 각 문단의 시작 부분에 불필요한 텍스트가 있을 때 유용합니다.
-            text = re.sub(r'^(인터뷰|보도|사진|자료|영상|그래픽)\s*:', '', text, flags=re.MULTILINE)
-            
-            # 6. 연속된 여러 개의 공백, 탭, 줄바꿈 문자를 하나의 공백으로 통일
-            text = ' '.join(text.split())
-            
-            # 7. 줄바꿈 문자 (\n) 제거 (필요하다면)
-            text = text.replace('\n', ' ')
-            
-            return text
-        
-    except Exception as e:
-        # log_error(f"본문 추출 실패: {url}, 에러: {e}")
-        return None
-    return None
 
 def expand_with_og(url):
     meta = {
@@ -181,37 +134,25 @@ def main():
         batch = fetch_naver_news(q, display=display, pages=pages)
         all_items.extend(batch)
         print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
-    
-    # 링크 중복 제거
     clean_items = dedup_by_url(all_items)
     
     meta_list =[]
     for it in clean_items:
-        url = it.get("link")
-        
-        # OG 메타데이터를 가져오는 기존 함수 호출
+        url = prefer_link(it)
         meta = expand_with_og(url)
-        
-        # description 값을 본문 크롤링 결과로 덮어쓰기
-        full_text = get_full_text(url)
-        meta["description"] = full_text
-        
-        # 나머지 기존 값들 할당
         meta["title"] = clean_html(it.get("title"))
+        meta["description"] = clean_html(it.get("description"))
         meta["pubDate_raw"] = it.get("pubDate")
         meta["_query"] = it.get("_query")
-        
         meta_list.append(meta)
         time.sleep(0.15)
-    
+
     os.makedirs("data", exist_ok=True)
     ts = int(time.time())
     raw_path = f"data/news_clean_{ts}.json"
-    meta_path = f"data/news_meta_{ts}.json"
-    
+    meta_path = f"data/news_meta_{ts}.json"  # 언더스코어 추가
     with open(raw_path, "w", encoding="utf-8") as f:
         json.dump(clean_items, f, ensure_ascii=False, indent=2)
-    
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta_list, f, ensure_ascii=False, indent=2)
 
