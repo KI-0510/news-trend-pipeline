@@ -10,7 +10,7 @@ import trafilatura
 from trafilatura.settings import use_config
 
 # 본문 최소 길이(환경변수로 조절 가능): 기본 120자
-MIN_LEN = int(os.environ.get("BODY_MIN_LEN", "120"))
+MIN_LEN = int(os.environ.get("BODY_MIN_LEN", "230"))
 
 def latest(globpat: str) -> str:
     files = sorted(glob.glob(globpat))
