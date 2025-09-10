@@ -101,41 +101,6 @@ jobs:
           ls data/
           python src/check_a.py
 
-      # B 입력 디버그 덤프(news_meta 최신본 + build_docs 미리보기)
-      - name: Dump B inputs (debug)
-        shell: bash
-        run: |
-          source .venv/bin/activate
-          mkdir -p outputs/debug
-          python - <<'PY'
-          import glob, json, os, shutil
-          from src.module_b import build_docs
-          files = sorted(glob.glob("data/news_meta_*.json"))
-          if not files:
-              raise SystemExit("no news_meta_* found")
-          meta_path = files[-1]
-          shutil.copy2(meta_path, "outputs/debug/news_meta_latest.json")
-          with open(meta_path, "r", encoding="utf-8") as f:
-              items = json.load(f)
-          docs = build_docs(items)
-          sample = docs[:200]
-          lens = [len(d) for d in sample]
-          out = {
-              "source_meta": os.path.basename(meta_path),
-              "docs_count": len(docs),
-              "sample_count": len(sample),
-              "length_stats": {
-                  "min": min(lens) if lens else 0,
-                  "max": max(lens) if lens else 0,
-                  "avg": (sum(lens)/len(lens)) if lens else 0,
-              },
-              "docs_sample": sample
-          }
-          with open("outputs/debug/b_docs.json", "w", encoding="utf-8") as f:
-              json.dump(out, f, ensure_ascii=False, indent=2)
-          print("[DEBUG] Dumped build_docs preview:", out["docs_count"], "docs")
-          PY
-
       # Warehouse Append
       - name: Warehouse Append
         shell: bash
