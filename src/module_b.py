@@ -126,9 +126,10 @@ def build_docs(meta_items):
     """메타데이터에서 문서 생성"""
     docs = []
     for it in meta_items:
-        title = clean_text(it.get("title") or it.get("title_og"))
-        desc = clean_text(it.get("description") or it.get("description_og"))
-        doc = (title + " " + desc).strip()
+        title = clean_text(it.get("title") or it.get("title_og"))      
+        body = clean_text(it.get("body") or it.get("description") or it.get("description_og"))
+        doc = (title + " " + body).strip()
+        
         if doc:
             docs.append(doc)
     return docs
