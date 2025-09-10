@@ -7,7 +7,7 @@ pandas>=2.2.2
 # fetch_article_bodies
 trafilatura>=1.0.0
 
-NLP / ML 
+# NLP / ML 
 scikit-learn>=1.4.0
 soynlp>=0.0.493
 krwordrank>=1.0.3
