@@ -69,7 +69,7 @@ def fetch_naver_news(query, display=30, pages=2):
 def dedup_by_url(items):
     seen, out = set(),[]
     for it in items:
-        # 네이버 링크를 기준으로 중복 제거
+        # 링크 중복 제거
         url = prefer_link(it)
         if "_query" not in it or it["_query"] is None:
             it["_query"] = "unknown"
@@ -182,7 +182,7 @@ def main():
         all_items.extend(batch)
         print(f"[INFO] query={q} | fetched={len(batch)} | total={len(all_items)}")
     
-    # 네이버 링크를 기준으로 중복 제거
+    # 링크 중복 제거
     clean_items = dedup_by_url(all_items)
     
     meta_list =[]
