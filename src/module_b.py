@@ -128,7 +128,7 @@ def build_docs(meta_items):
     for it in meta_items:
         title = clean_text(it.get("title") or it.get("title_og"))      
         body = clean_text(it.get("body") or it.get("description") or it.get("description_og"))
-        doc = (title + " " + body).strip()
+        doc  = (title + " " + body).strip()
         
         if doc:
             docs.append(doc)
