@@ -106,6 +106,13 @@ jobs:
           git pull --rebase --autostash origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref_name }} || true
 
+      # ✅ Enrich meta with article bodies
+      - name: Enrich meta with article bodies
+        shell: bash
+        run: |
+          set -e
+          python scripts/fetch_article_bodies.py
+
       # ✅ Module B 실행 및 검증 단계
       - name: Module B - Keywords
         shell: bash
