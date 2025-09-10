@@ -84,12 +84,6 @@ def main():
             skipped += 1
             continue
         
-        # description 값을 JSON 파일에서 직접 가져옵니다.
-        description_text = it.get("description", "")
-        if not description_text:
-             skipped += 1
-             continue
-        
         d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
         published = to_date(d_raw)
         
