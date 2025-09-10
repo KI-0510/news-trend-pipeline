@@ -123,6 +123,8 @@ jobs:
       # 본문 수집(본문→body, description 동기화)
       - name: Enrich meta with article bodies
         shell: bash
+        env:
+          BODY_MIN_LEN: "200"
         run: |
           source .venv/bin/activate
           python - <<'PY'
