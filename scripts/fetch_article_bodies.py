@@ -82,6 +82,83 @@ def extract_naver_body(html: str) -> str:
     txt = re.sub(r"\s+", " ", txt).strip()
     return txt
 
+def _remove_after_anchors(text: str) -> str:
+    """
+    특정 앵커(나오면 그 이후는 노이즈로 간주)를 기준으로 잘라냄.
+    기사 하단 ‘앱토 한마디’, ‘BEST댓글’, ‘이 기사를 공유합니다’, ‘제원표’, ‘POINT’ 등.
+    """
+    anchors = [
+        r"^앱토 한마디\b", r"^BEST댓글\b", r"^댓글\b", r"^이 기사를 공유합니다\b",
+        r"^제원표\b", r"^POINT\b", r"^관련기사\b", r"^기사원문\b"
+    ]
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    out = []
+    for ln in lines:
+        if any(re.search(pat, ln.strip()) for pat in anchors):
+            break
+        out.append(ln)
+    return "\n".join(out)
+
+def _strip_common_noise(text: str) -> str:
+    """
+    기자/저작권/이메일/URL/가격/캡션/UX 문구 제거. 보수적으로 적용.
+    """
+    t = text
+    # 매체 브라켓+기자
+    t = re.sub(r"\[[^\[\]\n]{0,80}기자\]", " ", t)                 # [녹색경제신문 = … 기자]
+    t = re.sub(r"[-–—]\s*기자명?\s*[^\s]*기자", " ", t)             # - 기자명 … 기자
+    t = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", " ", t)               # 이메일
+    t = re.sub(r"(무단전재\s*및\s*재배포\s*금지|Copyright\s*©[^,\n]+)", " ", t, flags=re.I)
+
+    # 댓글/공유 UI
+    t = re.sub(r"(BEST댓글|댓글삭제|댓글수정|이 기사를 공유합니다)", " ", t)
+
+    # URL/가격
+    t = re.sub(r"https?://\S+", " ", t)
+    t = re.sub(r"\b[0-9]{1,3}(?:,[0-9]{3})+(?:\s*원(?:부터)?)?\b", " ", t)  # 1,290,000원, 1,290,000원부터
+
+    # 캡션/장식
+    t = t.replace("▲", " ")
+    t = re.sub(r"^\s*사진\s*=\s*.*$", " ", t, flags=re.M)
+    t = re.sub(r"[│•▪◆■※☆★▷▶▸▹◀◁◾◼︎]+", " ", t)
+
+    # 공백 정리
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+def _dedup_sentences(text: str) -> str:
+    """
+    완전히 동일한 문장/문단 중복 제거(순서 유지).
+    """
+    parts = re.split(r"(?<=[\.!?다])\s+", text)
+    seen, out = set(), []
+    for s in parts:
+        s = s.strip()
+        if not s:
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return " ".join(out)
+
+def sanitize_article(text: str) -> str:
+    """
+    본문 정제 전체 파이프라인:
+    1) 앵커 이후 컷 → 2) 범용 노이즈 제거 → 3) ‘제원/스펙 표’ 등장 전 컷 → 4) 중복 문장 제거
+    """
+    if not text:
+        return ""
+    t = _remove_after_anchors(text)
+    t = _strip_common_noise(t)
+    m = re.search(r"(제원|스펙|사양)\s*표", t)
+    if m:
+        t = t[:m.start()].strip()
+    t = _dedup_sentences(t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
 def fetch_body(url: str, timeout: int = 12) -> str:
     if not url:
         return ""
@@ -141,14 +218,18 @@ def fetch_body(url: str, timeout: int = 12) -> str:
         except Exception:
             pass
 
-    # 캐시 저장
-    if len(text) >= MIN_LEN:
-        try:
-            with open(cache_path, "w", encoding="utf-8") as f:
-                f.write(text)
-        except Exception:
-            pass
-    return text
+        # 본문 정제(노이즈 제거)
+        text = sanitize_article(text)
+
+        # 캐시 저장
+        if len(text) >= MIN_LEN:
+            try:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    f.write(text)
+            except Exception:
+                pass
+        return text
+
 
 def main() -> int:
     meta_path = latest("data/news_meta_*.json")
