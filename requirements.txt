@@ -4,7 +4,10 @@ beautifulsoup4>=4.12.2
 lxml>=4.9.3
 pandas>=2.2.2
 
-# NLP / ML 
+# fetch_article_bodies
+trafilatura>=1.0.0
+
+NLP / ML 
 scikit-learn>=1.4.0
 soynlp>=0.0.493
 krwordrank>=1.0.3
@@ -20,6 +23,3 @@ seaborn>=0.13.2
 markdown>=3.6
 wordcloud>=1.9.3
 pillow>=10.3.0
-
-# fetch_article_bodies
-trafilatura
