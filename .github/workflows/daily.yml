@@ -134,6 +134,57 @@ jobs:
           PY
           python scripts/fetch_article_bodies.py
 
+      - name: Dump B inputs (debug, post-enrich)
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          mkdir -p outputs/debug
+          python - <<'PY'
+          import glob, json, os, shutil
+          files = sorted(glob.glob("data/news_meta_*.json"))
+          if not files:
+              raise SystemExit("no news_meta_* found")
+          meta_path = files[-1]
+
+          # 본문 주입 이후의 최신 메타를 복사
+          shutil.copy2(meta_path, "outputs/debug/news_meta_latest.json")
+
+          # 본문/설명 길이 통계
+          with open(meta_path, "r", encoding="utf-8") as f:
+              items = json.load(f)
+
+          def strlen(x): return len((x or "").strip())
+
+          body_lens = [strlen(it.get("body")) for it in items]
+          desc_lens = [strlen(it.get("description")) for it in items]
+          n_body_ge_120 = sum(1 for v in body_lens if v >= 120)
+          n_desc_ge_120 = sum(1 for v in desc_lens if v >= 120)
+
+          # Module B가 실제로 사용할 문서 미리보기
+          from src.module_b import build_docs
+          docs = build_docs(items)
+          sample = docs[:200]
+          lens = [len(d) for d in sample]
+
+          out = {
+              "source_meta": os.path.basename(meta_path),
+              "items": len(items),
+              "body_len_ge_120": n_body_ge_120,
+              "desc_len_ge_120": n_desc_ge_120,
+              "docs_count": len(docs),
+              "sample_count": len(sample),
+              "length_stats": {
+                  "min": min(lens) if lens else 0,
+                  "max": max(lens) if lens else 0,
+                  "avg": (sum(lens)/len(lens)) if lens else 0,
+              },
+              "docs_sample": sample
+          }
+          with open("outputs/debug/b_docs.json", "w", encoding="utf-8") as f:
+              json.dump(out, f, ensure_ascii=False, indent=2)
+          print("[DEBUG] post-enrich | body>=120:", n_body_ge_120, "desc>=120:", n_desc_ge_120, "docs:", len(docs))
+          PY
+
       # Module B
       - name: Module B - Keywords
         shell: bash
