@@ -26,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ✅ Python 환경 설정 (pip 캐시 활성화)
+      # Python 3.11 고정 + pip 캐시
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -34,16 +34,32 @@ jobs:
           cache: "pip"
           cache-dependency-path: "requirements.txt"
 
-      # ✅ 의존성 설치 및 가상환경 활성화
+      # 의존성 설치(venv 사용)
       - name: Install dependencies
         shell: bash
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
-      # ✅ 시각화/폰트 관련 설치
+      # trafilatura 임포트 확인(같은 파이썬 보장)
+      - name: Verify deps (quick)
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          import sys
+          print("PY:", sys.executable)
+          try:
+              import trafilatura
+              print("trafilatura:", trafilatura.__version__)
+          except Exception as e:
+              print("trafilatura import failed:", repr(e))
+              raise
+          PY
+
+      # 폰트 설치
       - name: Install viz deps
         shell: bash
         run: |
@@ -53,29 +69,27 @@ jobs:
           fc-list | grep -i -E "Nanum|Noto|CJK" || true
           fc-cache -f -v
 
-      # ✅ 사전 점검: 필수 시크릿 검사(빠른 실패)
+      # 시크릿 체크
       - name: Preflight | Check secrets
         shell: bash
         run: |
           test -n "${{ secrets.GEMINI_API_KEY }}" || (echo "GEMINI_API_KEY 없음"; exit 1)
-          # 네이버 키는 선택 사항이면 경고만 출력
           if [ -z "${{ secrets.NAVER_CLIENT_ID }}" ] || [ -z "${{ secrets.NAVER_CLIENT_SECRET }}" ]; then
             echo "[WARN] NAVER API 키가 없습니다(옵션?)."
           fi
 
-      # ✅ Module A - Fetch & Preprocess
+      # Module A
       - name: Module A - Fetch & Preprocess
         shell: bash
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-          # 스케줄 실행 시 기본 false, 수동 실행 시 입력값 사용
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         run: |
           source .venv/bin/activate
           python src/module_a.py
 
-      # ✅ Check A - Validate Output
+      # Check A
       - name: Check A - Validate Output
         shell: bash
         run: |
@@ -87,14 +101,14 @@ jobs:
           ls data/
           python src/check_a.py
 
-      # ✅ Warehouse 누적 실행(파일 생성만)
+      # Warehouse Append
       - name: Warehouse Append
         shell: bash
         run: |
           source .venv/bin/activate
           python src/warehouse_append.py
 
-      # ✅ Warehouse 커밋/푸시 (main에서만)
+      # Warehouse Commit & Push
       - name: Commit & Push Warehouse (main only)
         if: github.ref_name == 'main'
         shell: bash
@@ -106,7 +120,72 @@ jobs:
           git pull --rebase --autostash origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref_name }} || true
 
-      # ✅ Module B 실행 및 검증 단계
+      # 본문 수집(본문→body, description 동기화)
+      - name: Enrich meta with article bodies
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          import sys, subprocess
+          try:
+              import trafilatura  # noqa
+          except Exception:
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "trafilatura"])
+          PY
+          python scripts/fetch_article_bodies.py
+
+      - name: Dump B inputs (debug, post-enrich)
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          mkdir -p outputs/debug
+          python - <<'PY'
+          import glob, json, os, shutil
+          files = sorted(glob.glob("data/news_meta_*.json"))
+          if not files:
+              raise SystemExit("no news_meta_* found")
+          meta_path = files[-1]
+
+          # 본문 주입 이후의 최신 메타를 복사
+          shutil.copy2(meta_path, "outputs/debug/news_meta_latest.json")
+
+          # 본문/설명 길이 통계
+          with open(meta_path, "r", encoding="utf-8") as f:
+              items = json.load(f)
+
+          def strlen(x): return len((x or "").strip())
+
+          body_lens = [strlen(it.get("body")) for it in items]
+          desc_lens = [strlen(it.get("description")) for it in items]
+          n_body_ge_120 = sum(1 for v in body_lens if v >= 120)
+          n_desc_ge_120 = sum(1 for v in desc_lens if v >= 120)
+
+          # Module B가 실제로 사용할 문서 미리보기
+          from src.module_b import build_docs
+          docs = build_docs(items)
+          sample = docs[:200]
+          lens = [len(d) for d in sample]
+
+          out = {
+              "source_meta": os.path.basename(meta_path),
+              "items": len(items),
+              "body_len_ge_120": n_body_ge_120,
+              "desc_len_ge_120": n_desc_ge_120,
+              "docs_count": len(docs),
+              "sample_count": len(sample),
+              "length_stats": {
+                  "min": min(lens) if lens else 0,
+                  "max": max(lens) if lens else 0,
+                  "avg": (sum(lens)/len(lens)) if lens else 0,
+              },
+              "docs_sample": sample
+          }
+          with open("outputs/debug/b_docs.json", "w", encoding="utf-8") as f:
+              json.dump(out, f, ensure_ascii=False, indent=2)
+          print("[DEBUG] post-enrich | body>=120:", n_body_ge_120, "desc>=120:", n_desc_ge_120, "docs:", len(docs))
+          PY
+
+      # Module B
       - name: Module B - Keywords
         shell: bash
         run: |
@@ -119,7 +198,7 @@ jobs:
           source .venv/bin/activate
           python src/check_b.py
 
-      # ✅ Module C 실행 및 검증 단계
+      # Module C
       - name: Module C - Topics/Timeseries/Insight
         shell: bash
         env:
@@ -134,7 +213,29 @@ jobs:
           source .venv/bin/activate
           python src/check_c.py
 
-      # ✅ Module D 실행 및 검증 단계
+      # C 컨텍스트 덤프(topics+timeseries)
+      - name: Dump C context (debug)
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          mkdir -p outputs/debug
+          python - <<'PY'
+          import json
+          def load(p, default):
+              try:
+                  with open(p, encoding="utf-8") as f:
+                      return json.load(f)
+              except Exception:
+                  return default
+          topics = load("outputs/topics.json", {"topics":[]}).get("topics", [])
+          ts = load("outputs/trend_timeseries.json", {"daily":[]}).get("daily", [])
+          ctx = {"topics": topics, "timeseries": ts}
+          with open("outputs/debug/c_context.json", "w", encoding="utf-8") as f:
+              json.dump(ctx, f, ensure_ascii=False, indent=2)
+          print("[DEBUG] Dumped c_context: topics=", len(topics), "days=", len(ts))
+          PY
+
+      # Module D
       - name: Module D - Biz Opportunities
         shell: bash
         env:
@@ -149,66 +250,61 @@ jobs:
           source .venv/bin/activate
           python src/check_d.py
 
-      # ✅ Preflight Checks - 데이터 품질 사전 점검
+      # Preflight
       - name: Preflight Checks
         shell: bash
+        env:
+          PREFLIGHT_MIN_DAILY: "1"
+          PREFLIGHT_MIN_TOTAL: "1"
+          PREFLIGHT_MAX_SPAN:  "400"
         run: |
           set -e
+          source .venv/bin/activate
           python scripts/preflight.py
-        env:
-          PREFLIGHT_MIN_DAILY: "1"     # 최소 일수(필요 시 2~7로 조정)
-          PREFLIGHT_MIN_TOTAL: "1"     # 최소 기사 수(필요 시 10~50으로 조정)
-          PREFLIGHT_MAX_SPAN:  "400"   # 날짜 범위 상한
 
-      # ✅ Module E 실행 및 검증 단계
+      # Module E
       - name: Module E - Build Report
         shell: bash
         run: |
           source .venv/bin/activate
           python src/module_e.py
           
-      # ✅ Job Summary 출력 추가
       - name: Check E - Validate Report
         shell: bash
         run: |
           source .venv/bin/activate
           python src/check_e.py
           
+      # Job Summary
       - name: Build Job Summary
         shell: bash
         run: |
+          source .venv/bin/activate
           python - <<'PY'
           import json, os
-
           def load(p, default):
               try:
                   with open(p, encoding="utf-8") as f:
                       return json.load(f)
               except Exception:
                   return default
-
           ts = load("outputs/trend_timeseries.json", {"daily":[]})
           daily = ts.get("daily", [])
           total = sum(int(x.get("count",0)) for x in daily)
           dr = f"{daily[0]['date']} ~ {daily[-1]['date']}" if daily else "-"
-
           kw = load("outputs/keywords.json", {"keywords":[]}).get("keywords", [])
           kw = sorted(kw, key=lambda x: x.get("score",0), reverse=True)[:10]
-
           opp = load("outputs/biz_opportunities.json", {"ideas":[]}).get("ideas", [])[:5]
-
           lines = []
           lines.append("# Daily Pipeline Summary\n")
           lines.append(f"- 기간: {dr}")
           lines.append(f"- 총 기사 수: {total}\n")
-
           lines.append("## Top 10 Keywords")
           lines.append("| Rank | Keyword | Score |")
           lines.append("|---:|---|---:|")
           for i, k in enumerate(kw, 1):
               lines.append(f"| {i} | {k.get('keyword','')} | {round(float(k.get('score',0)),3)} |")
           lines.append("")
-
           lines.append("## Opportunities (Top 5)")
           if opp:
               for i, it in enumerate(opp, 1):
@@ -216,7 +312,6 @@ jobs:
                   lines.append(f"- {i}. {title}")
           else:
               lines.append("- (데이터 없음)")
-
           txt = "\n".join(lines) + "\n"
           print(txt)
           summ = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -225,18 +320,15 @@ jobs:
                   f.write(txt)
           PY
 
-      # ✅ 산출물 보관(브랜치에서도 생성)
+      # 일자별 아카이브(KST)
       - name: Prepare outputs daily folder (KST)
         shell: bash
         run: |
           set -e
-          # KST 기준 날짜/시각
           DATE_KST=$(TZ=Asia/Seoul date +'%Y-%m-%d')
           TIME_KST=$(TZ=Asia/Seoul date +'%H%M-KST')
           OUTDIR="outputs/daily/${DATE_KST}/${TIME_KST}"
           mkdir -p "${OUTDIR}/fig" "${OUTDIR}/debug" "${OUTDIR}/export"
-      
-          # 산출물 복사
           cp outputs/topics.json             "${OUTDIR}/" || true
           cp outputs/trend_timeseries.json   "${OUTDIR}/" || true
           cp outputs/trend_insights.json     "${OUTDIR}/" || true
@@ -244,21 +336,16 @@ jobs:
           cp outputs/biz_opportunities.json  "${OUTDIR}/" || true
           cp outputs/report.md               "${OUTDIR}/" || true
           cp outputs/report.html             "${OUTDIR}/" || true
-      
-          # CSV: export 폴더 전체 및 개별 CSV 복사(안전망)
           if [ -d outputs/export ]; then
             cp -r outputs/export/*           "${OUTDIR}/export/" || true
           fi
           cp outputs/*.csv                   "${OUTDIR}/export/" || true
           cp outputs/export/*.csv            "${OUTDIR}/export/" || true
-      
-          # 이미지/디버그
           cp outputs/fig/*.png               "${OUTDIR}/fig/" || true
           cp -r outputs/debug/*              "${OUTDIR}/debug/" || true
-      
           echo "OUTDIR=${OUTDIR}" >> $GITHUB_ENV
 
-      # ✅ outputs 커밋/푸시 (main에서만)
+      # outputs 커밋/푸시
       - name: Commit & Push outputs (main only)
         if: github.ref_name == 'main'
         shell: bash
@@ -271,14 +358,13 @@ jobs:
           git pull --rebase --autostash origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref_name }} || true
 
-      # ✅ 90일 지난 날짜 폴더 삭제 (warehouse)
+      # 오래된 warehouse 정리
       - name: Cleanup old warehouse (main only, keep 90 days)
         if: github.ref_name == 'main'
         shell: bash
         run: |
           set -e
           test -d data/warehouse || exit 0
-          # 90일 지난 날짜 폴더 삭제 (보관 일수 변경은 "-mtime +90" 및 "chore: cleanup old outputs (>90d)"의 숫자 변경)
           find data/warehouse -type f -daystart -mtime +90 -print -delete || true
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -287,33 +373,29 @@ jobs:
           git pull --rebase --autostash origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref_name }} || true
           
-      # ✅ 90일 지난 날짜 폴더 삭제 (outputs)
+      # 오래된 outputs 정리
       - name: Cleanup old outputs (main only, keep 90 days)
         if: github.ref_name == 'main'
         shell: bash
         run: |
           set -e
-          # 안전장치: 디렉토리 존재 확인
           test -d outputs/daily || exit 0
-          # 90일 지난 날짜 폴더 삭제 (보관 일수 변경은 "-mtime +90" 및 "chore: cleanup old outputs (>90d)"의 숫자 변경)
           find outputs/daily -mindepth 1 -maxdepth 1 -type d -daystart -mtime +90 -print -exec rm -rf {} \; || true
-          # 커밋
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A outputs/daily
           git commit -m "chore: cleanup old outputs (>90d)" || echo "no changes"
           git pull --rebase --autostash origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref_name }} || true
-      
 
-      # ✅ 아티팩트 이름 안전화(브랜치명 정제)
+      # 아티팩트 이름 안전화
       - name: Sanitize artifact name
         shell: bash
         run: |
           CLEAN=$(echo '${{ github.ref_name }}' | tr '/:*?"<>|\\ ' '-')
           echo "ARTIFACT_NAME=report-${CLEAN}" >> $GITHUB_ENV
 
-      # ✅ 결과 확인용 아티팩트 업로드
+      # 결과 아티팩트 업로드(메타/클린/디버그 포함)
       - name: Upload report artifacts
         if: success()
         uses: actions/upload-artifact@v4
@@ -325,4 +407,7 @@ jobs:
             outputs/report.md
             outputs/fig/*.png
             outputs/export/*.csv
+            outputs/debug/*.json
+            data/news_meta_*.json
+            data/news_clean_*.json
           if-no-files-found: warn
