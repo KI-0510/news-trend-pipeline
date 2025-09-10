@@ -70,7 +70,7 @@ def dedup_by_url(items):
     seen, out = set(),[]
     for it in items:
         # 링크 중복 제거
-        url = prefer_link(it)
+        url = prefer_link(it) # url =  it.get("link")
         if "_query" not in it or it["_query"] is None:
             it["_query"] = "unknown"
         if url and url not in seen:
