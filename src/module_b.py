@@ -9,6 +9,7 @@ import string
 import csv
 from collections import defaultdict
 from typing import List, Tuple
+
 from soynlp.normalizer import normalize, repeat_normalize, emoticon_normalize
 from krwordrank.word import KRWordRank
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -22,12 +23,9 @@ def _has_jongseong(ch: str) -> bool:
     return False
 
 def strip_korean_particle(word: str) -> str:
-    if not word or len(word) < 2:
-        return word
-    last = word[-1]
-    prev = word[-2]
-    if last in ("이", "의"):
-        return word
+    if not word or len(word) < 2: return word
+    last = word[-1]; prev = word[-2]
+    if last in ("이", "의"): return word
     rules = {"가": False, "은": True, "는": False, "을": True, "를": False, "과": True, "와": False}
     if last in rules and _has_jongseong(prev) == rules[last]:
         return word[:-1]
@@ -37,13 +35,11 @@ def strip_verb_ending(word: str) -> str:
     return re.sub(r"(하다|하게|하고|하며|하면|하는|해요?|했다|합니다|된다|되는|될|됐다|있다|있음|또한)$", "", word)
 
 def normalize_keyword(w: str) -> str:
-    if not w:
-        return ""
+    if not w: return ""
     w = re.sub(r"^[\'\"‘’“”]+|[\'\"‘’“”]+$", "", w.strip())
     w = w.strip(string.punctuation + "·…")
     w = re.sub(r"\s+", " ", w)
-    if re.fullmatch(r"[A-Za-z0-9 \-_/]+", w):
-        w = w.lower()
+    if re.fullmatch(r"[A-Za-z0-9 \-_/]+", w): w = w.lower()
     return w
 
 # ===== 공통 유틸 =====
@@ -56,11 +52,10 @@ def load_config():
         with open("config.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 5}
+        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 6}
 
 def clean_text(t: str) -> str:
-    if not t:
-        return ""
+    if not t: return ""
     t = re.sub(r"<.+?>", " ", t)
     t = unicodedata.normalize("NFKC", t)
     t = normalize(t)
@@ -69,16 +64,14 @@ def clean_text(t: str) -> str:
     return t.strip()
 
 def dedup_docs_by_cosine(docs, threshold=0.90):
-    if len(docs) <= 1:
-        return docs
-    vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+    if len(docs) <= 1: return docs
+    vec = TfidfVectorizer(max_features=7000, ngram_range=(1, 2))
     X = vec.fit_transform(docs)
     sim = cosine_similarity(X, dense_output=False)
     keep = []
     removed = set()
     for i in range(len(docs)):
-        if i in removed:
-            continue
+        if i in removed: continue
         keep.append(i)
         for j in range(i + 1, len(docs)):
             if sim[i, j] >= threshold:
@@ -91,8 +84,7 @@ def build_docs(meta_items):
         title = clean_text(it.get("title") or it.get("title_og"))
         body = clean_text(it.get("body") or it.get("description") or it.get("description_og"))
         doc = (title + " " + body).strip()
-        if doc:
-            docs.append(doc)
+        if doc: docs.append(doc)
     return docs
 
 # ===== stopwords 합집합 =====
@@ -111,8 +103,7 @@ def _load_json(p, default=None):
         return default if default is not None else {}
 
 def norm_kw_light(s: str) -> str:
-    if not s:
-        return ""
+    if not s: return ""
     s = unicodedata.normalize("NFKC", s)
     s = s.strip().lower()
     s = re.sub(r"\s+", " ", s)
@@ -133,70 +124,81 @@ EN_STOP = {
 }
 STOPWORDS |= set(EN_STOP)
 
+# 추가 컷 대상(보도문/행정/형식어/깨진 토큰)
+MORE_STOP = {
+    "이날","11일","이라고","이라며","대비","가장","특히","세계","지난","따르면","모든","적극",
+    "디스","프로","기술","미래","혁신","글로벌","전문","모델을","성과를","받았다","밝혔다","강조했다",
+    "국내","대한민국","서울","있는","새로운","여러","플랫폼","사업","핵심"
+}
+STOPWORDS |= set([norm_kw_light(x) for x in MORE_STOP])
+
+# ===== 의미성 체크 =====
+CURRENCY_PAT = re.compile(r"^[0-9,\.]+(원|달러|유로|엔|위안|억원|조원)$")
+DATE_PAT = re.compile(r"^\d{1,2}일$|^\d{4}년$|^\d{4}$")
+NUMERIC_ONLY = re.compile(r"^\d+$")
+BROKEN_KO = re.compile(r"^[ㄱ-ㅎㅏ-ㅣ]+$")  # 자모만
+
+def is_meaningful_token(tok: str) -> bool:
+    if not tok: return False
+    t = normalize_keyword(tok)
+    if len(t) < 2: return False
+    if norm_kw_light(t) in STOPWORDS: return False
+    if NUMERIC_ONLY.fullmatch(t): return False
+    if DATE_PAT.fullmatch(t): return False
+    if CURRENCY_PAT.fullmatch(t): return False
+    if BROKEN_KO.fullmatch(t): return False
+    # 일반적으로 붙는 허수아비 토큰 컷(2자 + '스'처럼 맥락 약한)
+    if len(t) <= 2 and t.endswith("스"): return False
+    return True
+
 # ===== KRWordRank 키워드 =====
 def extract_keywords_krwordrank(docs, topk=30):
     n = len(docs)
-    if n < 20:
-        min_count, max_iter = 1, 5
-    elif n < 50:
-        min_count, max_iter = 2, 8
-    else:
-        min_count, max_iter = 5, 12
+    if n < 20: min_count, max_iter = 1, 5
+    elif n < 50: min_count, max_iter = 2, 8
+    else: min_count, max_iter = 5, 12
     kwr = KRWordRank(min_count=min_count, max_length=10)
     keywords, _, _ = kwr.extract(docs, max_iter=max_iter)
     results = []
     for w, score in sorted(keywords.items(), key=lambda x: x[1], reverse=True):
-        if len(results) >= topk:
-            break
+        if len(results) >= topk: break
         w_norm = normalize_keyword(w)
         w_norm = strip_korean_particle(w_norm)
         w_norm = strip_verb_ending(w_norm)
-        if len(w_norm) < 2:
-            continue
-        if norm_kw_light(w_norm) in STOPWORDS:
-            continue
-        if re.fullmatch(r"[0-9\W_]+", w_norm):
-            continue
+        if not is_meaningful_token(w_norm): continue
         results.append({"keyword": w_norm, "score": float(score)})
     return results
 
-# ===== 빅람 상위 구문(2-gram) TF-IDF =====
-def top_bigrams_by_tfidf(docs, topn=50, min_df=5):
-    vec = TfidfVectorizer(ngram_range=(2,2), min_df=min_df, max_features=5000,
+# ===== 빅람(2-gram) TF-IDF =====
+def top_bigrams_by_tfidf(docs, topn=70, min_df=6):
+    vec = TfidfVectorizer(ngram_range=(2,2), min_df=min_df, max_features=7000,
                           token_pattern=r"[가-힣A-Za-z0-9_]{2,}")
     X = vec.fit_transform(docs)
-    if X.shape[1] == 0:
-        return []
+    if X.shape[1] == 0: return []
     tfidf_sum = X.sum(axis=0).A1
     terms = vec.get_feature_names_out()
     pairs = list(zip(terms, tfidf_sum))
     pairs.sort(key=lambda x: x[1], reverse=True)
-    pairs = [(t, s) for t, s in pairs if re.search(r"[가-힣A-Za-z0-9]", t) and norm_kw_light(t) not in STOPWORDS]
-    return [t for t, _ in pairs[:topn]]
+    out = []
+    for t, _ in pairs[:topn]:
+        if not is_meaningful_token(t): continue
+        out.append(t)
+    return out
 
 # ===== 키워드 후처리 =====
 def postprocess_keywords(docs, keywords, min_docfreq=1):
     df = defaultdict(int)
     for d in docs:
         tokens = set(re.findall(r"[가-힣]+|[A-Za-z0-9_]+", d))
-        for t in tokens:
-            df[t] += 1
+        for t in tokens: df[t] += 1
     merged = {}
     for k in keywords:
         w = normalize_keyword(k["keyword"])
-        if not w or len(w) < 1:
-            continue
-        if re.fullmatch(r"[0-9\W_]+", w):
-            continue
-        if norm_kw_light(w) in STOPWORDS:
-            continue
-        # 숫자/연도 단독 컷
-        if re.fullmatch(r"\d{1,4}$", w):
-            continue
+        if not is_meaningful_token(w): continue
+        # docfreq 필터
         exact_df = df.get(w, 0)
         approx_df = max((df[t] for t in df if w in t or t in w), default=0)
-        if max(exact_df, approx_df) < min_docfreq:
-            continue
+        if max(exact_df, approx_df) < min_docfreq: continue
         if w not in merged or merged[w]["score"] < k["score"]:
             merged[w] = {"keyword": w, "score": float(k["score"])}
     return sorted(merged.values(), key=lambda x: x["score"], reverse=True)
@@ -211,46 +213,38 @@ def load_entities_weight():
             for r in rdr:
                 e = (r.get("entity") or "").strip()
                 typ = (r.get("type") or "").strip().upper()
-                if not e:
-                    continue
-                if typ == "ORG":
-                    orgs.add(e)
-                elif typ == "PRODUCT":
-                    prods.add(e)
+                if not e: continue
+                if typ == "ORG": orgs.add(e)
+                elif typ == "PRODUCT": prods.add(e)
     except Exception:
         pass
     return orgs, prods
 
-def mmr_diversify(candidates, topn=50, diversity=0.7):
+def mmr_diversify(candidates, topn=50, diversity=0.6):
     terms = [c["keyword"] for c in candidates]
-    if not terms:
-        return candidates[:topn]
+    if not terms: return candidates[:topn]
     vec = TfidfVectorizer(analyzer="char", ngram_range=(3,5))
     M = vec.fit_transform(terms)
     sim = cosine_similarity(M)
     selected = []
     used = set()
     for i, _ in enumerate(candidates):
-        if len(selected) >= topn:
-            break
+        if len(selected) >= topn: break
         ok = True
         for j in selected:
             if sim[i, j] >= diversity:
-                ok = False
-                break
+                ok = False; break
         if ok:
             selected.append(i); used.add(i)
     if len(selected) < topn:
         for i in range(len(candidates)):
-            if i in used:
-                continue
+            if i in used: continue
             selected.append(i)
-            if len(selected) >= topn:
-                break
+            if len(selected) >= topn: break
     return [candidates[i] for i in selected]
 
 def build_tfidf(docs):
-    vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+    vec = TfidfVectorizer(max_features=7000, ngram_range=(1, 2))
     X = vec.fit_transform(docs)
     return vec, X
 
@@ -258,7 +252,7 @@ def main():
     t0 = time.time()
     cfg = CFG
     topk = int(cfg.get("top_n_keywords", 50))
-    min_docfreq = int(cfg.get("min_docfreq", 5))
+    min_docfreq = int(cfg.get("min_docfreq", 6))
 
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
@@ -269,8 +263,7 @@ def main():
 
     docs = build_docs(meta_items)
     if not docs:
-        print("[ERROR] 문서가 비어 있음")
-        raise SystemExit(1)
+        print("[ERROR] 문서가 비어 있음"); raise SystemExit(1)
 
     pre_n = len(docs)
     docs = dedup_docs_by_cosine(docs, threshold=0.90)
@@ -280,49 +273,45 @@ def main():
     # 1) KRWordRank
     keywords = extract_keywords_krwordrank(docs, topk=topk)
 
-    # 2) 빅람 합류
+    # 2) 빅람 합류(+상위 30% 가중)
     try:
-        bigrams = top_bigrams_by_tfidf(docs, topn=50, min_df=min_docfreq)
+        bigrams = top_bigrams_by_tfidf(docs, topn=70, min_df=min_docfreq)
         if bigrams:
             avg_score = (sum(k["score"] for k in keywords) / max(1, len(keywords))) if keywords else 1.0
             seen = {k["keyword"] for k in keywords}
-            for bg in bigrams:
-                if norm_kw_light(bg) in STOPWORDS:
-                    continue
-                if bg not in seen:
-                    keywords.append({"keyword": bg, "score": float(avg_score)})
-                    seen.add(bg)
+            cutoff = max(1, int(len(bigrams) * 0.3))
+            for idx, bg in enumerate(bigrams):
+                if not is_meaningful_token(bg): continue
+                if bg in seen: continue
+                score = avg_score * (1.2 if idx < cutoff else 1.0)
+                keywords.append({"keyword": bg, "score": float(score)})
+                seen.add(bg)
     except Exception:
         pass
 
     # 3) 후처리(빈도/불용어/숫자컷)
     keywords = postprocess_keywords(docs, keywords, min_docfreq=min_docfreq)
 
-    # 4) 엔터티 가중치
+    # 4) 엔터티 가중치 + 일반어 디버프
     orgs, prods = load_entities_weight()
     boosted = []
-    COMMON_DEBUFF = {"스마트","디지털","시장","글로벌","생활","기술","최근","지난해"}
+    COMMON_DEBUFF = {"스마트","디지털","시장","글로벌","생활","기술","최근","지난해","세계","사업","플랫폼"}
     for k in keywords:
         kw = k["keyword"]; score = k["score"]
-        if kw in orgs or kw in prods:
-            score *= 1.2
-        if kw in COMMON_DEBUFF:
-            score *= 0.8
+        if kw in orgs or kw in prods: score *= 1.2
+        if kw in COMMON_DEBUFF: score *= 0.7
         boosted.append({"keyword": kw, "score": score})
     boosted.sort(key=lambda x: x["score"], reverse=True)
 
-    # 5) MMR 다양화
-    diversified = mmr_diversify(boosted, topn=topk, diversity=0.7)
+    # 5) MMR 다양화(유사 억제 강화)
+    diversified = mmr_diversify(boosted, topn=topk, diversity=0.6)
 
     _vec, _X = build_tfidf(docs)
 
     os.makedirs("outputs", exist_ok=True)
     out_path = "outputs/keywords.json"
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "stats": {"num_docs": len(docs)},
-            "keywords": diversified
-        }, f, ensure_ascii=False, indent=2)
+        json.dump({"stats": {"num_docs": len(docs)}, "keywords": diversified}, f, ensure_ascii=False, indent=2)
 
     print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(diversified)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
 
