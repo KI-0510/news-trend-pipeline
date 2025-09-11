@@ -70,7 +70,7 @@ def load_config():
         with open("config.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 6}
+        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 7}
 
 def clean_text(t: str) -> str:
     if not t: return ""
@@ -208,7 +208,7 @@ def pro_extract_keywords_keybert(docs, topk=50):
 
 
 # Pro-Line 래퍼 함수 추가
-def extract_keywords_switch(docs, topk=50, min_docfreq=6):
+def extract_keywords_switch(docs, topk=50, min_docfreq=7):
     if use_pro_mode():
         try:
             return pro_extract_keywords_keybert(docs, topk=topk)
@@ -253,7 +253,7 @@ def top_bigrams_by_tfidf(docs, topn=70, min_df=6):
     return out
 
 # ===== 키워드 후처리 =====
-def postprocess_keywords(docs, keywords, min_docfreq=1):
+def postprocess_keywords(docs, keywords, min_docfreq=7):
     df = defaultdict(int)
     for d in docs:
         tokens = set(re.findall(r"[가-힣]+|[A-Za-z0-9_]+", d))
@@ -287,7 +287,7 @@ def load_entities_weight():
         pass
     return orgs, prods
 
-def mmr_diversify(candidates, topn=50, diversity=0.6):
+def mmr_diversify(candidates, topn=70, diversity=0.6):
     terms = [c["keyword"] for c in candidates]
     if not terms: return candidates[:topn]
     vec = TfidfVectorizer(analyzer="char", ngram_range=(3,5))
@@ -319,7 +319,7 @@ def main():
     t0 = time.time()
     cfg = CFG
     topk = int(cfg.get("top_n_keywords", 50))
-    min_docfreq = int(cfg.get("min_docfreq", 6))
+    min_docfreq = int(cfg.get("min_docfreq", 7))
 
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
