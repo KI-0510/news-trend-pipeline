@@ -26,10 +26,7 @@ def strip_korean_particle(word: str) -> str:
     prev = word[-2]
     if last in ("이", "의"):
         return word
-    rules = {
-        "가": False, "은": True, "는": False,
-        "을": True, "를": False, "과": True, "와": False,
-    }
+    rules = {"가": False, "은": True, "는": False, "을": True, "를": False, "과": True, "와": False}
     if last in rules and _has_jongseong(prev) == rules[last]:
         return word[:-1]
     return word
@@ -57,7 +54,7 @@ def load_config():
         with open("config.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 3}
+        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 4}
 
 def clean_text(t: str) -> str:
     if not t:
@@ -96,7 +93,7 @@ def build_docs(meta_items):
             docs.append(doc)
     return docs
 
-# ===== stopwords 합집합: config + ext + 영어불용어 =====
+# ===== stopwords 합집합 =====
 def _load_lines(p):
     try:
         with open(p, encoding="utf-8") as f:
@@ -124,7 +121,8 @@ CFG = load_config()
 DICT_DIR = "data/dictionaries"
 STOP_CFG = set([norm_kw_light(x) for x in (CFG.get("stopwords") or [])])
 STOP_EXT = set([norm_kw_light(x) for x in _load_lines(os.path.join(DICT_DIR, "stopwords_ext.txt"))])
-STOPWORDS = set(x for x in (STOP_CFG | STOP_EXT) if x)
+PHRASE_STOP = set([norm_kw_light(x) for x in _load_lines(os.path.join(DICT_DIR, "phrase_stopwords.txt"))])
+STOPWORDS = set(x for x in (STOP_CFG | STOP_EXT | PHRASE_STOP) if x)
 
 EN_STOP = {
     "the","and","to","of","in","for","on","with","at","by","from","as","is","are","be","it",
@@ -161,7 +159,7 @@ def extract_keywords_krwordrank(docs, topk=30):
     return results
 
 # ===== 빅람 상위 구문(2-gram) TF-IDF =====
-def top_bigrams_by_tfidf(docs, topn=50, min_df=3):
+def top_bigrams_by_tfidf(docs, topn=50, min_df=4):
     vec = TfidfVectorizer(ngram_range=(2,2), min_df=min_df, max_features=5000,
                           token_pattern=r"[가-힣A-Za-z0-9_]{2,}")
     X = vec.fit_transform(docs)
@@ -171,7 +169,7 @@ def top_bigrams_by_tfidf(docs, topn=50, min_df=3):
     terms = vec.get_feature_names_out()
     pairs = list(zip(terms, tfidf_sum))
     pairs.sort(key=lambda x: x[1], reverse=True)
-    pairs = [(t, s) for t, s in pairs if re.search(r"[가-힣A-Za-z0-9]", t)]
+    pairs = [(t, s) for t, s in pairs if re.search(r"[가-힣A-Za-z0-9]", t) and norm_kw_light(t) not in STOPWORDS]
     return [t for t, _ in pairs[:topn]]
 
 # ===== 키워드 후처리 =====
@@ -198,6 +196,64 @@ def postprocess_keywords(docs, keywords, min_docfreq=1):
             merged[w] = {"keyword": w, "score": float(k["score"])}
     return sorted(merged.values(), key=lambda x: x["score"], reverse=True)
 
+# ===== 엔터티 가중치 + MMR 다양화 =====
+def load_entities_weight():
+    ent_path = "outputs/export/entities.csv"
+    orgs = set(); prods = set()
+    try:
+        with open(ent_path, "r", encoding="utf-8") as f:
+            import csv
+            rdr = csv.DictReader(f)
+            for r in rdr:
+                e = (r.get("entity") or "").strip()
+                typ = (r.get("type") or "").strip().upper()
+                if not e:
+                    continue
+                if typ == "ORG":
+                    orgs.add(e)
+                elif typ == "PRODUCT":
+                    prods.add(e)
+    except Exception:
+        pass
+    return orgs, prods
+
+def tfidf_matrix(docs):
+    vec = TfidfVectorizer(max_features=5000, ngram_range=(1,2))
+    X = vec.fit_transform(docs)
+    return vec, X
+
+def mmr_diversify(candidates, topn=50, diversity=0.7):
+    # candidates: [{"keyword":..., "score":...}, ...]
+    # 간단 TF-IDF 기반 유사도(키워드 단어벡터)
+    terms = [c["keyword"] for c in candidates]
+    if not terms:
+        return candidates[:topn]
+    vec = TfidfVectorizer(analyzer="char", ngram_range=(3,5))
+    M = vec.fit_transform(terms)
+    sim = cosine_similarity(M)
+    selected = []
+    used = set()
+    for i, cand in enumerate(candidates):
+        if len(selected) >= topn:
+            break
+        ok = True
+        for j in selected:
+            if sim[i, j] >= diversity:
+                ok = False
+                break
+        if ok:
+            selected.append(i)
+            used.add(i)
+    # 부족하면 점차 낮춰 채우기
+    if len(selected) < topn:
+        for i in range(len(candidates)):
+            if i in used:
+                continue
+            selected.append(i)
+            if len(selected) >= topn:
+                break
+    return [candidates[i] for i in selected]
+
 def build_tfidf(docs):
     vec = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
     X = vec.fit_transform(docs)
@@ -207,7 +263,7 @@ def main():
     t0 = time.time()
     cfg = CFG
     topk = int(cfg.get("top_n_keywords", 50))
-    min_docfreq = int(cfg.get("min_docfreq", 3))
+    min_docfreq = int(cfg.get("min_docfreq", 4))
 
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
@@ -226,13 +282,14 @@ def main():
     post_n = len(docs)
     print(f"[INFO] 문서 중복 제거: {pre_n} -> {post_n}")
 
+    # 1) KRWordRank
     keywords = extract_keywords_krwordrank(docs, topk=topk)
 
-    # 빅람 상위 구문을 키워드 후보에 합류
+    # 2) 빅람 합류
     try:
         bigrams = top_bigrams_by_tfidf(docs, topn=50, min_df=min_docfreq)
         if bigrams:
-            avg_score = sum(k["score"] for k in keywords)/max(1,len(keywords))
+            avg_score = (sum(k["score"] for k in keywords) / max(1, len(keywords))) if keywords else 1.0
             seen = {k["keyword"] for k in keywords}
             for bg in bigrams:
                 if norm_kw_light(bg) in STOPWORDS:
@@ -243,21 +300,34 @@ def main():
     except Exception:
         pass
 
+    # 3) 후처리(빈도/불용어)
     keywords = postprocess_keywords(docs, keywords, min_docfreq=min_docfreq)
 
-    _vec, _X = build_tfidf(docs)
+    # 4) 엔터티 가중치
+    orgs, prods = load_entities_weight()
+    boosted = []
+    for k in keywords:
+        kw = k["keyword"]
+        score = k["score"]
+        if kw in orgs or kw in prods:
+            score *= 1.2
+        boosted.append({"keyword": kw, "score": score})
+    boosted.sort(key=lambda x: x["score"], reverse=True)
 
-    # 엔터티/이벤트 내보내기는 이전 스프린트에서 추가됨(생략 없이 그대로 유지)
+    # 5) MMR 다양화
+    diversified = mmr_diversify(boosted, topn=topk, diversity=0.7)
+
+    _vec, _X = build_tfidf(docs)
 
     os.makedirs("outputs", exist_ok=True)
     out_path = "outputs/keywords.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({
             "stats": {"num_docs": len(docs)},
-            "keywords": keywords
+            "keywords": diversified
         }, f, ensure_ascii=False, indent=2)
 
-    print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(keywords)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
+    print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(diversified)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
 
 if __name__ == "__main__":
     main()
