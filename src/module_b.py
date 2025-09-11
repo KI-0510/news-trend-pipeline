@@ -208,6 +208,153 @@ def build_tfidf(docs):
     X = vec.fit_transform(docs)
     return vec, X
 
+# ====== 추가: 엔터티/이벤트 추출 유틸 ======
+def _load_lines(p):
+    try:
+        with open(p, encoding="utf-8") as f:
+            return [x.strip() for x in f if x.strip()]
+    except Exception:
+        return []
+
+def _load_json(p, default=None):
+    import json
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default if default is not None else {}
+
+def norm_kw(s: str) -> str:
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFKC", s)
+    s = s.strip().lower()
+    s = re.sub(r"\s+", " ", s)
+    s = s.replace("‐", "-").replace("‑", "-")
+    return s
+
+# 사전 로드
+DICT_DIR = "data/dictionaries"
+STOP_EXT = set(_load_lines(os.path.join(DICT_DIR, "stopwords_ext.txt")))
+ENT_ORG  = set(_load_lines(os.path.join(DICT_DIR, "entities_org.txt")))
+BRANDS   = set(_load_lines(os.path.join(DICT_DIR, "brands.txt")))
+ALIASMAP = _load_json(os.path.join(DICT_DIR, "product_alias.json"), {})
+
+def alias_merge(term: str) -> str:
+    t = term.strip()
+    for canon, alist in ALIASMAP.items():
+        if t == canon:
+            return t
+        for a in alist:
+            if t == a:
+                return canon
+    return t
+
+def extract_entities(text: str) -> List[Tuple[str, str]]:
+    """
+    간단 엔터티 추출: ORG/BRAND/PRODUCT(숫자 붙은 모델) 중심
+    """
+    ents = []
+    if not text:
+        return ents
+
+    # 토큰 후보
+    toks = re.findall(r"[가-힣A-Za-z0-9\-\+\.]{2,}", text)
+    toks = [t.strip() for t in toks if len(t.strip()) >= 2]
+
+    for t in toks:
+        if t in STOP_EXT:
+            continue
+        if t in ENT_ORG:
+            ents.append((t, "ORG"))
+            continue
+        if t in BRANDS:
+            ents.append((t, "BRAND"))
+            continue
+        # 숫자 결합 모델(예: 아이폰17, 갤럭시S25, A19)
+        if re.match(r"^[가-힣A-Za-z]+[0-9]{1,3}[A-Za-z]?$", t):
+            ents.append((t, "PRODUCT"))
+    # 동의어 병합
+    ents = [(alias_merge(e), typ) for e, typ in ents]
+    return ents
+
+EVENT_PATTERNS = [
+    ("LAUNCH", r"(출시|공개|발표|선보였|공식 오픈)"),
+    ("PARTNERSHIP", r"(제휴|파트너십|MOU|공동개발|공급 계약)"),
+    ("INVEST", r"(투자|유치|라운드|증자|펀드)"),
+    ("ORDER", r"(수주|납품|계약 체결)"),
+    ("CERT", r"(인증|승인|허가|표준|규격)"),
+    ("REGUL", r"(규제|지침|정책|보조금|예산)")
+]
+
+def extract_events(text: str) -> List[Tuple[str, str]]:
+    evts = []
+    if not text:
+        return evts
+    # 문장 분리(라이트)
+    sents = re.split(r"(?<=[\.!?다])\s+", text)
+    for s in sents:
+        for etype, pat in EVENT_PATTERNS:
+            if re.search(pat, s):
+                evts.append((etype, s.strip()))
+    return evts
+
+def save_entities_events(meta_items: List[dict]):
+    """
+    meta에서 body/raw_body/title 등을 이용해 entities.csv, events.csv 저장
+    """
+    os.makedirs("outputs/export", exist_ok=True)
+    ent_freq = {}  # (term,type) -> count
+    ent_samples = {}  # term -> sample_count
+    events_rows = []  # type, sentence, url, date
+
+    from timeutil import to_kst_date_str
+
+    for it in meta_items:
+        url = it.get("url") or ""
+        date_raw = it.get("published_time") or it.get("pubDate_raw") or ""
+        try:
+            date_str = to_kst_date_str(date_raw)
+        except Exception:
+            date_str = ""
+        text = (it.get("body") or it.get("description") or "") or ""
+        # 엔터티
+        ents = extract_entities(text)
+        seen_terms = set()
+        for term, typ in ents:
+            key = (term, typ)
+            ent_freq[key] = ent_freq.get(key, 0) + 1
+            if term not in seen_terms:
+                ent_samples[term] = ent_samples.get(term, 0) + 1
+                seen_terms.add(term)
+        # 이벤트(원문 가까운 raw_body가 있으면 우선)
+        base = (it.get("raw_body") or text)
+        evs = extract_events(base)
+        for et, sent in evs:
+            events_rows.append({
+                "type": et,
+                "sentence": sent[:2000],
+                "url": url,
+                "date": date_str
+            })
+
+    # entities.csv
+    import csv
+    with open("outputs/export/entities.csv", "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["entity", "type", "freq", "sample_count"])
+        for (term, typ), cnt in sorted(ent_freq.items(), key=lambda x: (-x[1], x[0][0]))[:1000]:
+            w.writerow([term, typ, cnt, ent_samples.get(term, 0)])
+
+    # events.csv
+    import csv
+    with open("outputs/export/events.csv", "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["type", "sentence", "url", "date"])
+        for row in events_rows[:2000]:
+            w.writerow([row["type"], row["sentence"], row["url"], row["date"]])
+
+
 def main():
     t0 = time.time()
     cfg = load_config()
@@ -242,6 +389,20 @@ def main():
     
     # TF-IDF(추후 유사도/클러스터링에 활용)
     _vec, _X = build_tfidf(docs)
+
+    # (중략) keywords, topics 등 저장 직전 또는 직후
+    try:
+        # meta_items를 가지고 있다면 그 리스트를 전달
+        # module_b.py에서 meta_items를 갖고 있지 않다면, 최신 news_meta를 다시 로드해도 됨
+        meta_path = latest("data/news_meta_*.json")
+        if meta_path:
+            with open(meta_path, "r", encoding="utf-8") as _f:
+                _items = json.load(_f)
+            save_entities_events(_items)
+            print("[INFO] entities/events exported")
+    except Exception as e:
+        print("[WARN] entities/events export failed:", repr(e))
+
     
     os.makedirs("outputs", exist_ok=True)
     out_path = "outputs/keywords.json"
