@@ -72,19 +72,19 @@ def to_date(s: str) -> str:
 # ---------------- 데이터 로더 ----------------
 def load_today_meta() -> Tuple[List[str], List[str]]:
     """
-    최신 data/news_meta_*.json에서 오늘 문서(docs)와 날짜(dates) 생성
+    최신 data/news_meta_*.json에서 문서(docs)와 날짜(dates)만 반환
     """
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
         return [], []
     try:
         with open(meta_path, "r", encoding="utf-8") as f:
-            items = json.load(f)
+            items = json.load(f) or []
     except Exception:
         return [], []
 
     docs, dates = [], []
-    for it in (items or []):
+    for it in items:
         title = clean_text((it.get("title") or it.get("title_og") or "").strip())
         desc  = clean_text((it.get("body") or it.get("description") or it.get("description_og") or "").strip())
         if not title and not desc:
@@ -95,17 +95,13 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
         docs.append(doc)
 
         d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
-        try:
-            d_std = to_date(d_raw)
-        except Exception:
-            d_std = to_date("")
-        dates.append(d_std)
+        dates.append(to_date(d_raw))
     return docs, dates
 
 def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
     """
     최근 N일 data/warehouse/*.jsonl에서 날짜만 수집(시계열용)
-    반환: (docs, dates) — docs는 사용하지 않으므로 빈 리스트 유지
+    반환: (docs, dates) — docs는 사용하지 않으므로 빈 리스트
     """
     files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
     docs, dates = [], []
@@ -145,7 +141,8 @@ EN_STOP = {
 }
 KO_FUNC = {
     "하다","있다","되다","통해","이번","대한","것으로","밝혔다","다양한","함께","현재",
-    "기자","대표","회장","주요","기준","위해","위한","지원","전략","정책","협력","확대"
+    "기자","대표","회장","주요","기준","위해","위한","지원","전략","정책","협력","확대",
+    "이어서","한편","또한","아울러"
 }
 
 def build_topics(docs: List[str],
@@ -206,7 +203,6 @@ def build_topics(docs: List[str],
         return topics_obj
 
     for tid, words in best_topics:
-        # 최종 필터(기능어 제거 후 비면 원래 단어 유지)
         filtered = [w for w in words if (w.split()[0] if " " in w else w) not in KO_FUNC and w.lower() not in EN_STOP]
         if not filtered:
             filtered = words
@@ -289,13 +285,14 @@ def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
 def main():
     os.makedirs("outputs", exist_ok=True)
 
-    # 1) 오늘 메타 문서/날짜
-    docs_today, dates_today = load_today_meta()
+    # 1) 오늘 메타 문서/날짜 (반환 2개 보장)
+    res = load_today_meta()
+    docs_today, dates_today = (res[0], res[1]) if isinstance(res, tuple) and len(res) >= 2 else ([], [])
 
     # 2) 과거 N일(warehouse) 날짜
     _, wh_dates = load_warehouse(days=30)
 
-    # 3) 집계 대상 구성
+    # 3) 집계 대상
     docs = docs_today or []
     dates = (dates_today or []) + (wh_dates or [])
 
@@ -346,3 +343,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
