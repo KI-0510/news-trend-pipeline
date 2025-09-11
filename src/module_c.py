@@ -12,6 +12,25 @@ from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
+# Splint-2 switch (키워드/topics 추출 향상)
+def use_pro_mode() -> bool:
+    import os
+    import json
+
+    v = os.getenv("USE_PRO", "").lower()
+    if v in ("1", "true", "yes", "y"):
+        return True
+    if v in ("0", "false", "no", "n"):
+        return False
+    
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            cfg = json.load(f) or {}
+            return bool(cfg.get("use_pro", False))
+    except Exception:
+        return False
+
+
 # ---------------- 공통 설정 ----------------
 try:
     from config import load_config, llm_config
