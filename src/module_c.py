@@ -148,7 +148,68 @@ def is_bad_token(base: str) -> bool:
     if re.search(r"(억|조|달러|원)$", base): return True
     return False
 
-def build_topics(docs: List[str],
+import re
+
+# topics 추출 (Pro)
+def pro_build_topics_bertopic(docs, topn=10):
+    try:
+        from bertopic import BERTopic
+        from sentence_transformers import SentenceTransformer
+    except Exception as e:
+        raise RuntimeError(f"Pro 토픽 모드 준비 실패(패키지 없음): {e}")
+
+    if not docs:
+        return {"topics": []}
+
+    emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
+    model = BERTopic(
+        embedding_model=emb,
+        min_topic_size=10,  # 이후 8~15 사이에서 튜닝 가능
+        nr_topics=None,
+        calculate_probabilities=False,
+        verbose=False
+    )
+    topics, _ = model.fit_transform(docs)
+    topic_info = model.get_topics()  # {topic_id: [(word, ctfidf), ...]}
+
+    topics_obj = {"topics": []}
+    for tid, items in topic_info.items():
+        if tid == -1:
+            continue
+        words = [w for w, _ in items[:topn]]
+
+        # 숫자/날짜/화폐/형식어 컷(너의 is_bad_token 로직과 합치면 더 좋음)
+        filtered = []
+        for w in words:
+            base = w.split()[0] if " " in w else w
+            if re.fullmatch(r"\d+$", base) or re.fullmatch(r"\d{1,2}일$", base) or re.search(r"(억|조|달러|원)$", base):
+                continue
+            filtered.append(w)
+
+        if not filtered:
+            filtered = words
+        
+        topics_obj["topics"].append({
+            "topic_id": int(tid),
+            "top_words": [{"word": x} for x in filtered[:topn]]
+        })
+
+    return topics_obj
+
+
+# 최종 build_topics 래퍼 추가
+def build_topics(docs, k_candidates=(7, 8, 9, 10, 11), max_features=8000, min_df=6, topn=10):
+    if use_pro_mode():
+        try:
+            return pro_build_topics_bertopic(docs, topn=topn)
+        except Exception as e:
+            print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
+            # Lite 경로
+            return build_topics_lite(docs, k_candidates=k_candidates, max_features=max_features, min_df=min_df, topn=topn)
+
+
+
+def build_topics_lite(docs: List[str],
                  k_candidates=(7,8,9,10,11),
                  max_features=8000,
                  min_df=6,
