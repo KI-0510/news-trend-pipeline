@@ -215,6 +215,13 @@ jobs:
           source .venv/bin/activate
           python src/check_c.py
 
+      - name: Export signals (trend strength & weak signals)
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          python scripts/signal_export.py
+
+    
       # C 컨텍스트 덤프(topics+timeseries)
       - name: Dump C context (debug)
         shell: bash
