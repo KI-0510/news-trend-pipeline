@@ -5,14 +5,18 @@ permissions:
 
 on:
   schedule:
-    - cron: "0 22 * * *"  # UTC 22:00 = KST 07:00
+    - cron: "0 22 * * *" # UTC 22:00 = KST 07:00
   workflow_dispatch:
     inputs:
       dry_run:
         description: "드라이 런"
         required: true
         default: "true"
-        
+      pro_mode:
+        description: "Pro 모드로 실행할까요? (true/false)"
+        required: false
+        default: "false"
+
 concurrency:
   group: daily-${{ github.ref_name }}
   cancel-in-progress: false
@@ -20,6 +24,12 @@ concurrency:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
+    env:
+      # 수동 실행 시 입력값(pro_mode) 사용, 스케줄/기타 이벤트는 기본 false(Lite)
+      USE_PRO: ${{ github.event_name == 'workflow_dispatch' && inputs.pro_mode || 'false' }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      HF_HOME: ~/.cache/huggingface # 임베딩 모델 캐시 디렉터리
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +44,7 @@ jobs:
           cache: "pip"
           cache-dependency-path: "requirements.txt"
 
-      # 의존성 설치(venv 사용)
+      # 의존성 설치 (venv 사용)
       - name: Install dependencies
         shell: bash
         run: |
@@ -42,6 +52,14 @@ jobs:
           source .venv/bin/activate
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+
+      # Pro 모드용 모델 캐시 (선택) - 캐시가 없으면 그냥 건너뜀
+      - name: Prepare HuggingFace cache (optional)
+        if: env.USE_PRO == 'true'
+        shell: bash
+        run: |
+          mkdir -p "${HF_HOME}"
+          echo "HF_HOME=${HF_HOME}"
 
       # trafilatura 임포트 확인(같은 파이썬 보장)
       - name: Verify deps (quick)
