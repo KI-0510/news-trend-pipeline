@@ -210,6 +210,7 @@ jobs:
         shell: bash
         run: |
           source .venv/bin/activate
+          echo "[INFO] USE_PRO=${USE_PRO} → Module B 실행(워크플로우)"
           python src/module_b.py
 
       - name: Check B - Validate Keywords
@@ -225,6 +226,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           source .venv/bin/activate
+          echo "[INFO] USE_PRO=${USE_PRO} → Module C 실행(워크플로우)"
           python src/module_c.py
 
       - name: Check C - Validate Insights
