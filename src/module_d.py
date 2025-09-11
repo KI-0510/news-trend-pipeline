@@ -1,375 +1,318 @@
 # -*- coding: utf-8 -*-
-import os
-import json
-import re
-import time
-from typing import List, Dict, Any, Optional
+import os, re, json, csv, glob, unicodedata, datetime
+from typing import List, Dict, Any, Tuple
+from collections import defaultdict, Counter
 
-import google.generativeai as genai
+def latest(globpat: str):
+    files = sorted(glob.glob(globpat))
+    return files[-1] if files else None
 
-# D1: 설정 일원화 적용
-from config import load_config, llm_config
-CFG = load_config()
-LLM = llm_config(CFG)
-
-from utils import log_info, log_warn, log_error, retry
-
-# ---------- 유틸 ----------
-
-def load_json(path: str, default=None):
-    if default is None:
-        default = None
+def load_json(p, default=None):
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(p, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return default
+        return default if default is not None else {}
 
-def save_json(path: str, obj: Any):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
+def clean_text(t: str) -> str:
+    if not t:
+        return ""
+    t = re.sub(r"<.+?>", " ", t)
+    t = unicodedata.normalize("NFKC", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
 
-def strip_code_fence(text: str) -> str:
-    t = (text or "").strip()
-    # 코드펜스/앞뒤 잡텍스트 제거
-    t = re.sub(r"^```[\t ]*\w*[\t ]*\n", "", t, flags=re.M)
-    t = re.sub(r"\n```[\t ]*$", "", t, flags=re.M)
-    return t.strip()
-
-def clean_json_text(t: str) -> str:
-    # 스마트쿼트/제어문자/트레일링 콤마 정리
-    t = strip_code_fence(t or "")
-    t = t.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
-    t = re.sub(r"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u2028\u2029]", "", t)
-    t = re.sub(r",\s*(\}|\])", r"\1", t)
-    t = t.lstrip("\ufeff")
-    return t.strip()
-
-def now_ts():
-    import time as _t
-    return _t.strftime("%Y%m%dT%H%M%SZ", _t.gmtime())
-
-def dump_debug(text: str, tag="array"):
+def to_kst_date_str(s: str) -> str:
+    # 날자 표준화(가능하면 YYYY-MM-DD로)
+    from email.utils import parsedate_to_datetime
     try:
-        os.makedirs("outputs/debug", exist_ok=True)
-        fp = f"outputs/debug/module_d_raw_{tag}_{now_ts()}.txt"
-        with open(fp, "w", encoding="utf-8") as f:
-            f.write(text or "")
-        print(f"[INFO] raw dump: {fp}")
+        if not s:
+            raise ValueError
+        s2 = s.replace("Z", "+00:00")
+        dt = datetime.datetime.fromisoformat(s2)
+        d = dt.date()
     except Exception:
-        pass
-
-# ---------- 파서(이전 방식 복원 + 보강) ----------
-
-def parse_json_array_or_object(t: str):
-    """전체를 JSON으로 읽어 리스트 or {'ideas':[...]} 지원"""
-    s = clean_json_text(t)
-    try:
-        obj = json.loads(s)
-        if isinstance(obj, list):
-            return obj
-        if isinstance(obj, dict) and isinstance(obj.get("ideas"), list):
-            return obj["ideas"]
-    except Exception:
-        return None
-    return None
-
-def extract_balanced_array(t: str):
-    """첫 번째 [ ... ] 배열을 괄호 균형으로 추출 후 json.loads"""
-    s = clean_json_text(t)
-    start = s.find("[")
-    if start == -1:
-        return None
-    depth, end = 0, -1
-    for i, ch in enumerate(s[start:], start):
-        if ch == "[":
-            depth += 1
-        elif ch == "]":
-            depth -= 1
-            if depth == 0:
-                end = i
-                break
-    if end == -1:
-        return None
-    payload = s[start:end+1]
-    try:
-        arr = json.loads(payload)
-        return arr if isinstance(arr, list) else None
-    except Exception:
-        return None
-
-def extract_objects_sequence(t: str, max_items=10):
-    """텍스트 전역에서 { ... } 객체를 균형으로 연속 추출 → list[dict]"""
-    s = clean_json_text(t)
-    out, i, n = [], 0, len(s)
-    while i < n and len(out) < max_items:
-        start = s.find("{", i)
-        if start == -1:
-            break
-        depth, end = 0, -1
-        j = start
-        while j < n:
-            ch = s[j]
-            if ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    end = j
-                    break
-            j += 1
-        if end == -1:
-            break
-        chunk = s[start:end+1]
         try:
-            obj = json.loads(clean_json_text(chunk))
-            if isinstance(obj, dict):
-                out.append(obj)
+            dt = parsedate_to_datetime(s)
+            d = dt.date()
+        except Exception:
+            m = re.search(r"(\d{4}).*?(\d{1,2}).*?(\d{1,2})", s or "")
+            if m:
+                y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                d = datetime.date(y, mm, dd)
+            else:
+                d = datetime.date.today()
+    today = datetime.date.today()
+    if d > today:
+        d = today
+    return d.strftime("%Y-%m-%d")
+
+# ----- 간단 엔터티 추출(ORG/브랜드/모델) -----
+def extract_orgs(text: str) -> List[str]:
+    # 아주 라이트: 대문자/한글 혼합 고유명사 + 사전 없이 모델 패턴
+    if not text:
+        return []
+    # 단순 토큰화
+    toks = re.findall(r"[가-힣A-Za-z0-9\-\+\.]{2,}", text)
+    # 모델류(아이폰17, 갤럭시S25, A19 등) 제외: 기업만 남기고 싶은데,
+    # 여기서는 기업명 후보만 대략적으로 추림(완벽X)
+    orgs = []
+    for t in toks:
+        # 숫자 붙은 모델은 스킵
+        if re.match(r"^[가-힣A-Za-z]+[0-9]{1,3}[A-Za-z]?$", t):
+            continue
+        # 기자/공통 단어 필터 일부
+        if t in ("기자", "무단전재", "재배포", "관련기사", "사진", "영상"):
+            continue
+        # 회사명으로 자주 쓰이는 토큰(간단 휴리스틱)
+        if len(t) >= 2 and not re.fullmatch(r"[0-9\W_]+", t):
+            orgs.append(t)
+    # 상위만(길이/빈도 기준) 간단 정리
+    cnt = Counter(orgs)
+    out = [w for w, c in cnt.most_common(10)]
+    return out
+
+# ----- 토픽 라벨(상위 단어 묶음) -----
+def load_topic_labels(topics_obj: Dict[str, Any], topn=5) -> List[Dict[str, Any]]:
+    labels = []
+    for t in topics_obj.get("topics", []):
+        words = [w.get("word","") for w in (t.get("top_words") or [])][:topn]
+        labels.append({"topic_id": t.get("topic_id"), "words": [w for w in words if w]})
+    return labels
+
+# ----- 회사×토픽 매트릭스 -----
+def export_company_topic_matrix(meta_items: List[Dict[str,Any]], topic_labels: List[Dict[str,Any]]) -> None:
+    """
+    org가 들어있는 문서에서 topic 단어가 얼마나 같이 나오는지 세서 csv로 저장
+    """
+    os.makedirs("outputs/export", exist_ok=True)
+    # 준비: 토픽별 단어 세트
+    topic_wordsets = []
+    for tl in topic_labels:
+        ws = set([w for w in tl["words"] if w])
+        topic_wordsets.append((tl["topic_id"], ws))
+
+    # 집계
+    matrix = defaultdict(lambda: defaultdict(int))  # org -> topic_id -> count
+    for it in meta_items:
+        text = (it.get("body") or it.get("description") or "") or ""
+        if not text:
+            continue
+        orgs = extract_orgs(text)
+        low = text.lower()
+        for org in orgs:
+            for tid, ws in topic_wordsets:
+                hit = 0
+                for w in ws:
+                    if w and (w.lower() in low):
+                        hit += 1
+                if hit > 0:
+                    matrix[org][tid] += hit
+
+    # 저장
+    # 헤더: org, topic_0, topic_1, ...
+    all_tids = sorted(set([tid for _, d in matrix.items() for tid in d.keys()]))
+    with open("outputs/export/company_topic_matrix.csv", "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["org"] + [f"topic_{tid}" for tid in all_tids])
+        for org, row in sorted(matrix.items(), key=lambda x: x[0].lower()):
+            w.writerow([org] + [row.get(tid, 0) for tid in all_tids])
+
+# ----- 기회 스코어링 -----
+def clamp01(x): 
+    return max(0.0, min(1.0, float(x)))
+
+def normalize_score(x, lo, hi):
+    if hi <= lo:
+        return 0.0
+    return clamp01((x - lo) / (hi - lo))
+
+NEG_WORDS = ["논란", "우려", "리스크", "규제", "지연", "지적", "하락", "부진", "적자", "연기"]
+
+def pick_evidence(term: str, items: List[Dict[str,Any]], limit=3):
+    ev = []
+    term_low = term.lower()
+    for it in items:
+        base = (it.get("raw_body") or it.get("body") or it.get("description") or "")
+        if not base:
+            continue
+        low = base.lower()
+        if term_low in low:
+            # 간단 문장 분리
+            sents = re.split(r"(?<=[\.!?다])\s+", base)
+            for s in sents:
+                if term_low in s.lower():
+                    ev.append({
+                        "sentence": s.strip()[:400],
+                        "url": it.get("url") or "",
+                        "date": to_kst_date_str(it.get("published_time") or it.get("pubDate_raw") or "")
+                    })
+                    if len(ev) >= limit:
+                        return ev
+    return ev
+
+def make_opportunities(meta_items: List[Dict[str,Any]],
+                       keywords_obj: Dict[str,Any],
+                       trend_strength_rows: List[Dict[str,Any]],
+                       events_rows: List[Dict[str,str]]) -> Dict[str,Any]:
+    """
+    입력:
+      - meta_items: news_meta 최신
+      - keywords_obj: outputs/keywords.json
+      - trend_strength_rows: trend_strength.csv 로드
+      - events_rows: events.csv 로드
+    출력:
+      - {"ideas": [...]} 구조
+    """
+    # 트렌드 dict
+    trend_idx = {}
+    for r in trend_strength_rows:
+        try:
+            term = r["term"]
+            trend_idx[term] = r
         except Exception:
             pass
-        i = end + 1
-    return out
 
-def extract_ndjson_lines(t: str, max_items=10):
-    """라인 단위로 JSON 객체를 읽는 NDJSON 보조 파서(마커 없이도 시도)"""
+    # 이벤트 집계(유형별 최근 존재 여부)
+    event_hit = defaultdict(int)
+    for r in events_rows:
+        et = r.get("type")
+        if et:
+            event_hit[et] += 1
+
+    # 후보: 상위 키워드 20개를 베이스로
+    top_kw = (keywords_obj.get("keywords") or [])[:20]
     ideas = []
-    for line in (t or "").splitlines():
-        if len(ideas) >= max_items:
-            break
-        line = line.strip()
-        if not line:
+    # 정규화 범위 미리 계산
+    ts_cur_vals = [int(trend_idx.get(k["keyword"], {}).get("cur", 0)) for k in top_kw]
+    ts_z_vals   = [float(trend_idx.get(k["keyword"], {}).get("z_like", 0.0)) for k in top_kw]
+    cur_hi = max([1] + ts_cur_vals); cur_lo = min([0] + ts_cur_vals)
+    z_hi  = max([0.0] + ts_z_vals);  z_lo  = min([0.0] + ts_z_vals)
+
+    for k in top_kw:
+        term = k.get("keyword","")
+        if not term:
             continue
-        line = re.sub(r"^[\-\*\d\.\)\s]+", "", line)  # 불릿/번호 제거
-        try:
-            obj = json.loads(clean_json_text(line))
-            if isinstance(obj, dict):
-                ideas.append(obj)
-                continue
-        except Exception:
-            # 라인 안에 객체 2개 이상 붙은 케이스
-            objs = extract_objects_sequence(line, max_items=2)
-            for o in objs:
-                if isinstance(o, dict):
-                    ideas.append(o)
-                    if len(ideas) >= max_items:
-                        break
-    return ideas
+        tr = trend_idx.get(term, {})
+        cur = int(tr.get("cur", 0))
+        z   = float(tr.get("z_like", 0.0))
 
-def extract_ideas_any(text: str, want=5):
-    """
-    이전 파서 방식 복원:
-    1) 전체 JSON 파싱(list or {'ideas':[...]} )
-    2) 첫 배열 균형 추출
-    3) 전역 객체 연속 추출
-    4) NDJSON 라인 파싱
-    """
-    # 1
-    arr = parse_json_array_or_object(text)
-    if isinstance(arr, list) and arr:
-        return arr
-    # 2
-    arr2 = extract_balanced_array(text)
-    if isinstance(arr2, list) and arr2:
-        return arr2
-    # 3
-    objs = extract_objects_sequence(text, max_items=want)
-    if objs:
-        return objs
-    # 4
-    nd = extract_ndjson_lines(text, max_items=want)
-    if nd:
-        return nd
-    return None
+        # 스코어 구성
+        # Market: 현재 빈도(cur)를 (lo~hi) 정규화 + 키워드 자체 점수 약간 반영
+        s_market = 0.75 * normalize_score(cur, cur_lo, cur_hi) + 0.25 * normalize_score(k.get("score",0.0), 0.0, (top_kw[0].get("score",1.0) or 1.0))
+        # Urgency: z_like(스파이크) 정규화 + 이벤트 가중(출시/제휴/투자/수주/인증/규제 언급)
+        s_urg = normalize_score(z, z_lo, z_hi)
+        evt_boost = 0.0
+        if event_hit.get("LAUNCH",0)>0: evt_boost += 0.10
+        if event_hit.get("PARTNERSHIP",0)>0: evt_boost += 0.08
+        if event_hit.get("INVEST",0)>0: evt_boost += 0.07
+        if event_hit.get("ORDER",0)>0: evt_boost += 0.06
+        if event_hit.get("CERT",0)>0: evt_boost += 0.05
+        if event_hit.get("REGUL",0)>0: evt_boost += 0.04  # 규제 이슈는 시급성↑이지만 리스크에도 반영됨
+        s_urg = clamp01(s_urg + evt_boost)
 
-# ---------- 스키마/프롬프트(필드 축소 버전 유지) ----------
+        # Feasibility: 기본 0.6, 경쟁강도(상위 기업 많으면 약간↓)로 소폭 조정(간단히 0.5~0.7 클램프)
+        s_feas = 0.6
 
-def build_schema_hint() -> Dict[str, Any]:
-    # 길이 최소화한 축소 스키마(롤백 기준)
-    return {
-        "idea": "아이디어 한 줄 제목",
-        "problem": "해결하려는 문제(2-3문장, 220자 이내)",
-        "target_customer": "핵심 타깃(산업/직군/조직 규모 명확히)",
-        "value_prop": "핵심 가치제안(차별점, 180자 이내)",
-        "solution": ["핵심 기능 bullet 최대 4개"],
-        "risks": ["리스크/규제 bullet 3개 내"],
-        "priority_score": "우선순위 점수(0.0~5.0, 숫자)"
-    }
+        # Risk: 부정 키워드가 증거문장에 발견되면 가산
+        evid = pick_evidence(term, meta_items, limit=3)
+        risk = 0.0
+        for e in evid:
+            if any(nw in e["sentence"] for nw in NEG_WORDS):
+                risk += 0.10
+        risk = clamp01(risk)
 
-def build_prompt(context: Dict[str, Any], want: int = 5) -> str:
-    schema = build_schema_hint()
-    return (
-        "다음 컨텍스트(키워드/토픽/요약)를 기반으로 신사업 아이디어를 제안해 주세요.\n"
-        f"- 아이디어 개수: 최대 {want}개\n"
-        "- JSON 배열 형식만 출력하세요. 배열 이외의 텍스트를 출력하지 마세요.\n"
-        "- 각 아이템은 아래 스키마 키를 정확히 사용하세요.\n"
-        f"스키마: {json.dumps(schema, ensure_ascii=False)}\n"
-        "- solution, risks는 리스트로 주세요.\n"
-        "- priority_score는 0.0~5.0의 숫자(float)로 주세요.\n"
-        "컨텍스트:\n"
-        f"{json.dumps(context, ensure_ascii=False)}"
-    )
+        score = 100.0 * (0.40 * s_market + 0.35 * s_urg + 0.25 * s_feas) - 100.0 * risk
+        score = max(0.0, min(100.0, score))
 
-# ---------- LLM 호출 ----------
-@retry(max_attempts=3, backoff=0.8, exceptions=(Exception,), circuit_trip=4)
-def _gen_content(model, prompt, max_tokens, temperature):
-    return model.generate_content(
-        prompt,
-        generation_config={
-            "max_output_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-        }
-    )
+        ideas.append({
+            "title": term,
+            "score": round(score, 2),
+            "score_breakdown": {
+                "market": round(s_market, 3),
+                "urgency": round(s_urg, 3),
+                "feasibility": round(s_feas, 3),
+                "risk": round(risk, 3),
+                "notes": {
+                    "cur": cur,
+                    "z_like": round(z,3),
+                    "events_any": sum(event_hit.values()),
+                }
+            },
+            "evidence": evid
+        })
 
-def call_gemini(prompt: str) -> str:
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY 환경 변수가 없습니다.")
-    genai.configure(api_key=api_key)
-    model_name = str(LLM.get("model", "gemini-1.5-flash"))
-    max_tokens = int(LLM.get("max_output_tokens", 2048))
-    temperature = float(LLM.get("temperature", 0.3))
+    ideas = sorted(ideas, key=lambda x: x["score"], reverse=True)
+    return {"ideas": ideas}
 
-    model = genai.GenerativeModel(model_name)
-    resp = _gen_content(model, prompt, max_tokens, temperature)
-    text = (getattr(resp, "text", None) or "").strip()
-    return text
-
-# ---------- 아이디어 정규화/검증 ----------
-
-def as_list(x, max_len=4) -> List[str]:
-    if isinstance(x, list):
-        out = []
-        for v in x[:max_len]:
-            if v is None:
-                continue
-            s = str(v).strip()
-            if s:
-                out.append(s)
-        return out
-    if x is None:
-        return []
-    s = str(x).strip()
-    return [s] if s else []
-
-def clip_text(s: Optional[str], max_chars: int) -> str:
-    s = (s or "").strip()
-    if len(s) <= max_chars:
-        return s
-    return s[:max_chars].rstrip() + "…"
-
-def to_float(x, default=0.0) -> float:
+def load_trend_strength_csv(path: str) -> List[Dict[str,Any]]:
+    rows = []
     try:
-        return float(x)
+        with open(path, "r", encoding="utf-8") as f:
+            rdr = csv.DictReader(f)
+            for r in rdr:
+                # 숫자 필드 변환
+                r["cur"] = int(r.get("cur", 0) or 0)
+                r["prev"] = int(r.get("prev", 0) or 0)
+                r["diff"] = int(r.get("diff", 0) or 0)
+                try:
+                    r["ma7"] = float(r.get("ma7", 0.0) or 0.0)
+                except Exception:
+                    r["ma7"] = 0.0
+                try:
+                    r["z_like"] = float(r.get("z_like", 0.0) or 0.0)
+                except Exception:
+                    r["z_like"] = 0.0
+                r["total"] = int(r.get("total", 0) or 0)
+                rows.append(r)
     except Exception:
-        return float(default)
+        pass
+    return rows
 
-def normalize_item(it: Dict[str, Any]) -> Dict[str, Any]:
-    # 다양한 키 관대하게 흡수하되, 축소 스키마로 정규화
-    idea = it.get("idea") or it.get("title") or it.get("name") or ""
-    problem = it.get("problem") or it.get("pain") or ""
-    target = it.get("target_customer") or it.get("target") or it.get("audience") or ""
-    value = it.get("value_prop") or it.get("value") or it.get("description") or ""
-    solution = it.get("solution") or it.get("solutions") or []
-    risks = it.get("risks") or it.get("risk") or []
-
-    score = it.get("priority_score", it.get("score", 0))
-    score = max(0.0, min(5.0, to_float(score, 0.0)))
-
-    # 길이 제한(샘플 톤)
-    idea = clip_text(idea, 100)
-    problem = clip_text(problem, 300)
-    target = clip_text(target, 120)
-    value = clip_text(value, 220)
-    solution = as_list(solution, max_len=4)
-    risks = as_list(risks, max_len=3)
-
-    out = {
-        "idea": idea,
-        "problem": problem,
-        "target_customer": target,
-        "value_prop": value,
-        "solution": solution,
-        "risks": risks,
-        "priority_score": round(score, 1)
-    }
-    # 호환성 위해 title/score도 같이 둠(리포트 테이블 생성 시 유용)
-    out["title"] = idea
-    out["score"] = out["priority_score"]
-    return out
-
-def postprocess_ideas(raw_list: List[Dict[str, Any]], want=5) -> List[Dict[str, Any]]:
-    items = []
-    for it in (raw_list or []):
-        try:
-            norm = normalize_item(it)
-            # 최소 요건: 아이디어 제목, 가치제안은 있어야 유의미
-            if norm["idea"] and norm["value_prop"]:
-                items.append(norm)
-        except Exception:
-            continue
-
-    # 상위 5개만 (점수 내림차순)
-    items.sort(key=lambda x: x.get("priority_score", 0.0), reverse=True)
-    return items[:want]
-
-# ---------- 컨텍스트 로딩 ----------
-
-def load_context() -> Dict[str, Any]:
-    keywords = load_json("outputs/keywords.json", default={"keywords": []}) or {"keywords": []}
-    topics = load_json("outputs/topics.json", default={"topics": []}) or {"topics": []}
-    insights = load_json("outputs/trend_insights.json", default={"summary": "", "top_topics": [], "evidence": {}}) or {"summary": "", "top_topics": [], "evidence": {}}
-
-    # 요약 길이 제한(프롬프트 과도 길이 방지)
-    summary = (insights.get("summary") or "").strip()
-    if len(summary) > 1200:
-        summary = summary[:1200] + "…"
-
-    # 키워드 상위 20개만
-    kw_simple = [{"keyword": k.get("keyword", ""), "score": k.get("score", 0)} for k in (keywords.get("keywords") or [])[:20]]
-
-    # 토픽은 단어만 간추림
-    tp_simple = []
-    for t in (topics.get("topics") or [])[:6]:
-        words = [w.get("word", "") for w in (t.get("top_words") or [])][:6]
-        tp_simple.append({"topic_id": t.get("topic_id"), "words": words})
-
-    return {
-        "summary": summary,
-        "keywords": kw_simple,
-        "topics": tp_simple
-    }
-
-# ---------- 메인 ----------
+def load_events_csv(path: str) -> List[Dict[str,str]]:
+    rows = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            rdr = csv.DictReader(f)
+            for r in rdr:
+                rows.append(r)
+    except Exception:
+        pass
+    return rows
 
 def main():
-    t0 = time.time()
-    want = 5
+    os.makedirs("outputs", exist_ok=True)
+    os.makedirs("outputs/export", exist_ok=True)
 
-    context = load_context()
-    prompt = build_prompt(context, want=want)
+    # 1) 입력 로드
+    meta_path = latest("data/news_meta_*.json")
+    meta_items = load_json(meta_path, [])
+    keywords_obj = load_json("outputs/keywords.json", {"keywords":[]})
+    topics_obj   = load_json("outputs/topics.json", {"topics":[]})
 
+    trend_rows = load_trend_strength_csv("outputs/export/trend_strength.csv")
+    events_rows = load_events_csv("outputs/export/events.csv")
+
+    # 2) 회사×토픽 매트릭스 생성
+    topic_labels = load_topic_labels(topics_obj, topn=5)
     try:
-        raw_text = call_gemini(prompt)
+        export_company_topic_matrix(meta_items, topic_labels)
+        print("[INFO] company_topic_matrix.csv exported")
     except Exception as e:
-        # LLM 호출 실패 시에도 빈 구조로 저장하여 파이프라인 계속
-        print(f"[ERROR] Gemini 호출 실패: {e}")
-        save_json("outputs/biz_opportunities.json", {"ideas": []})
-        print("[INFO] SUMMARY | D | ideas=0 elapsed=%.2fs" % (time.time() - t0))
-        return
+        print("[WARN] company_topic_matrix export failed:", repr(e))
 
-    dump_debug(raw_text, tag="gen")
+    # 3) 기회 스코어링 + 근거 생성
+    try:
+        opp = make_opportunities(meta_items, keywords_obj, trend_rows, events_rows)
+    except Exception as e:
+        print("[ERROR] make_opportunities failed:", repr(e))
+        opp = {"ideas": []}
 
-    ideas = extract_ideas_any(raw_text, want=want) or []
-    if not isinstance(ideas, list):
-        ideas = []
+    # 4) 저장
+    with open("outputs/biz_opportunities.json", "w", encoding="utf-8") as f:
+        json.dump(opp, f, ensure_ascii=False, indent=2)
 
-    # 후처리/정규화 + 상위 5개
-    ideas_final = postprocess_ideas(ideas, want=want)
-
-    save_json("outputs/biz_opportunities.json", {"ideas": ideas_final})
-    print("[INFO] SUMMARY | D | ideas=%d elapsed=%.2fs" % (len(ideas_final), time.time() - t0))
+    print("[INFO] Module D done | ideas=%d" % len(opp.get("ideas", [])))
 
 if __name__ == "__main__":
     main()
