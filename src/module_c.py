@@ -145,7 +145,7 @@ def main():
     os.makedirs("outputs", exist_ok=True)
 
     # 1) 오늘 메타 로드
-    docs_today, dates_today = load_today_meta()
+    docs_today, dates_today, *_ = load_today_meta() or ([], [])
 
     # 2) warehouse 날짜 추가(최근 30일)
     _, wh_dates = load_warehouse(days=30)
