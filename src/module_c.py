@@ -14,9 +14,6 @@ from sklearn.decomposition import LatentDirichletAllocation
 
 # Splint-2 switch (키워드/topics 추출 향상)
 def use_pro_mode() -> bool:
-    import os
-    import json
-
     v = os.getenv("USE_PRO", "").lower()
     if v in ("1", "true", "yes", "y"):
         return True
@@ -462,6 +459,16 @@ def main():
     except Exception:
         keywords_obj = {"keywords":[]}
     export_trend_and_weak_signals(docs, dates, keywords_obj)
+
+    # 실행 메타 기록
+    os.makedirs("outputs", exist_ok=True)
+    meta = {
+        "module": "C",
+        "mode": "PRO" if use_pro_mode() else "LITE",
+        "time_utc": datetime.datetime.utcnow().isoformat() + "Z"
+    }
+    with open("outputs/run_meta_c.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
 
