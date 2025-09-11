@@ -169,6 +169,55 @@ def is_meaningful_token(tok: str) -> bool:
     if len(t) <= 2 and t.endswith("스"): return False
     return True
 
+# 키워드 추출 함수 추가 (Pro)
+def pro_extract_keywords_keybert(docs, topk=50):
+    try:
+        from keybert import KeyBERT
+        from sentence_transformers import SentenceTransformer
+    except Exception as e:
+        raise RuntimeError(f"Pro 키워드 모드 준비 실패(패키지 없음): {e}")
+
+    if not docs:
+        return []
+
+    model = SentenceTransformer("jhgan/ko-sroberta-multitask")
+    kb = KeyBERT(model=model)
+    sample_docs = docs[:2000]
+
+    # 문서 리스트를 하나의 큰 문자열 리스트로 합쳐 처리(간단/안정)
+    joined = [" ".join(sample_docs)]
+
+    pairs = kb.extract_keywords(
+        joined,
+        keyphrase_ngram_range=(1, 3),
+        stop_words=None,
+        use_mmr=True,
+        diversity=0.7,
+        top_n=max(topk * 3, 150)
+    )
+
+    # pairs: [(phrase, score), ...]
+    out = []
+    for p, s in pairs:
+        p = (p or "").strip()
+        if not p:
+            continue
+        out.append({"keyword": p, "score": float(s)})
+
+    return out
+
+
+# Pro-Line 래퍼 함수 추가
+def extract_keywords_switch(docs, topk=50, min_docfreq=6):
+    if use_pro_mode():
+        try:
+            return pro_extract_keywords_keybert(docs, topk=topk)
+        except Exception as e:
+            print(f"[WARN] Pro 키워드 실패, Lite로 폴백: {e}")
+            # 기존 Lite 경로(KRWordRank)
+            return extract_keywords_krwordrank(docs, topk=topk)
+
+
 # ===== KRWordRank 키워드 =====
 def extract_keywords_krwordrank(docs, topk=30):
     n = len(docs)
@@ -289,7 +338,7 @@ def main():
     print(f"[INFO] 문서 중복 제거: {pre_n} -> {post_n}")
 
     # 1) KRWordRank
-    keywords = extract_keywords_krwordrank(docs, topk=topk)
+    keywords = extract_keywords_switch(docs, topk=topk, min_docfreq=min_docfreq)
 
     # 2) 빅람 합류(+상위 30% 가중)
     try:
