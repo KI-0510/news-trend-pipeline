@@ -263,7 +263,7 @@ def main():
     t0 = time.time()
     cfg = CFG
     topk = int(cfg.get("top_n_keywords", 50))
-    min_docfreq = int(cfg.get("min_docfreq", 4))
+    min_docfreq = int(cfg.get("min_docfreq", 5))
 
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
