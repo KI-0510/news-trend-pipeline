@@ -198,7 +198,7 @@ def pro_build_topics_bertopic(docs, topn=10):
 
 
 # 최종 build_topics 래퍼 추가
-def build_topics(docs, k_candidates=(7, 8, 9, 10, 11), max_features=8000, min_df=6, topn=10):
+def build_topics(docs, k_candidates=(7, 8, 9, 10, 11), max_features=8000, min_df=7, topn=10):
     if use_pro_mode():
         try:
             return pro_build_topics_bertopic(docs, topn=topn)
@@ -212,7 +212,7 @@ def build_topics(docs, k_candidates=(7, 8, 9, 10, 11), max_features=8000, min_df
 def build_topics_lite(docs: List[str],
                  k_candidates=(7,8,9,10,11),
                  max_features=8000,
-                 min_df=6,
+                 min_df=7,
                  topn=10) -> Dict[str, Any]:
     if not docs: return {"topics": []}
     vec = CountVectorizer(ngram_range=(1,2),
@@ -418,7 +418,7 @@ def main():
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
     # 토픽
-    topics_obj = build_topics(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
+    topics_obj = build_topics(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=7, topn=10)
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
