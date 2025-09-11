@@ -383,12 +383,18 @@ def build_prompt(context: Dict[str, Any], want: int = 5) -> str:
         "- JSON 배열 형식만 출력하세요. 배열 이외의 텍스트를 출력하지 마세요.\n"
         "- 각 아이템은 아래 스키마 키를 정확히 사용하세요.\n"
         f"스키마: {json.dumps(schema, ensure_ascii=False)}\n"
+        "- 제약:\n"
+        "  1) 서로 유사한 테마/표현 금지(중복 금지). 각 아이디어의 '차별화 포인트'를 1문장 포함.\n"
+        "  2) 카테고리 분산: [제품/서비스/플랫폼/파트너십(조달)/데이터·분석] 중 서로 다른 카테고리에서 최소 3개 이상 포함.\n"
+        "  3) 산업 맥락: 디스플레이/사이니지/전자 제조·조달/모빌리티-디스플레이 접점을 최소 2개 아이디어에 반영.\n"
+        "  4) 지역 명시: KR/JP/EU 중 하나를 각 아이디어에 1개 이상 명시.\n"
+        "  5) 'Why now'를 각 아이디어에 1문장으로 포함(최근 스파이크/이벤트/정책을 근거로).\n"
         "- solution, risks는 리스트로 주세요.\n"
         "- priority_score는 0.0~5.0의 숫자(float)로 주세요.\n"
         "컨텍스트:\n"
         f"{json.dumps(context, ensure_ascii=False)}"
     )
-
+    
 # ========== Gemini 호출 ==========
 
 @retry(max_attempts=3, backoff=0.8, exceptions=(Exception,), circuit_trip=4)

@@ -6,31 +6,57 @@ import glob
 import unicodedata
 import time
 import datetime
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from email.utils import parsedate_to_datetime
+from collections import Counter
 
-import tomotopy as tp
-import google.generativeai as genai
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
 
-from config import load_config, llm_config
+# 설정/LLM
+try:
+    from config import load_config, llm_config
+except Exception:
+    def load_config():
+        return {}
+    def llm_config(cfg: dict) -> dict:
+        llm = cfg.get("llm") or {}
+        return {
+            "model": llm.get("model", "gemini-1.5-flash"),
+            "max_output_tokens": int(llm.get("max_output_tokens", 2048)),
+            "temperature": float(llm.get("temperature", 0.3)),
+        }
+
 CFG = load_config()
 LLM = llm_config(CFG)
 
-from utils import log_info, log_warn, log_error, retry
-from timeutil import to_kst_date_str
+# 선택 로그 유틸(없으면 print 대체)
+try:
+    from utils import log_info, log_warn, log_error
+except Exception:
+    def log_info(*args, **kwargs): print("[INFO]", *args, kwargs if kwargs else "")
+    def log_warn(*args, **kwargs): print("[WARN]", *args, kwargs if kwargs else "")
+    def log_error(*args, **kwargs): print("[ERROR]", *args, kwargs if kwargs else "")
 
-# ------------- 파일 유틸 -------------
+# 날짜 보정 유틸(프로젝트 공용)
+try:
+    from timeutil import to_kst_date_str
+except Exception:
+    def to_kst_date_str(s: str) -> str:
+        # 간단 폴백(UTC 기준)
+        return s or datetime.date.today().strftime("%Y-%m-%d")
+
+# ---------------- 파일 유틸 ----------------
 def latest(globpat: str):
     files = sorted(glob.glob(globpat))
     return files[-1] if files else None
 
-# ------------- 날짜 처리 -------------
+# ---------------- 날짜/텍스트 처리 ----------------
 def to_date(s: str) -> str:
     today = datetime.date.today()
     if not s or not isinstance(s, str):
         return today.strftime("%Y-%m-%d")
     s = s.strip()
-
     try:
         iso = s.replace("Z", "+00:00")
         dt = datetime.datetime.fromisoformat(iso)
@@ -49,12 +75,10 @@ def to_date(s: str) -> str:
                     d = today
             else:
                 d = today
-
     if d > today:
         d = today
     return d.strftime("%Y-%m-%d")
 
-# ------------- 텍스트 전처리 -------------
 def clean_text(t: str) -> str:
     if not t:
         return ""
@@ -63,12 +87,13 @@ def clean_text(t: str) -> str:
     t = re.sub(r"\s+", " ", t).strip()
     return t
 
-# ------------- 데이터 로더 -------------
+# ---------------- 데이터 로더 ----------------
 def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
+    """
+    과거 N일 data/warehouse/*.jsonl에서 제목/날짜를 읽어 날짜 리스트만 활용
+    """
     files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
-
     docs, dates = [], []
-
     for fp in files:
         try:
             file_day = os.path.basename(fp)[:10]  # 'YYYY-MM-DD'
@@ -82,33 +107,26 @@ def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
                         title = clean_text((obj.get("title") or "").strip())
                         if not title:
                             continue
-
                         d_raw = obj.get("published") or obj.get("created_at") or file_day
                         try:
                             d_std = to_kst_date_str(d_raw)
                         except Exception:
-                            d_std = to_date(d_raw)  # 안전 폴백
-
-                        docs.append(title)
+                            d_std = to_date(d_raw)
+                        # 토픽은 오늘 데이터로만, 여기선 날짜만
                         dates.append(d_std)
                     except Exception:
                         continue
         except Exception:
             continue
-
-    return docs, dates
-
-
+    return docs, dates  # docs는 사용 안 함(의도)
 
 def load_today_meta() -> Tuple[List[str], List[str]]:
     """
-    data/news_meta_*.json에서 title+description 합쳐 문서 생성.
-    반환: (docs, dates_str_YYYY-MM-DD)
+    최신 data/news_meta_*.json에서 title + description/body를 합쳐 오늘 문서와 날짜를 생성
     """
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
         return [], []
-
     try:
         with open(meta_path, "r", encoding="utf-8") as f:
             items = json.load(f)
@@ -116,92 +134,123 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
         return [], []
 
     docs, dates = [], []
-    for it in items:
-        title = clean_text(it.get("title") or it.get("title_og"))
-        desc  = clean_text(it.get("description") or it.get("description_og"))
+    for it in (items or []):
+        title = clean_text((it.get("title") or it.get("title_og") or "").strip())
+        desc = clean_text((it.get("body") or it.get("description") or it.get("description_og") or "").strip())
+        if not title and not desc:
+            continue
         doc = (title + " " + desc).strip()
-        if doc:
-            docs.append(doc)
-            d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
-            dates.append(to_kst_date_str(d_raw))
+        if not doc:
+            continue
+        docs.append(doc)
+        d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
+        try:
+            d_std = to_kst_date_str(d_raw)
+        except Exception:
+            d_std = to_date(d_raw)
+        dates.append(d_std)
     return docs, dates
 
-# ------------- 토크나이저 -------------
-def simple_tokenize_ko(text: str):
-    toks = re.findall(r"[가-힣A-Za-z0-9]+", text or "")
-    toks = [t.lower() for t in toks if len(t) >= 2]
-    return toks
+# ---------------- 토픽 모델링(품질 강화) ----------------
+EN_STOP = {
+    "the","and","to","of","in","for","on","with","at","by","from","as","is","are","be","it",
+    "that","this","an","a","or","if","we","you","they","he","she","was","were","been","than",
+    "into","about","over","under","per","via"
+}
+KO_FUNC = {"하다","있다","되다","통해","이번","대한","것으로","밝혔다","다양한","함께","현재"}
 
-# ------------- LDA 토픽 모델링 -------------
-def lda_topics(docs: List[str],
-               k: int = 6,
-               topn: int = 8,
-               min_cf: int = 2,
-               iters: int = 150) -> Dict[str, Any]:
-    mdl = tp.LDAModel(k=k, alpha=0.1, eta=0.01, min_cf=min_cf)
-    for d in docs:
-        mdl.add_doc(simple_tokenize_ko(d))
+def build_topics(docs: List[str], k_candidates=(8,9,10), max_features=8000, min_df=3, topn=10) -> Dict[str, Any]:
+    if not docs:
+        return {"topics": []}
 
-    if len(mdl.docs) == 0:
-        return {"topics": [], "doc_topics": []}
+    vec = CountVectorizer(
+        ngram_range=(1,2),
+        max_features=max_features,
+        min_df=min_df,
+        token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
+        stop_words=list(EN_STOP)  # 영어 일반어 컷
+    )
+    X = vec.fit_transform(docs)
+    vocab = vec.get_feature_names_out()
+    if X.shape[1] == 0:
+        return {"topics": []}
 
-    mdl.burn_in = 50
-    for _ in range(iters):
-        mdl.train(10)
+    def topic_words(lda, n_top=topn):
+        comps = lda.components_
+        topics = []
+        for tid, comp in enumerate(comps):
+            idx = comp.argsort()[-n_top:][::-1]
+            words = [vocab[i] for i in idx]
+            topics.append((tid, words))
+        return topics
 
-    topics = []
-    for ti in range(mdl.k):
-        words = mdl.get_topic_words(ti, top_n=topn)
-        topics.append({
-            "topic_id": ti,
-            "top_words": [{"word": w, "prob": float(p)} for w, p in words]
+    def is_bad_topic(words):
+        bad = 0
+        for w in words:
+            base = w.split()[0] if " " in w else w
+            if base in KO_FUNC or base.lower() in EN_STOP:
+                bad += 1
+        return (bad / max(1, len(words))) >= 0.4
+
+    best = None
+    best_score = -1.0
+    best_topics = None
+
+    for k in k_candidates:
+        lda = LatentDirichletAllocation(n_components=k, learning_method="batch", random_state=42, max_iter=15)
+        _ = lda.fit_transform(X)
+        ts = topic_words(lda, n_top=topn)
+        good = sum(1 for _, ws in ts if not is_bad_topic(ws))
+        score = good / float(k)
+        if score > best_score:
+            best_score = score
+            best = lda
+            best_topics = ts
+
+    topics_obj = {"topics": []}
+    if not best_topics:
+        return topics_obj
+
+    for tid, words in best_topics:
+        filtered = [w for w in words if (w.split()[0] if " " in w else w) not in KO_FUNC and w.lower() not in EN_STOP]
+        if not filtered:
+            filtered = words
+        topics_obj["topics"].append({
+            "topic_id": int(tid),
+            "top_words": [{"word": w} for w in filtered[:topn]]
         })
+    return topics_obj
 
-    doc_topics = []
-    for di in range(len(mdl.docs)):
-        dist = mdl.docs[di].get_topics(top_n=3)
-        doc_topics.append([{"topic_id": tid, "prob": float(prob)} for tid, prob in dist])
-
-    return {"topics": topics, "doc_topics": doc_topics}
-
-# ------------- 시계열 집계 -------------
-def timeseries_by_date(dates):
-    counts = {}
-    for d in dates:
-        if not d:
-            continue
-        # d가 원시 문자열(ISO/헤더)일 수 있으니 KST yyyy-mm-dd로 표준화
-        try:
-            kst_d = to_kst_date_str(d)
-        except Exception:
-            # 이미 표준 yyyy-mm-dd면 그대로
-            kst_d = d
-        counts[kst_d] = counts.get(kst_d, 0) + 1
-    daily = [{"date": k, "count": v} for k, v in sorted(counts.items())]
+# ---------------- 시계열 집계 ----------------
+def timeseries_by_date(dates: List[str]) -> Dict[str, Any]:
+    if not dates:
+        return {"daily": []}
+    cnt = Counter(dates)
+    daily = [{"date": d, "count": int(cnt[d])} for d in sorted(cnt.keys())]
     return {"daily": daily}
 
-# ------------- 인사이트 생성(Gemini) -------------
-# gemini_insight 내부에 아래 래퍼 추가
-@retry(max_attempts=3, backoff=0.8, exceptions=(Exception,), circuit_trip=4)
-def _gen_content(model, prompt, max_tokens, temperature):
-    return model.generate_content(
-        prompt,
-        generation_config={
-            "max_output_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-        }
-    )
-    
-def gemini_insight(api_key: str,
-                   model: str,
-                   context: Dict[str, Any],
-                   max_tokens: int = None,
-                   temperature: float = None) -> str:
-    """
-    LLM 설정(D1)을 그대로 반영해서 요약 생성.
-    문장 종결성이 약하면 한 번 더 이어쓰기 요청으로 보완.
-    """
+# ---------------- Gemini 인사이트 요약 ----------------
+def strip_code_fence(text: str) -> str:
+    t = (text or "").strip()
+    t = re.sub(r"^```[\t ]*\w*[\t ]*\n", "", t, flags=re.M)
+    t = re.sub(r"\n```[\t ]*$", "", t, flags=re.M)
+    return t.strip()
+
+def clean_json_text(t: str) -> str:
+    t = strip_code_fence(t or "")
+    t = t.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
+    t = re.sub(r"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u2028\u2029]", "", t)
+    t = re.sub(r",\s*(\}|\])", r"\1", t)
+    t = t.lstrip("\ufeff")
+    return t.strip()
+
+def gemini_insight(api_key: str, model: str, context: Dict[str, Any], max_tokens: int = 2048, temperature: float = 0.3) -> str:
+    # prompt는 기존 포맷 유지
+    import google.generativeai as genai
+    if not api_key:
+        log_warn("gemini_insight.no_api_key")
+        return "(요약 생성 실패: API 키 없음)"
+
     genai.configure(api_key=api_key)
     gmodel = genai.GenerativeModel(model)
 
@@ -220,16 +269,22 @@ def gemini_insight(api_key: str,
         f"데이터: {json.dumps(context, ensure_ascii=False)}"
     )
 
-    # 기존 호출 부분 교체
     try:
-        resp = _gen_content(gmodel, prompt, max_tokens, temperature)
+        resp = gmodel.generate_content(
+            prompt,
+            generation_config={
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": 0.9,
+            }
+        )
         text = (getattr(resp, "text", None) or "").strip()
     except Exception as e:
         log_error("gemini_insight.fail", err=repr(e))
         return f"(요약 생성 실패: {e})"
-        
-    # 종결성 보완: 문장 부호로 끝나지 않으면 이어쓰기 한 번
-    if text and not re.search(r"[\.!?]$|[다요요요]$|[다]$", text):
+
+    # 종결성 보완
+    if text and not re.search(r"[\.!?]$|[다요]$", text):
         follow = (
             "위 요약을 마무리 문장 1~2문장으로 자연스럽게 이어서 완결해 주세요. "
             "중복 없이 핵심만 덧붙여 마무리 문장으로 끝내세요."
@@ -251,7 +306,7 @@ def gemini_insight(api_key: str,
 
     return text or "(요약 없음)"
 
-# ------------- 메인 파이프라인 -------------
+# ---------------- 메인 파이프라인 ----------------
 def main():
     os.makedirs("outputs", exist_ok=True)
 
@@ -259,27 +314,25 @@ def main():
     docs_today, dates_today = load_today_meta()
 
     # 2) 과거 N일(warehouse): 날짜만 사용
-    _, wh_dates = load_warehouse(days=30)  # docs는 사용하지 않음
+    _, wh_dates = load_warehouse(days=30)
 
     # 3) 병합: 토픽/요약은 오늘만, 시계열은 오늘+과거
     docs = docs_today
     dates = (dates_today or []) + (wh_dates or [])
 
-    # 4) 토픽 모델링
-    topics_obj = lda_topics(docs, k=6, topn=8, min_cf=2, iters=150)
+    # 4) 토픽 모델링(품질 강화 버전)
+    topics_obj = build_topics(docs, k_candidates=(8,9,10), max_features=8000, min_df=3, topn=10)
 
     # 5) 시계열 집계
     ts_obj = timeseries_by_date(dates)
 
-    # 6) 인사이트 요약
+    # 6) 인사이트 요약(Gemini)
     api_key = os.getenv("GEMINI_API_KEY", "")
     model_name = str(LLM.get("model", "gemini-1.5-flash"))
-
     context = {
         "topics": topics_obj.get("topics", []),
         "timeseries": ts_obj.get("daily", []),
     }
-
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
@@ -288,7 +341,7 @@ def main():
         temperature=float(LLM.get("temperature", 0.3)),
     )
 
-    # 7) top_topics
+    # 7) top_topics 구성(상위 단어 5개)
     top_topics = []
     for t in topics_obj.get("topics", []):
         words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
@@ -318,7 +371,7 @@ def main():
         "[INFO] SUMMARY | C | topics_k=%d docs=%d ts_days=%d model=%s"
         % (
             len(topics_obj.get("topics", [])),
-            len(docs),
+            len(docs or []),
             len(ts_obj.get("daily", [])),
             model_name,
         )
@@ -326,4 +379,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
