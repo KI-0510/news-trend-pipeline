@@ -365,6 +365,9 @@ jobs:
           cp outputs/biz_opportunities.json  "${OUTDIR}/" || true
           cp outputs/report.md               "${OUTDIR}/" || true
           cp outputs/report.html             "${OUTDIR}/" || true
+          cp outputs/outputs/run_meta_b.json "${OUTDIR}/" || true
+          cp outputs/outputs/run_meta_c.json "${OUTDIR}/" || true
+          
           if [ -d outputs/export ]; then
             cp -r outputs/export/*           "${OUTDIR}/export/" || true
           fi
@@ -437,6 +440,8 @@ jobs:
             outputs/fig/*.png
             outputs/export/*.csv
             outputs/debug/*.json
+            outputs/debug/run_meta_b.json
+            outputs/debug/run_meta_c.json
             data/news_meta_*.json
             data/news_clean_*.json
           if-no-files-found: warn
