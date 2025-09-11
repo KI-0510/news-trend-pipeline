@@ -30,6 +30,16 @@ def use_pro_mode() -> bool:
     except Exception:
         return False
 
+def _log_mode(prefix="Module C"):
+    try:
+        is_pro = use_pro_mode()
+    except Exception:
+        is_pro = False
+    mode = "PRO" if is_pro else "LITE"
+    print(f"[INFO] USE_PRO={str(is_pro).lower()} → {prefix} ({mode}) 시작")
+
+
+
 
 # ---------------- 공통 설정 ----------------
 try:
@@ -404,6 +414,7 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
 
 # ---------------- 메인 ----------------
 def main():
+    _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
 
     docs_today, dates_today = load_today_meta()
