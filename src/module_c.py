@@ -133,13 +133,82 @@ def build_topics(docs: List[str], k_candidates=(7,8,9,10,11), max_features=8000,
         })
     return topics_obj
 
+def timeseries_by_date(dates: list) -> dict:
+    from collections import Counter
+
+    cnt = Counter(dates or [])
+    daily = [{"date": d, "count": int(cnt[d])} for d in sorted(cnt.keys())]
+    return {"daily": daily}
+
+
 def main():
     os.makedirs("outputs", exist_ok=True)
-    docs = load_today_meta()
-    topics_obj = build_topics(docs, k_candidates=(7,8,9,10,11), max_features=8000, min_df=4, topn=10)
+
+    # 1) 오늘 메타 로드
+    docs_today, dates_today = load_today_meta()
+
+    # 2) warehouse 날짜 추가(최근 30일)
+    _, wh_dates = load_warehouse(days=30)
+
+    # 3) 집계 대상 구성
+    docs = docs_today or []
+    dates = (dates_today or []) + (wh_dates or [])
+
+    # 4) 시계열은 먼저 저장(체크C 선행 보장)
+    ts_obj = timeseries_by_date(dates)
+    with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
+        json.dump(ts_obj, f, ensure_ascii=False, indent=2)
+
+    # 5) 토픽 모델링(문서가 없어도 빈 구조 생성)
+    topics_obj = build_topics(
+        docs, 
+        k_candidates=(7, 8, 9, 10, 11), 
+        max_features=8000, 
+        min_df=4, 
+        topn=10
+    )
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
-    print(f"[INFO] Module C done | topics={len(topics_obj.get('topics', []))} | docs={len(docs)}")
+
+    # 6) 인사이트 요약(Gemini 실패해도 파일은 이미 있음)
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    model_name = str(LLM.get("model", "gemini-1.5-flash"))
+    
+    context = {
+        "topics": topics_obj.get("topics", []),
+        "timeseries": ts_obj.get("daily", []),
+    }
+
+    try:
+        summary = gemini_insight(
+            api_key=api_key,
+            model=model_name,
+            context=context,
+            max_tokens=int(LLM.get("max_output_tokens", 2048)),
+            temperature=float(LLM.get("temperature", 0.3)),
+        )
+    except Exception as e:
+        summary = f"(요약 생성 실패: {e})"
+
+    # 7) top_topics 구성
+    top_topics = []
+    for t in topics_obj.get("topics", []):
+        words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
+        top_topics.append({"topic_id": t.get("topic_id"), "words": words})
+
+    # 8) 인사이트 저장(빈 구조라도 생성)
+    insights_obj = {
+        "summary": summary,
+        "top_topics": top_topics,
+        "evidence": {"timeseries": ts_obj.get("daily", [])[-14:]},
+    }
+    with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
+        json.dump(insights_obj, f, ensure_ascii=False, indent=2)
+
+    print(
+        "[INFO] Module C done | topics=%d | ts_days=%d | model=%s"
+        % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name)
+    )
 
 if __name__ == "__main__":
     main()
