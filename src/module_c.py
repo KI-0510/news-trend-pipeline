@@ -74,6 +74,47 @@ EN_STOP = {
 }
 KO_FUNC = {"하다","있다","되다","통해","이번","대한","것으로","밝혔다","다양한","함께","현재","기자","대표","회장"}
 
+def load_warehouse(days: int = 30):
+    """
+    최근 N일 data/warehouse/*.jsonl에서 '날짜'만 수집(시계열용)
+    반환: (docs, dates) — docs는 사용하지 않으므로 빈 리스트 유지
+    """
+    files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
+    docs, dates = [], []
+    
+    for fp in files:
+        try:
+            # 파일명에서 날짜 추출 ('YYYY-MM-DD' 형식)
+            file_day = os.path.basename(fp)[:10]
+            
+            with open(fp, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = (line or "").strip()
+                    if not line:
+                        continue
+                    
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    
+                    # 날짜 정보 추출 (published > created_at > 파일명 날짜)
+                    d_raw = obj.get("published") or obj.get("created_at") or file_day
+                    
+                    try:
+                        # 표준화된 날짜 형식으로 변환
+                        d_std = to_date(d_raw)  # module_c에 정의된 to_date 함수 사용
+                    except Exception:
+                        d_std = file_day  # 변환 실패 시 파일명 날짜 사용
+                    
+                    dates.append(d_std)
+        
+        except Exception:
+            continue
+    
+    return docs, dates
+
+
 def build_topics(docs: List[str], k_candidates=(7,8,9,10,11), max_features=8000, min_df=4, topn=10) -> Dict[str, Any]:
     if not docs:
         return {"topics": []}
@@ -145,7 +186,14 @@ def main():
     os.makedirs("outputs", exist_ok=True)
 
     # 1) 오늘 메타 로드
-    docs_today, dates_today, *_ = load_today_meta() or ([], [])
+    _res = load_today_meta()
+    if isinstance(_res, tuple):
+        # 튜플의 길이에 따라 안전하게 값 할당
+        docs_today = _res[0] if len(_res) > 0 else []
+        dates_today = _res[1] if len(_res) > 1 else []
+    else:
+        # 튜플이 아닌 경우 기본값으로 빈 리스트 할당
+        docs_today, dates_today = [], []
 
     # 2) warehouse 날짜 추가(최근 30일)
     _, wh_dates = load_warehouse(days=30)
