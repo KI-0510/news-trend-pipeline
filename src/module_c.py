@@ -71,9 +71,6 @@ def to_date(s: str) -> str:
 
 # ---------------- 데이터 로더 ----------------
 def load_today_meta() -> Tuple[List[str], List[str]]:
-    """
-    최신 data/news_meta_*.json에서 문서(docs)와 날짜(dates)만 반환
-    """
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
         return [], []
@@ -93,21 +90,16 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
         if not doc:
             continue
         docs.append(doc)
-
         d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
         dates.append(to_date(d_raw))
     return docs, dates
 
 def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
-    """
-    최근 N일 data/warehouse/*.jsonl에서 날짜만 수집(시계열용)
-    반환: (docs, dates) — docs는 사용하지 않으므로 빈 리스트
-    """
     files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
     docs, dates = [], []
     for fp in files:
         try:
-            file_day = os.path.basename(fp)[:10]  # 'YYYY-MM-DD'
+            file_day = os.path.basename(fp)[:10]
             with open(fp, "r", encoding="utf-8") as f:
                 for line in f:
                     line = (line or "").strip()
@@ -143,13 +135,13 @@ KO_FUNC = {
     "하다","있다","되다","통해","이번","대한","것으로","밝혔다","다양한","함께","현재",
     "기자","대표","회장","주요","기준","위해","위한","지원","전략","정책","협력","확대",
     "말했다","강조했다","대상","대상으로","최근","지난해","생활","시장","스마트","디지털","글로벌",
-    "그는","그녀는","이어","한편","또한"
+    "그는","그녀는","이어","한편","또한","이날","이라며","이라고","모델을","성과를","받았다","서울"
 }
 
 def build_topics(docs: List[str],
                  k_candidates=(7,8,9,10,11),
                  max_features=8000,
-                 min_df=5,
+                 min_df=6,
                  topn=10) -> Dict[str, Any]:
     if not docs:
         return {"topics": []}
@@ -159,7 +151,7 @@ def build_topics(docs: List[str],
         max_features=max_features,
         min_df=min_df,
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
-        stop_words=list(EN_STOP)  # 영어 일반어 컷
+        stop_words=list(EN_STOP)
     )
     X = vec.fit_transform(docs)
     vocab = vec.get_feature_names_out()
@@ -176,15 +168,12 @@ def build_topics(docs: List[str],
         return topics
 
     def is_bad_topic(words):
-        # 기능어/일반어 비율이 높으면 배드(임계 25%)
         bad = 0
         for w in words:
             base = w.split()[0] if " " in w else w
-            if base in KO_FUNC or base.lower() in EN_STOP:
+            if base in KO_FUNC or base.lower() in EN_STOP or re.fullmatch(r"\d+$", base) or re.fullmatch(r"\d{1,2}일$", base) or re.search(r"(억|조|달러|원)$", base):
                 bad += 1
-            elif re.fullmatch(r"\d+$", base):
-                bad += 1
-        return (bad / max(1, len(words))) >= 0.25
+        return (bad / max(1, len(words))) >= 0.20  # 20%로 더 엄격
 
     best_topics = None
     best_score = -1.0
@@ -211,7 +200,7 @@ def build_topics(docs: List[str],
             base = w.split()[0] if " " in w else w
             if base in KO_FUNC or base.lower() in EN_STOP:
                 continue
-            if re.fullmatch(r"\d+$", base):
+            if re.fullmatch(r"\d+$", base) or re.fullmatch(r"\d{1,2}일$", base) or re.search(r"(억|조|달러|원)$", base):
                 continue
             filtered.append(w)
         if not filtered:
@@ -225,9 +214,6 @@ def build_topics(docs: List[str],
 # ---------------- 인사이트 요약(Gemini 폴백 포함) ----------------
 def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
                    max_tokens: int = 2048, temperature: float = 0.3) -> str:
-    """
-    Gemini로 토픽/시계열 요약 생성. 키 없거나 실패해도 폴백 요약 반환.
-    """
     prompt = (
         "아래는 한국어 뉴스에서 추출한 토픽과 날짜별 기사 수 요약입니다.\n"
         "요청:\n"
@@ -259,11 +245,7 @@ def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
         gmodel = genai.GenerativeModel(model or "gemini-1.5-flash")
         resp = gmodel.generate_content(
             prompt,
-            generation_config={
-                "max_output_tokens": max_tokens or 2048,
-                "temperature": temperature if temperature is not None else 0.3,
-                "top_p": 0.9,
-            }
+            generation_config={"max_output_tokens": max_tokens or 2048, "temperature": temperature if temperature is not None else 0.3, "top_p": 0.9}
         )
         text = (getattr(resp, "text", None) or "").strip()
         if not text:
@@ -283,66 +265,124 @@ def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
     except Exception as e:
         return f"(요약 생성 실패: {e}) 최근 흐름과 상위 토픽 기준으로 우선 과제를 정리하세요."
 
-# ---------------- 메인 파이프라인 ----------------
+# ---------------- 트렌드 강/약 신호 분리 ----------------
+def _term_counts(docs: list, terms: list) -> dict:
+    res = {}
+    for t in terms:
+        t_low = (t or "").lower()
+        if not t_low:
+            continue
+        c = 0
+        for d in docs:
+            if t_low in (d or "").lower():
+                c += 1
+        res[t] = c
+    return res
+
+def _z_like(cur: int, ma: float, sd: float) -> float:
+    if sd <= 0:
+        return 0.0
+    return (cur - ma) / sd
+
+def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
+    import csv, math
+    os.makedirs("outputs/export", exist_ok=True)
+    terms = [k.get("keyword","") for k in (keywords_obj.get("keywords") or [])[:80]]
+    terms = [t for t in terms if t and len(t) >= 2]
+
+    totals = _term_counts(docs, terms)
+    vals = list(totals.values()) or [0]
+    mean_all = sum(vals)/max(1,len(vals))
+    sd_all = (sum((x-mean_all)**2 for x in vals)/max(1,len(vals)))**0.5
+    rows = []
+    for t in terms:
+        cur = totals.get(t, 0)
+        prev = 0
+        diff = cur - prev
+        ma7 = mean_all
+        z = _z_like(cur, ma7, sd_all)
+        total = cur
+        rows.append({"term": t, "cur": cur, "prev": prev, "diff": diff, "ma7": round(ma7,3), "z_like": round(z,3), "total": total})
+
+    cur_sorted = sorted([r["cur"] for r in rows], reverse=True)
+    z_sorted = sorted([r["z_like"] for r in rows], reverse=True)
+    total_sorted = sorted([r["total"] for r in rows])
+
+    def quantile(vs, p):
+        if not vs: return 0
+        i = max(0, min(len(vs)-1, int(len(vs)*p)))
+        return vs[i]
+
+    cur_q80 = quantile(cur_sorted, 0.2)
+    z_q80   = quantile(z_sorted, 0.2)
+    total_q60 = quantile(total_sorted, 0.6)
+    z_q70   = quantile(z_sorted, 0.3)
+
+    trend = [r for r in rows if r["cur"] >= cur_q80 and r["z_like"] >= z_q80]
+    weak  = [r for r in rows if r["total"] <= total_q60 and r["z_like"] >= z_q70 and r["diff"] >= 0]
+
+    trend_terms = {r["term"] for r in trend}
+    weak = [r for r in weak if r["term"] not in trend_terms]
+
+    with open("outputs/export/trend_strength.csv","w",encoding="utf-8",newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["term","cur","prev","diff","ma7","z_like","total"])
+        w.writeheader()
+        for r in trend:
+            w.writerow(r)
+
+    with open("outputs/export/weak_signals.csv","w",encoding="utf-8",newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["term","cur","prev","diff","ma7","z_like","total"])
+        w.writeheader()
+        for r in weak:
+            w.writerow(r)
+
+# ---------------- 메인 ----------------
 def main():
     os.makedirs("outputs", exist_ok=True)
 
-    # 1) 오늘 메타 문서/날짜
-    res = load_today_meta()
-    docs_today = res[0] if isinstance(res, tuple) and len(res) >= 1 else []
-    dates_today = res[1] if isinstance(res, tuple) and len(res) >= 2 else []
-
-    # 2) 과거 N일(warehouse) 날짜
+    docs_today, dates_today = load_today_meta()
     _, wh_dates = load_warehouse(days=30)
 
-    # 3) 집계 대상
     docs = docs_today or []
     dates = (dates_today or []) + (wh_dates or [])
 
-    # 4) 시계열은 '먼저' 저장(체크 C 보장)
     ts_obj = timeseries_by_date(dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 5) 토픽 모델링(문서 없어도 빈 구조 저장)
-    topics_obj = build_topics(docs, k_candidates=(7,8,9,10,11), max_features=8000, min_df=5, topn=10)
+    topics_obj = build_topics(docs, k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
-    # 6) 인사이트 요약(Gemini 키 없어도 안전)
     api_key = os.getenv("GEMINI_API_KEY", "")
     model_name = str(LLM.get("model", "gemini-1.5-flash"))
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
-        context={
-            "topics": topics_obj.get("topics", []),
-            "timeseries": ts_obj.get("daily", []),
-        },
+        context={"topics": topics_obj.get("topics", []), "timeseries": ts_obj.get("daily", [])},
         max_tokens=int(LLM.get("max_output_tokens", 2048)),
         temperature=float(LLM.get("temperature", 0.3)),
     )
 
-    # 7) top_topics 구성(상위 단어 5개)
     top_topics = []
     for t in topics_obj.get("topics", []):
         words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
         top_topics.append({"topic_id": t.get("topic_id"), "words": words})
 
-    # 8) 인사이트 저장(증거: 최근 14일 시계열)
     tail_14 = ts_obj.get("daily", [])[-14:] if isinstance(ts_obj.get("daily", []), list) else []
-    insights_obj = {
-        "summary": summary,
-        "top_topics": top_topics,
-        "evidence": {"timeseries": tail_14},
-    }
+    insights_obj = {"summary": summary, "top_topics": top_topics, "evidence": {"timeseries": tail_14}}
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
-    print(
-        "[INFO] Module C done | topics=%d | ts_days=%d | model=%s"
-        % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name)
-    )
+    # 강/약 신호 분리 저장
+    try:
+        with open("outputs/keywords.json","r",encoding="utf-8") as f:
+            keywords_obj = json.load(f)
+    except Exception:
+        keywords_obj = {"keywords":[]}
+    export_trend_and_weak_signals(docs, dates, keywords_obj)
+
+    print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
 
 if __name__ == "__main__":
     main()
