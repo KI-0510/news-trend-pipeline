@@ -7,6 +7,7 @@ import unicodedata
 import time
 import string
 import csv
+import datetime
 from collections import defaultdict
 from typing import List, Tuple
 
@@ -17,9 +18,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 # Splint-2 switch (키워드/topics 추출 향상)
 def use_pro_mode() -> bool:
-    import os
-    import json
-
     v = os.getenv("USE_PRO", "").lower()
     if v in ("1", "true", "yes", "y"):
         return True
@@ -391,6 +389,17 @@ def main():
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"stats": {"num_docs": len(docs)}, "keywords": diversified}, f, ensure_ascii=False, indent=2)
 
+        # 실행 메타 기록
+
+    os.makedirs("outputs", exist_ok=True)
+    meta = {
+        "module": "B",
+        "mode": "PRO" if use_pro_mode() else "LITE",
+        "time_utc": datetime.datetime.utcnow().isoformat() + "Z"
+    }
+    with open("outputs/run_meta_b.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+        
     print(f"[INFO] 모듈 B 완료 | 문서 수={len(docs)} | 상위 키워드={len(diversified)} | 출력={out_path} | 경과(초)={round(time.time() - t0, 2)}")
 
 if __name__ == "__main__":
