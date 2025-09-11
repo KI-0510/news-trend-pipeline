@@ -12,16 +12,15 @@ from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
-# Splint-2 switch (키워드/topics 추출 향상)
+# ================= 공용 스위치/로그 =================
 def use_pro_mode() -> bool:
     v = os.getenv("USE_PRO", "").lower()
-    if v in ("1", "true", "yes", "y"):
+    if v in ("1","true","yes","y"):
         return True
-    if v in ("0", "false", "no", "n"):
+    if v in ("0","false","no","n"):
         return False
-    
     try:
-        with open("config.json", "r", encoding="utf-8") as f:
+        with open("config.json","r",encoding="utf-8") as f:
             cfg = json.load(f) or {}
             return bool(cfg.get("use_pro", False))
     except Exception:
@@ -35,10 +34,7 @@ def _log_mode(prefix="Module C"):
     mode = "PRO" if is_pro else "LITE"
     print(f"[INFO] USE_PRO={str(is_pro).lower()} → {prefix} ({mode}) 시작")
 
-
-
-
-# ---------------- 공통 설정 ----------------
+# ================= 설정 로드 =================
 try:
     from config import load_config, llm_config
 except Exception:
@@ -52,7 +48,7 @@ except Exception:
 CFG = load_config()
 LLM = llm_config(CFG)
 
-# ---------------- 파일/텍스트 유틸 ----------------
+# ================= 공용 유틸 =================
 def latest(globpat: str) -> Optional[str]:
     files = sorted(glob.glob(globpat))
     return files[-1] if files else None
@@ -86,7 +82,7 @@ def to_date(s: str) -> str:
     if d > today: d = today
     return d.strftime("%Y-%m-%d")
 
-# ---------------- 데이터 로더 ----------------
+# ================= 데이터 로더 =================
 def load_today_meta() -> Tuple[List[str], List[str]]:
     meta_path = latest("data/news_meta_*.json")
     if not meta_path: return [], []
@@ -130,13 +126,13 @@ def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
             continue
     return docs, dates
 
-# ---------------- 시계열 집계 ----------------
+# ================= 시계열 =================
 def timeseries_by_date(dates: List[str]) -> Dict[str, Any]:
     cnt = Counter(dates or [])
     daily = [{"date": d, "count": int(cnt[d])} for d in sorted(cnt.keys())]
     return {"daily": daily}
 
-# ---------------- 토픽 모델링(품질 강화) ----------------
+# ================= 불용/컷(토픽 공통) =================
 EN_STOP = {
     "the","and","to","of","in","for","on","with","at","by","from","as","is","are","be","it",
     "that","this","an","a","or","if","we","you","they","he","she","was","were","been","than",
@@ -155,72 +151,12 @@ def is_bad_token(base: str) -> bool:
     if re.search(r"(억|조|달러|원)$", base): return True
     return False
 
-import re
-
-# topics 추출 (Pro)
-def pro_build_topics_bertopic(docs, topn=10):
-    try:
-        from bertopic import BERTopic
-        from sentence_transformers import SentenceTransformer
-    except Exception as e:
-        raise RuntimeError(f"Pro 토픽 모드 준비 실패(패키지 없음): {e}")
-
-    if not docs:
-        return {"topics": []}
-
-    emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
-    model = BERTopic(
-        embedding_model=emb,
-        min_topic_size=10,  # 이후 8~15 사이에서 튜닝 가능
-        nr_topics=None,
-        calculate_probabilities=False,
-        verbose=False
-    )
-    topics, _ = model.fit_transform(docs)
-    topic_info = model.get_topics()  # {topic_id: [(word, ctfidf), ...]}
-
-    topics_obj = {"topics": []}
-    for tid, items in topic_info.items():
-        if tid == -1:
-            continue
-        words = [w for w, _ in items[:topn]]
-
-        # 숫자/날짜/화폐/형식어 컷(너의 is_bad_token 로직과 합치면 더 좋음)
-        filtered = []
-        for w in words:
-            base = w.split()[0] if " " in w else w
-            if re.fullmatch(r"\d+$", base) or re.fullmatch(r"\d{1,2}일$", base) or re.search(r"(억|조|달러|원)$", base):
-                continue
-            filtered.append(w)
-
-        if not filtered:
-            filtered = words
-        
-        topics_obj["topics"].append({
-            "topic_id": int(tid),
-            "top_words": [{"word": x} for x in filtered[:topn]]
-        })
-
-    return topics_obj
-
-
-# 최종 build_topics 래퍼 추가
-def build_topics(docs, k_candidates=(7, 8, 9, 10, 11), max_features=8000, min_df=7, topn=10):
-    if use_pro_mode():
-        try:
-            return pro_build_topics_bertopic(docs, topn=topn)
-        except Exception as e:
-            print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
-            # Lite 경로
-            return build_topics_lite(docs, k_candidates=k_candidates, max_features=max_features, min_df=min_df, topn=topn)
-
-
-
+# ================= Lite 토픽(LDA) =================
 def build_topics_lite(docs: List[str],
-                 k_candidates=(7,8,9,10,11),
-                 max_features=8000,
-                 min_df=7,
-                 topn=10) -> Dict[str, Any]:
+                      k_candidates=(7,8,9,10,11),
+                      max_features=8000,
+                      min_df=6,
+                      topn=10) -> Dict[str, Any]:
     if not docs: return {"topics": []}
     vec = CountVectorizer(ngram_range=(1,2),
                           max_features=max_features,
@@ -271,7 +207,75 @@ def build_topics_lite(docs: List[str],
                                      "top_words": [{"word": w} for w in filtered[:topn]]})
     return topics_obj
 
-# ---------------- 인사이트 요약(Gemini 폴백 포함) ----------------
+# ================= Pro 토픽(BERTopic) =================
+def pro_build_topics_bertopic(docs, topn=10):
+    try:
+        from bertopic import BERTopic
+        from bertopic.representation import KeyBERTInspired
+        from sentence_transformers import SentenceTransformer
+        from sklearn.feature_extraction.text import CountVectorizer
+    except Exception as e:
+        raise RuntimeError(f"Pro 토픽 모드 준비 실패(패키지 없음): {e}")
+
+    if not docs:
+        return {"topics": []}
+
+    emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
+
+    # 벡터라이저에 커스텀 불용어 주입
+    custom_stop = set(EN_STOP) | set(KO_FUNC)
+    vectorizer_model = CountVectorizer(
+        ngram_range=(1,3),
+        min_df=6,
+        token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
+        stop_words=list(custom_stop)
+    )
+
+    rep = KeyBERTInspired(top_n_words=12, mmr=True, diversity=0.7)
+
+    model = BERTopic(
+        embedding_model=emb,
+        vectorizer_model=vectorizer_model,
+        representation_model=rep,
+        min_topic_size=12,          # 8~15 사이 추가 탐색 가능
+        nr_topics=None,
+        calculate_probabilities=False,
+        verbose=False
+    )
+    topics, probs = model.fit_transform(docs)
+
+    # 아웃라이어 정리 + 유사 토픽 병합(보수적으로)
+    try:
+        model.reduce_outliers(docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.05)
+    except Exception:
+        pass
+    try:
+        model.merge_topics(docs, topics, threshold=0.85)
+    except Exception:
+        pass
+
+    topic_info = model.get_topics()  # {topic_id: [(word, score), ...]}
+
+    topics_obj = {"topics": []}
+    for tid, items in topic_info.items():
+        if tid == -1:
+            continue
+        words = [w for w, _ in items[:max(12, topn)]]
+        # 숫자/날짜/화폐/형식어 컷
+        filtered = []
+        for w in words:
+            base = w.split()[0] if " " in w else w
+            if is_bad_token(base): continue
+            filtered.append(w)
+        if not filtered:
+            filtered = words[:topn]
+        topics_obj["topics"].append({
+            "topic_id": int(tid),
+            "top_words": [{"word": x} for x in filtered[:topn]]
+        })
+    return topics_obj
+
+# ================= 인사이트 요약 =================
 def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
                    max_tokens: int = 2048, temperature: float = 0.3) -> str:
     prompt = (
@@ -313,7 +317,7 @@ def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
     except Exception as e:
         return f"(요약 생성 실패: {e}) 최근 흐름과 상위 토픽 기준으로 우선 과제를 정리하세요."
 
-# ---------------- 트렌드 강/약 신호(기울기 반영) ----------------
+# ================= 강/약 신호(기울기 반영) =================
 def _term_counts_in_docs(docs: list, terms: list) -> dict:
     res = {}
     for t in terms:
@@ -331,12 +335,11 @@ def _z_like(cur: float, mean: float, sd: float) -> float:
     return (cur - mean) / sd
 
 def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
-    import csv, math
+    import csv
     os.makedirs("outputs/export", exist_ok=True)
     terms = [k.get("keyword","") for k in (keywords_obj.get("keywords") or [])[:80]]
     terms = [t for t in terms if t and len(t) >= 2]
 
-    # 날짜 집합(최근 28일)
     days = sorted(set(dates or []))[-28:]
     day_docs = {d: [] for d in days}
     for d, doc in zip(dates, docs):
@@ -354,7 +357,6 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         if len(arr) < k: return 0.0
         return sum(arr[-k:]) / float(k)
 
-    # 전체분포 기반 평균/표준편차(대체치)
     totals_all = _term_counts_in_docs(docs, terms)
     vals = list(totals_all.values()) or [0]
     mean_all = sum(vals)/max(1,len(vals))
@@ -389,12 +391,11 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         i = max(0, min(len(vs)-1, int(len(vs)*p)))
         return vs[i]
 
-    # 더 분리된 컷
-    cur_q90   = quantile(cur_sorted, 0.1)  # 상위 10%
-    z_q80     = quantile(z_sorted, 0.2)    # 상위 20%
+    cur_q90   = quantile(cur_sorted, 0.1)   # 상위 10%
+    z_q80     = quantile(z_sorted, 0.2)     # 상위 20%
     total_q70 = quantile(total_sorted, 0.3) # 상위 30%
     total_q50 = quantile(total_sorted, 0.5) # 하위 50%
-    z_q60     = quantile(z_sorted, 0.4)    # 상위 40%
+    z_q60     = quantile(z_sorted, 0.4)     # 상위 40%
 
     trend = [r for r in rows if r["cur"] >= cur_q90 and r["z_like"] >= z_q80 and r["total"] >= total_q70]
     weak  = [r for r in rows if r["total"] <= total_q50 and r["z_like"] >= z_q60 and r["cur"] < cur_q90 and r["slope"] > 0]
@@ -409,7 +410,7 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         w = csv.DictWriter(f, fieldnames=["term","cur","prev","diff","ma7","z_like","total","slope"])
         w.writeheader(); [w.writerow(r) for r in weak]
 
-# ---------------- 메인 ----------------
+# ================= 메인 =================
 def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
@@ -420,13 +421,21 @@ def main():
     docs = (docs_today or []) + (wh_docs or [])
     dates = (dates_today or []) + (wh_dates or [])
 
-    # 시계열 먼저 저장
+    # 시계열 먼저
     ts_obj = timeseries_by_date(dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 토픽
-    topics_obj = build_topics(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=7, topn=10)
+    # 토픽(Pro/Lite 분기)
+    try:
+        if use_pro_mode():
+            topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
+        else:
+            topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
+    except Exception as e:
+        print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
+        topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
+
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
@@ -452,7 +461,7 @@ def main():
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
-    # 강/약 신호 분리 저장(기울기 반영)
+    # 강/약 신호 저장
     try:
         with open("outputs/keywords.json","r",encoding="utf-8") as f:
             keywords_obj = json.load(f)
@@ -461,7 +470,7 @@ def main():
     export_trend_and_weak_signals(docs, dates, keywords_obj)
 
     # 실행 메타 기록
-    os.makedirs("outputs", exist_ok=True)
+    import datetime
     meta = {
         "module": "C",
         "mode": "PRO" if use_pro_mode() else "LITE",
