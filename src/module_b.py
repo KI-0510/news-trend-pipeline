@@ -15,6 +15,24 @@ from krwordrank.word import KRWordRank
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# Splint-2 switch (키워드/topics 추출 향상)
+def use_pro_mode() -> bool:
+    import os
+    import json
+
+    v = os.getenv("USE_PRO", "").lower()
+    if v in ("1", "true", "yes", "y"):
+        return True
+    if v in ("0", "false", "no", "n"):
+        return False
+    
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            cfg = json.load(f) or {}
+            return bool(cfg.get("use_pro", False))
+    except Exception:
+        return False
+
 # ===== 조사/어미/정규화 =====
 def _has_jongseong(ch: str) -> bool:
     code = ord(ch)
