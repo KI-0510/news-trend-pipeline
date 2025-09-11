@@ -33,6 +33,16 @@ def use_pro_mode() -> bool:
     except Exception:
         return False
 
+def _log_mode(prefix="Module B"):
+    try:
+        is_pro = use_pro_mode()
+    except Exception:
+        is_pro = False
+    mode = "PRO" if is_pro else "LITE"
+    print(f"[INFO] USE_PRO={str(is_pro).lower()} → {prefix} ({mode}) 시작")
+
+
+
 # ===== 조사/어미/정규화 =====
 def _has_jongseong(ch: str) -> bool:
     code = ord(ch)
@@ -316,6 +326,7 @@ def build_tfidf(docs):
     return vec, X
 
 def main():
+    _log_mode("Module B")
     t0 = time.time()
     cfg = CFG
     topk = int(cfg.get("top_n_keywords", 50))
