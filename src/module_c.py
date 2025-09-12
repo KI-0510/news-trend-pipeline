@@ -151,7 +151,7 @@ def is_bad_token(base: str) -> bool:
     if re.search(r"(억|조|달러|원)$", base): return True
     return False
 
-# ================= Lite 토픽(LDA) =================
+# ================= Lite 토픽(LDA) — prob 포함 =================
 def build_topics_lite(docs: List[str],
                       k_candidates=(7,8,9,10,11),
                       max_features=8000,
@@ -167,47 +167,55 @@ def build_topics_lite(docs: List[str],
     vocab = vec.get_feature_names_out()
     if X.shape[1] == 0: return {"topics": []}
 
-    def topic_words(lda, n_top=topn):
+    def topic_pairs(lda, n_top=topn):
         comps = lda.components_
         topics = []
         for tid, comp in enumerate(comps):
             idx = comp.argsort()[-n_top:][::-1]
-            words = [vocab[i] for i in idx]
-            topics.append((tid, words))
+            pairs = [(vocab[i], float(comp[i])) for i in idx]
+            topics.append((tid, pairs))
         return topics
 
-    def bad_ratio(words):
+    def bad_ratio_from_pairs(pairs):
         bad = 0
-        for w in words:
+        for w, _s in pairs:
             base = w.split()[0] if " " in w else w
-            if is_bad_token(base): bad += 1
-        return (bad / max(1, len(words)))
+            if is_bad_token(base):
+                bad += 1
+        return bad / max(1, len(pairs))
 
-    best_topics = None; best_score = -1.0
+    best_topics = None
+    best_score = -1.0
+
     for k in k_candidates:
         lda = LatentDirichletAllocation(n_components=k, learning_method="batch", random_state=42, max_iter=15)
         _ = lda.fit_transform(X)
-        ts = topic_words(lda, n_top=topn)
-        good = sum(1 for _, ws in ts if bad_ratio(ws) < 0.20)  # 20% 임계
+        ts = topic_pairs(lda, n_top=topn)
+        good = sum(1 for _, pairs in ts if bad_ratio_from_pairs(pairs) < 0.20)
         score = good / float(k)
         if score > best_score:
-            best_score = score; best_topics = ts
+            best_score = score
+            best_topics = ts
 
     topics_obj = {"topics": []}
-    if not best_topics: return topics_obj
+    if not best_topics:
+        return topics_obj
 
-    for tid, words in best_topics:
+    for tid, pairs in best_topics:
+        maxv = max((s for _, s in pairs), default=0.0) or 1.0
         filtered = []
-        for w in words:
+        for w, s in pairs:
             base = w.split()[0] if " " in w else w
-            if is_bad_token(base): continue
-            filtered.append(w)
-        if not filtered: filtered = words
-        topics_obj["topics"].append({"topic_id": int(tid),
-                                     "top_words": [{"word": w} for w in filtered[:topn]]})
+            if is_bad_token(base):
+                continue
+            prob = float(s) / maxv
+            filtered.append({"word": w, "prob": prob})
+        if not filtered:
+            filtered = [{"word": w, "prob": (float(s)/maxv)} for w, s in pairs]
+        topics_obj["topics"].append({"topic_id": int(tid), "top_words": filtered[:topn]})
     return topics_obj
 
-# ================= Pro 토픽(BERTopic) =================
+# ================= Pro 토픽(BERTopic) — prob 포함 =================
 def pro_build_topics_bertopic(docs, topn=10):
     try:
         from bertopic import BERTopic
@@ -221,8 +229,6 @@ def pro_build_topics_bertopic(docs, topn=10):
         return {"topics": []}
 
     emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
-
-    # 벡터라이저에 커스텀 불용어 주입
     custom_stop = set(EN_STOP) | set(KO_FUNC)
     vectorizer_model = CountVectorizer(
         ngram_range=(1,3),
@@ -230,21 +236,19 @@ def pro_build_topics_bertopic(docs, topn=10):
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(custom_stop)
     )
-
     rep = KeyBERTInspired(top_n_words=12, mmr=True, diversity=0.7)
 
     model = BERTopic(
         embedding_model=emb,
         vectorizer_model=vectorizer_model,
         representation_model=rep,
-        min_topic_size=12,          # 8~15 사이 추가 탐색 가능
+        min_topic_size=12,
         nr_topics=None,
         calculate_probabilities=False,
         verbose=False
     )
     topics, probs = model.fit_transform(docs)
 
-    # 아웃라이어 정리 + 유사 토픽 병합(보수적으로)
     try:
         model.reduce_outliers(docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.05)
     except Exception:
@@ -254,25 +258,24 @@ def pro_build_topics_bertopic(docs, topn=10):
     except Exception:
         pass
 
-    topic_info = model.get_topics()  # {topic_id: [(word, score), ...]}
+    topic_info = model.get_topics()
 
     topics_obj = {"topics": []}
     for tid, items in topic_info.items():
         if tid == -1:
             continue
-        words = [w for w, _ in items[:max(12, topn)]]
-        # 숫자/날짜/화폐/형식어 컷
+        head = items[:max(12, topn)]
+        maxv = max((float(s) for _, s in head), default=0.0) or 1.0
         filtered = []
-        for w in words:
+        for w, s in head:
             base = w.split()[0] if " " in w else w
-            if is_bad_token(base): continue
-            filtered.append(w)
+            if is_bad_token(base):
+                continue
+            prob = float(s) / maxv
+            filtered.append({"word": w, "prob": prob})
         if not filtered:
-            filtered = words[:topn]
-        topics_obj["topics"].append({
-            "topic_id": int(tid),
-            "top_words": [{"word": x} for x in filtered[:topn]]
-        })
+            filtered = [{"word": w, "prob": (float(s)/maxv)} for w, s in head]
+        topics_obj["topics"].append({"topic_id": int(tid), "top_words": filtered[:topn]})
     return topics_obj
 
 # ================= 인사이트 요약 =================
@@ -391,11 +394,11 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         i = max(0, min(len(vs)-1, int(len(vs)*p)))
         return vs[i]
 
-    cur_q90   = quantile(cur_sorted, 0.1)   # 상위 10%
-    z_q80     = quantile(z_sorted, 0.2)     # 상위 20%
-    total_q70 = quantile(total_sorted, 0.3) # 상위 30%
-    total_q50 = quantile(total_sorted, 0.5) # 하위 50%
-    z_q60     = quantile(z_sorted, 0.4)     # 상위 40%
+    cur_q90   = quantile(cur_sorted, 0.1)
+    z_q80     = quantile(z_sorted, 0.2)
+    total_q70 = quantile(total_sorted, 0.3)
+    total_q50 = quantile(total_sorted, 0.5)
+    z_q60     = quantile(z_sorted, 0.4)
 
     trend = [r for r in rows if r["cur"] >= cur_q90 and r["z_like"] >= z_q80 and r["total"] >= total_q70]
     weak  = [r for r in rows if r["total"] <= total_q50 and r["z_like"] >= z_q60 and r["cur"] < cur_q90 and r["slope"] > 0]
@@ -421,12 +424,10 @@ def main():
     docs = (docs_today or []) + (wh_docs or [])
     dates = (dates_today or []) + (wh_dates or [])
 
-    # 시계열 먼저
     ts_obj = timeseries_by_date(dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 토픽(Pro/Lite 분기)
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
@@ -439,7 +440,6 @@ def main():
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
-    # 인사이트
     api_key = os.getenv("GEMINI_API_KEY", "")
     model_name = str(LLM.get("model", "gemini-1.5-flash"))
     summary = gemini_insight(
@@ -450,7 +450,6 @@ def main():
         temperature=float(LLM.get("temperature", 0.3)),
     )
 
-    # top_topics
     top_topics = []
     for t in topics_obj.get("topics", []):
         words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
@@ -461,7 +460,6 @@ def main():
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
-    # 강/약 신호 저장
     try:
         with open("outputs/keywords.json","r",encoding="utf-8") as f:
             keywords_obj = json.load(f)
@@ -469,13 +467,8 @@ def main():
         keywords_obj = {"keywords":[]}
     export_trend_and_weak_signals(docs, dates, keywords_obj)
 
-    # 실행 메타 기록
     import datetime
-    meta = {
-        "module": "C",
-        "mode": "PRO" if use_pro_mode() else "LITE",
-        "time_utc": datetime.datetime.utcnow().isoformat() + "Z"
-    }
+    meta = {"module": "C", "mode": "PRO" if use_pro_mode() else "LITE", "time_utc": datetime.datetime.utcnow().isoformat() + "Z"}
     with open("outputs/run_meta_c.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
