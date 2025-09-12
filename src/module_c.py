@@ -151,7 +151,7 @@ def is_bad_token(base: str) -> bool:
     if re.search(r"(억|조|달러|원)$", base): return True
     return False
 
-# ================= Lite 토픽(LDA) — prob 포함 =================
+# ================= Lite 토픽(LDA) — prob 포함/안전화 =================
 def build_topics_lite(docs: List[str],
                       k_candidates=(7,8,9,10,11),
                       max_features=8000,
@@ -168,7 +168,7 @@ def build_topics_lite(docs: List[str],
     if X.shape[1] == 0: return {"topics": []}
 
     def topic_pairs(lda, n_top=topn):
-        comps = lda.components_
+        comps = lda.components_  # (n_topics, n_terms)
         topics = []
         for tid, comp in enumerate(comps):
             idx = comp.argsort()[-n_top:][::-1]
@@ -180,13 +180,10 @@ def build_topics_lite(docs: List[str],
         bad = 0
         for w, _s in pairs:
             base = w.split()[0] if " " in w else w
-            if is_bad_token(base):
-                bad += 1
+            if is_bad_token(base): bad += 1
         return bad / max(1, len(pairs))
 
-    best_topics = None
-    best_score = -1.0
-
+    best_topics = None; best_score = -1.0
     for k in k_candidates:
         lda = LatentDirichletAllocation(n_components=k, learning_method="batch", random_state=42, max_iter=15)
         _ = lda.fit_transform(X)
@@ -194,28 +191,32 @@ def build_topics_lite(docs: List[str],
         good = sum(1 for _, pairs in ts if bad_ratio_from_pairs(pairs) < 0.20)
         score = good / float(k)
         if score > best_score:
-            best_score = score
-            best_topics = ts
+            best_score = score; best_topics = ts
 
     topics_obj = {"topics": []}
-    if not best_topics:
-        return topics_obj
+    if not best_topics: return topics_obj
 
     for tid, pairs in best_topics:
-        maxv = max((s for _, s in pairs), default=0.0) or 1.0
-        filtered = []
-        for w, s in pairs:
-            base = w.split()[0] if " " in w else w
-            if is_bad_token(base):
-                continue
-            prob = float(s) / maxv
-            filtered.append({"word": w, "prob": prob})
-        if not filtered:
-            filtered = [{"word": w, "prob": (float(s)/maxv)} for w, s in pairs]
+        maxv = max((s for _, s in pairs if s is not None), default=0.0)
+        if maxv <= 0:
+            filtered = [{"word": w, "prob": 1.0} for w, _ in pairs][:topn]
+        else:
+            filtered = []
+            for w, s in pairs:
+                base = w.split()[0] if " " in w else w
+                if is_bad_token(base):
+                    continue
+                val = float(s) if s is not None else 0.0
+                prob = max(val, 0.0) / maxv
+                if prob == 0.0:
+                    prob = 1e-6
+                filtered.append({"word": w, "prob": prob})
+            if not filtered:
+                filtered = [{"word": w, "prob": (max(float(s or 0.0), 0.0)/maxv if maxv>0 else 1.0)} for w, s in pairs][:topn]
         topics_obj["topics"].append({"topic_id": int(tid), "top_words": filtered[:topn]})
     return topics_obj
 
-# ================= Pro 토픽(BERTopic) — prob 포함 =================
+# ================= Pro 토픽(BERTopic) — prob 포함/안전화 =================
 def pro_build_topics_bertopic(docs, topn=10):
     try:
         from bertopic import BERTopic
@@ -258,6 +259,7 @@ def pro_build_topics_bertopic(docs, topn=10):
     except Exception:
         pass
 
+    # 병합/정리 이후 최신 라벨 재취득
     topic_info = model.get_topics()
 
     topics_obj = {"topics": []}
@@ -265,16 +267,23 @@ def pro_build_topics_bertopic(docs, topn=10):
         if tid == -1:
             continue
         head = items[:max(12, topn)]
-        maxv = max((float(s) for _, s in head), default=0.0) or 1.0
-        filtered = []
-        for w, s in head:
-            base = w.split()[0] if " " in w else w
-            if is_bad_token(base):
-                continue
-            prob = float(s) / maxv
-            filtered.append({"word": w, "prob": prob})
-        if not filtered:
-            filtered = [{"word": w, "prob": (float(s)/maxv)} for w, s in head]
+        scores = [float(s) if s is not None else 0.0 for _, s in head]
+        maxv = max(scores) if scores else 0.0
+        if maxv <= 0:
+            filtered = [{"word": w, "prob": 1.0} for w, _ in head][:topn]
+        else:
+            filtered = []
+            for w, s in head:
+                base = w.split()[0] if " " in w else w
+                if is_bad_token(base):
+                    continue
+                val = float(s) if s is not None else 0.0
+                prob = max(val, 0.0) / maxv
+                if prob == 0.0:
+                    prob = 1e-6
+                filtered.append({"word": w, "prob": prob})
+            if not filtered:
+                filtered = [{"word": w, "prob": (max(float(s or 0.0),0.0)/maxv if maxv>0 else 1.0)} for w, s in head][:topn]
         topics_obj["topics"].append({"topic_id": int(tid), "top_words": filtered[:topn]})
     return topics_obj
 
