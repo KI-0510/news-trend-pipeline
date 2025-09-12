@@ -133,7 +133,7 @@ def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
         labels = [str((w.get("word") or "")) for w in words][::-1]
         probs = [float(w.get("prob", 1.0) or 1.0) for w in words][::-1]
         # 보기용 스케일 업 원하면 아래 주석 해제
-        # probs = [p*100.0 for p in probs]
+        probs = [p*100.0 for p in probs]
         sns.barplot(x=probs, y=labels, ax=ax, color="#10b981")
         ax.set_title(f"Topic #{t.get('topic_id')}")
         ax.set_xlabel("Weight"); ax.set_ylabel("")
