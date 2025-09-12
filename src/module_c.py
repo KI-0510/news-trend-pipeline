@@ -158,7 +158,6 @@ def is_bad_token(base: str) -> bool:
     return False
 
 # ================= Lite 토픽(LDA) — prob 포함/안정화 =================
-# Lite 토픽(LDA)
 def build_topics_lite(docs: List[str],
                       k_candidates=(7,8,9,10,11),
                       max_features=8000,
@@ -182,7 +181,7 @@ def build_topics_lite(docs: List[str],
         comps = lda.components_
         topics = []
         for tid, comp in enumerate(comps):
-            idx = comp.argsort()[-max(n_top, 30):][::-1]  # 후보폭 넓힘
+            idx = comp.argsort()[-max(n_top, 30):][::-1]
             pairs = [(vocab[i], float(comp[i])) for i in idx]
             topics.append((tid, pairs))
         return topics
@@ -212,7 +211,7 @@ def build_topics_lite(docs: List[str],
         kept = []
         for w, s in pairs:
             base = w.split()[0] if " " in w else w
-            if is_bad_token(base): 
+            if is_bad_token(base):
                 continue
             kept.append((w, s))
         if not kept:
@@ -226,7 +225,6 @@ def build_topics_lite(docs: List[str],
                 prob = max(float(s or 0.0), 0.0) / maxv
                 payload.append({"word": w, "prob": prob})
         else:
-            # 평탄/제로 분포 → 순위 감쇠(하한 0.2)
             decay = 0.95
             for rank, (w, _s) in enumerate(kept[:topn], start=0):
                 prob = max(0.2, decay**rank)
@@ -235,7 +233,7 @@ def build_topics_lite(docs: List[str],
         topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
     return topics_obj
 
-# Pro 토픽(BERTopic)
+
 def pro_build_topics_bertopic(docs, topn=10):
     try:
         from bertopic import BERTopic
@@ -278,7 +276,6 @@ def pro_build_topics_bertopic(docs, topn=10):
     except Exception:
         pass
 
-    # 최신 라벨을 c-TF-IDF에서 직접 추출
     topics_obj = {"topics": []}
     try:
         ctfidf = model.c_tf_idf_
@@ -293,7 +290,7 @@ def pro_build_topics_bertopic(docs, topn=10):
             kept = []
             for w, s in pairs:
                 base = w.split()[0] if " " in w else w
-                if is_bad_token(base): 
+                if is_bad_token(base):
                     continue
                 kept.append((w, s))
             if not kept:
@@ -311,10 +308,11 @@ def pro_build_topics_bertopic(docs, topn=10):
                 for rank, (w, _s) in enumerate(kept[:topn], start=0):
                     prob = max(0.2, decay**rank)
                     payload.append({"word": w, "prob": prob})
+
             topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
         return topics_obj
+
     except Exception:
-        # 폴백(get_topics)도 prob 보장
         topic_info = model.get_topics()
         for tid, items in topic_info.items():
             if tid == -1:
@@ -342,6 +340,7 @@ def pro_build_topics_bertopic(docs, topn=10):
                     payload.append({"word": w, "prob": prob})
             topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
         return topics_obj
+        
         
 
 # ================= 인사이트 요약 =================
