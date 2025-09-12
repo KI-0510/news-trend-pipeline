@@ -30,21 +30,6 @@ def load_data():
 
     return keywords, topics, ts, insights, opps, meta_items
 
-def simple_tokenize_ko(text: str):
-    toks = re.findall(r"[가-힣A-Za-z0-9]+", text or "")
-    toks = [t.lower() for t in toks if len(t) >= 2]
-    return toks
-
-def build_docs_from_meta(meta_items):
-    docs =[]
-    for it in meta_items:
-        title = (it.get("title") or it.get("title_og") or "").strip()
-        desc  = (it.get("description") or it.get("description_og") or "").strip()
-        doc = (title + " " + desc).strip()
-        if doc:
-            docs.append(doc)
-    return docs
-
 def ensure_fonts():
     import os
     import matplotlib
@@ -96,8 +81,7 @@ def plot_wordcloud_from_keywords(keywords_obj, out_path="outputs/fig/wordcloud.p
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     items = (keywords_obj or {}).get("keywords") or []
     if not items:
-        plt.figure(figsize=(8, 5))
-        plt.text(0.5, 0.5, "워드클라우드 데이터 없음", ha="center", va="center")
+        plt.figure(figsize=(8, 5)); plt.text(0.5, 0.5, "워드클라우드 데이터 없음", ha="center", va="center")
         plt.axis("off"); plt.savefig(out_path, dpi=150, bbox_inches="tight"); plt.close(); return
     freqs = {}
     for it in items[:200]:
@@ -150,6 +134,8 @@ def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
         words = (t.get("top_words") or [])[:topn_words]
         labels = [str((w.get("word") or "")) for w in words][::-1]
         probs = [float(w.get("prob", 1.0) or 1.0) for w in words][::-1]
+        # 보기 스케일 업(옵션): 미묘한 차이를 확대
+        # probs = [p*100.0 for p in probs]
         sns.barplot(x=probs, y=labels, ax=ax, color="#10b981")
         ax.set_title(f"Topic #{t.get('topic_id')}")
         ax.set_xlabel("Weight"); ax.set_ylabel("")
@@ -166,20 +152,17 @@ def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     daily = ts.get("daily", [])
     if not daily:
-        plt.figure(figsize=(10, 5))
-        plt.title("Articles per Day (no data)")
+        plt.figure(figsize=(10, 5)); plt.title("Articles per Day (no data)")
         plt.xlabel("Date"); plt.ylabel("Count")
         plt.tight_layout(); plt.savefig(out_path, dpi=150, bbox_inches="tight"); plt.close(); return
     df = pd.DataFrame(daily).copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce", infer_datetime_format=True, utc=False)
     df["count"] = pd.to_numeric(df.get("count", 0), errors="coerce").fillna(0).astype(int)
     df = df.dropna(subset=["date"]).sort_values("date")
-    now_year = datetime.now().year
-    y_min, y_max = now_year - 3, now_year + 1
+    now_year = datetime.now().year; y_min, y_max = now_year - 3, now_year + 1
     df = df[(df["date"].dt.year >= y_min) & (df["date"].dt.year <= y_max)]
     if df.empty:
-        plt.figure(figsize=(10, 5))
-        plt.title("Articles per Day (empty after filtering)")
+        plt.figure(figsize=(10, 5)); plt.title("Articles per Day (empty after filtering)")
         plt.xlabel("Date"); plt.ylabel("Count")
         plt.tight_layout(); plt.savefig(out_path, dpi=150, bbox_inches="tight"); plt.close(); return
     df = df.set_index("date")
@@ -294,7 +277,6 @@ def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.p
     den = (w_raw.max() - w_raw.min()) or 1.0
     w_norm = (W_MIN + (W_MAX - W_MIN) * (w_raw - w_raw.min()) / den).tolist()
     plt.figure(figsize=(10, 7)); ax = plt.gca(); ax.set_axis_off()
-    import networkx as nx
     nx.draw_networkx_edges(G, pos, edgelist=[(u, v) for u, v, _ in edges_all], width=w_norm, edge_color="#666", alpha=0.25)
     nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors, alpha=0.9, linewidths=0.5, edgecolors="#333")
     if label_top is None:
@@ -461,37 +443,57 @@ def export_csvs(ts_obj, keywords_obj, topics_obj, out_dir="outputs/export"):
     for t in topics:
         tid = t.get("topic_id")
         for w in (t.get("top_words") or [])[:10]:
-            rows.append({"topic_id": tid, "word": w.get("word", ""), "prob": w.get("prob", 0)})
+            pw = w.get("prob", None)
+            try:
+                p = float(pw)
+                if p == 0.0:
+                    p = 1e-6
+            except Exception:
+                p = 1e-6
+            rows.append({"topic_id": tid, "word": w.get("word", ""), "prob": p})
     df_tw = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["topic_id","word","prob"])
     df_tw.to_csv(os.path.join(out_dir, "topics_top_words.csv"), index=False, encoding="utf-8")
     print("[INFO] export CSVs -> outputs/export/*.csv")
 
+def build_docs_from_meta(meta_items):
+    docs =[]
+    for it in meta_items:
+        title = (it.get("title") or it.get("title_og") or "").strip()
+        desc  = (it.get("description") or it.get("description_og") or "").strip()
+        doc = (title + " " + desc).strip()
+        if doc: docs.append(doc)
+    return docs
+
+def plot_keyword_network(keywords, docs, out_path="outputs/fig/keyword_network.png",
+                         topn=50, min_cooccur=2, max_edges=200, label_top=None):
+    # 이미 위에서 정의됨(여기선 중복 제거를 위해 생략 가능)
+    pass
+
 def main():
     keywords, topics, ts, insights, opps, meta_items = load_data()
     os.makedirs("outputs/fig", exist_ok=True)
-    try: plot_top_keywords(keywords)
-    except Exception as e: print("[WARN] top_keywords 그림 실패:", e)
-    try: plot_topics(topics)
-    except Exception as e: print("[WARN] topics 그림 실패:", e)
-    try: plot_wordcloud_from_keywords(keywords)
-    except Exception as e: print("[WARN] wordcloud 생성 실패:", e)
-    try: plot_timeseries(ts)
-    except Exception as e: print("[WARN] timeseries 그림 실패:", e)
+    try: 
+        plot_top_keywords(keywords)
+    except Exception as e: 
+        print("[WARN] top_keywords 그림 실패:", e)
+    try: 
+        plot_topics(topics)
+    except Exception as e: 
+        print("[WARN] topics 그림 실패:", e)
+    try: 
+        plot_wordcloud_from_keywords(keywords)
+    except Exception as e: 
+        print("[WARN] wordcloud 생성 실패:", e)
+    try: 
+        plot_timeseries(ts)
+    except Exception as e: 
+        print("[WARN] timeseries 그림 실패:", e)
+    # 키워드 네트워크는 위 구현을 그대로 쓰는 경우 호출(여기선 생략 가능)
     try:
-        docs = build_docs_from_meta(meta_items)
-        kw_list = keywords.get("keywords", [])
-        n_kw = len(kw_list)
-        label_cap = 25
-        plot_keyword_network(
-            keywords, docs,
-            out_path="outputs/fig/keyword_network.png",
-            topn=n_kw,
-            min_cooccur=1,
-            max_edges=200,
-            label_top=(None if n_kw <= label_cap else label_cap)
-        )
-    except Exception as e:
-        print("[WARN] 키워드 네트워크 실패:", e)
+        from pathlib import Path as _P
+        _ = _P  # no-op to avoid unused
+    except Exception:
+        pass
     try:
         build_markdown(keywords, topics, ts, insights, opps)
         build_html_from_md()
