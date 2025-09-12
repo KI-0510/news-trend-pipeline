@@ -367,6 +367,8 @@ jobs:
           cp outputs/report.html             "${OUTDIR}/" || true
           cp outputs/run_meta_b.json "${OUTDIR}/" || true
           cp outputs/run_meta_c.json "${OUTDIR}/" || true
+          cp outputs/outputs/run_meta_c.json "${OUTDIR}/" || true
+          
           
           if [ -d outputs/export ]; then
             cp -r outputs/export/*           "${OUTDIR}/export/" || true
