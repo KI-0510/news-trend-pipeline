@@ -122,46 +122,44 @@ def plot_top_keywords(keywords, out_path="outputs/fig/top_keywords.png", topn=15
     plt.tight_layout(); plt.savefig(out_path, dpi=150); plt.close()
 
 def plot_topics(topics, out_path="outputs/fig/topics.png", topn_words=6):
-    import os
-    import math
+    import os, math
     import matplotlib.pyplot as plt
     import seaborn as sns
-    ensure_fonts()
-    apply_plot_style()
+    ensure_fonts(); apply_plot_style()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     tps = topics.get("topics", [])
     if not tps:
-        plt.figure(figsize=(8,5))
-        plt.text(0.5,0.5,"토픽 데이터 없음", ha="center")
-        plt.axis("off")
-        plt.savefig(out_path, dpi=150, bbox_inches="tight")
-        plt.close()
-        return
+        plt.figure(figsize=(8,5)); plt.text(0.5,0.5,"토픽 데이터 없음", ha="center")
+        plt.axis("off"); plt.savefig(out_path, dpi=150, bbox_inches="tight"); plt.close(); return
 
-    k = len(tps)
-    cols = 2
-    rows = math.ceil(k / cols)
+    k = len(tps); cols = 2; rows = math.ceil(k / cols)
     fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
     axes = axes.flatten() if k > 1 else [axes]
 
     for i, t in enumerate(tps):
         ax = axes[i]
-        words = t.get("top_words", [])[:topn_words]
-        labels = [w["word"] for w in words][::-1]
-        probs = [w["prob"] for w in words][::-1]
+        words = (t.get("top_words") or [])[:topn_words]
+        labels = [str((w.get("word") or "")) for w in words][::-1]
+        probs = []
+        for w in words[::-1]:
+            pw = w.get("prob", 1.0)
+            try:
+                p = float(pw)
+                if p <= 0:
+                    p = 1.0
+            except Exception:
+                p = 1.0
+            probs.append(p)
+        # 보기용 스케일(원하면 주석 해제)
+        # probs = [p*100.0 for p in probs]
         sns.barplot(x=probs, y=labels, ax=ax, color="#10b981")
         ax.set_title(f"Topic #{t.get('topic_id')}")
-        ax.set_xlabel("Prob.")
-        ax.set_ylabel("")
-
+        ax.set_xlabel("Weight"); ax.set_ylabel("")
     for j in range(i + 1, len(axes)):
         axes[j].axis("off")
-
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
-    plt.close()
-
+    plt.tight_layout(); plt.savefig(out_path, dpi=150); plt.close()
+    
 
 def plot_timeseries(ts, out_path="outputs/fig/timeseries.png"):
     import matplotlib.pyplot as plt
