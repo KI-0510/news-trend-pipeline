@@ -143,7 +143,6 @@ KO_FUNC = {
     "기자","대표","회장","주요","기준","위해","위한","지원","전략","정책","협력","확대",
     "말했다","강조했다","대상","대상으로","최근","지난해","생활","시장","스마트","디지털","글로벌",
     "그는","그녀는","이어","한편","또한","이날","이라며","이라고","모델을","성과를","받았다","서울","기반으로",
-    # 보강
     "있는","있으며","있다는","이후","설명했다","전했다","계획이다","관계자는","따르면",
     "올해","내년","최대","신규","기존","국제","국내","세계","오전","오후"
 }
@@ -151,18 +150,53 @@ KO_FUNC = {
 def is_bad_token(base: str) -> bool:
     if base in KO_FUNC or base.lower() in EN_STOP: return True
     if re.fullmatch(r"\d+$", base): return True
-    if re.fullmatch(r"\d{1,2}$", base): return True       # 17 같은 순수 숫자 컷
-    if re.fullmatch(r"\d{1,2}월$", base): return True     # 8월 등
+    if re.fullmatch(r"\d{1,2}$", base): return True
+    if re.fullmatch(r"\d{1,2}월$", base): return True
     if re.fullmatch(r"\d{1,2}일$", base): return True
     if re.search(r"(억|조|달러|원)$", base): return True
     return False
 
-# ================= Lite 토픽(LDA) — prob 포함/안정화 =================
+# ================= 내부 헬퍼: prob 세이프가드 =================
+def _ensure_prob_payload(obj: dict, topn: int = 10, decay: float = 0.95, floor: float = 0.2) -> dict:
+    """
+    - 저장 직전에 호출하여 모든 토픽 단어에 prob를 강제 주입.
+    - 문자열 리스트면 dict 리스트로 변환 후 주입.
+    - 이미 prob가 있더라도 0/음수/NaN은 최소값 보정.
+    """
+    topics = obj.get("topics") or []
+    for t in topics:
+        ws = t.get("top_words") or []
+        # 문자열 리스트 → dict 변환
+        if ws and isinstance(ws[0], str):
+            ws = [{"word": w} for w in ws if w]
+            t["top_words"] = ws
+        # 주입/보정
+        if not ws:
+            continue
+        all_have = all((isinstance(w, dict) and ("prob" in w)) for w in ws)
+        if all_have:
+            for w in ws:
+                try:
+                    p = float(w.get("prob", 0))
+                    if not (p > 0):
+                        w["prob"] = 1e-6
+                except Exception:
+                    w["prob"] = 1e-6
+        else:
+            for rank, w in enumerate(ws[:topn], start=0):
+                if not isinstance(w, dict):
+                    continue
+                prob = max(floor, decay ** rank)
+                w["prob"] = float(prob)
+    return obj
+
+# ================= Lite 토픽(LDA) — prob 포함 =================
 def build_topics_lite(docs: List[str],
                       k_candidates=(7,8,9,10,11),
                       max_features=8000,
                       min_df=6,
                       topn=10) -> Dict[str, Any]:
+    print("[DEBUG][C] LITE builder 진입")
     if not docs:
         return {"topics": []}
     vec = CountVectorizer(
@@ -205,6 +239,7 @@ def build_topics_lite(docs: List[str],
 
     topics_obj = {"topics": []}
     if not best_topics:
+        print("[DEBUG][C] LITE 생성 완료 | topics=0")
         return topics_obj
 
     for tid, pairs in best_topics:
@@ -231,10 +266,12 @@ def build_topics_lite(docs: List[str],
                 payload.append({"word": w, "prob": prob})
 
         topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
+    print(f"[DEBUG][C] LITE 생성 완료 | topics={len(topics_obj.get('topics', []))}")
     return topics_obj
 
-
+# ================= Pro 토픽(BERTopic) — prob 포함 =================
 def pro_build_topics_bertopic(docs, topn=10):
+    print("[DEBUG][C] PRO builder 진입")
     try:
         from bertopic import BERTopic
         from bertopic.representation import KeyBERTInspired
@@ -245,6 +282,7 @@ def pro_build_topics_bertopic(docs, topn=10):
         raise RuntimeError(f"Pro 토픽 모드 준비 실패(패키지 없음): {e}")
 
     if not docs:
+        print("[DEBUG][C] PRO 생성 완료 | topics=0 (docs empty)")
         return {"topics": []}
 
     emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
@@ -310,9 +348,11 @@ def pro_build_topics_bertopic(docs, topn=10):
                     payload.append({"word": w, "prob": prob})
 
             topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
+        print(f"[DEBUG][C] PRO 생성 완료 | topics={len(topics_obj.get('topics', []))}")
         return topics_obj
 
     except Exception:
+        # 폴백: get_topics 사용(여기도 prob 보장)
         topic_info = model.get_topics()
         for tid, items in topic_info.items():
             if tid == -1:
@@ -339,9 +379,8 @@ def pro_build_topics_bertopic(docs, topn=10):
                     prob = max(0.2, decay**rank)
                     payload.append({"word": w, "prob": prob})
             topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
+        print(f"[DEBUG][C] PRO 생성 완료(폴백) | topics={len(topics_obj.get('topics', []))}")
         return topics_obj
-        
-        
 
 # ================= 인사이트 요약 =================
 def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
@@ -497,7 +536,7 @@ def main():
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 토픽
+    # 토픽(경로 로그 포함)
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
@@ -507,7 +546,15 @@ def main():
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
         topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
 
-    # prob 필드가 포함된 구조로 저장
+    # 저장 직전 prob 강제 주입 + 샘플 로그
+    topics_obj = _ensure_prob_payload(topics_obj, topn=10, decay=0.95, floor=0.2)
+    try:
+        ex = (topics_obj.get("topics") or [])[0]
+        exw = (ex.get("top_words") or [])[0] if isinstance(ex, dict) else {}
+        print("[DEBUG][C] ensure_prob sample:", exw)
+    except Exception:
+        pass
+
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
