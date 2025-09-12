@@ -142,36 +142,45 @@ KO_FUNC = {
     "하다","있다","되다","통해","이번","대한","것으로","밝혔다","다양한","함께","현재",
     "기자","대표","회장","주요","기준","위해","위한","지원","전략","정책","협력","확대",
     "말했다","강조했다","대상","대상으로","최근","지난해","생활","시장","스마트","디지털","글로벌",
-    "그는","그녀는","이어","한편","또한","이날","이라며","이라고","모델을","성과를","받았다","서울","기반으로"
+    "그는","그녀는","이어","한편","또한","이날","이라며","이라고","모델을","성과를","받았다","서울","기반으로",
+    # 보강
+    "있는","있으며","있다는","이후","설명했다","전했다","계획이다","관계자는","따르면",
+    "올해","내년","최대","신규","기존","국제","국내","세계","오전","오후"
 }
+
 def is_bad_token(base: str) -> bool:
     if base in KO_FUNC or base.lower() in EN_STOP: return True
     if re.fullmatch(r"\d+$", base): return True
+    if re.fullmatch(r"\d{1,2}$", base): return True       # 17 같은 순수 숫자 컷
+    if re.fullmatch(r"\d{1,2}월$", base): return True     # 8월 등
     if re.fullmatch(r"\d{1,2}일$", base): return True
     if re.search(r"(억|조|달러|원)$", base): return True
     return False
 
-# ================= Lite 토픽(LDA) — prob 포함 =================
+# ================= Lite 토픽(LDA) — prob 포함/안정화 =================
 def build_topics_lite(docs: List[str],
                       k_candidates=(7,8,9,10,11),
                       max_features=8000,
                       min_df=6,
                       topn=10) -> Dict[str, Any]:
     if not docs: return {"topics": []}
-    vec = CountVectorizer(ngram_range=(1,2),
-                          max_features=max_features,
-                          min_df=min_df,
-                          token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
-                          stop_words=list(EN_STOP))
+    vec = CountVectorizer(
+        ngram_range=(1,2),
+        max_features=max_features,
+        min_df=min_df,
+        token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
+        stop_words=list(set(EN_STOP) | set(KO_FUNC))  # 강화
+    )
     X = vec.fit_transform(docs)
     vocab = vec.get_feature_names_out()
-    if X.shape[1] == 0: return {"topics": []}
+    if X.shape[1] == 0:
+        return {"topics": []}
 
     def topic_pairs(lda, n_top=topn):
         comps = lda.components_
         topics = []
         for tid, comp in enumerate(comps):
-            idx = comp.argsort()[-n_top:][::-1]
+            idx = comp.argsort()[-max(n_top, 30):][::-1]  # 후보폭 확대
             pairs = [(vocab[i], float(comp[i])) for i in idx]
             topics.append((tid, pairs))
         return topics
@@ -180,13 +189,10 @@ def build_topics_lite(docs: List[str],
         bad = 0
         for w, _s in pairs:
             base = w.split()[0] if " " in w else w
-            if is_bad_token(base):
-                bad += 1
+            if is_bad_token(base): bad += 1
         return bad / max(1, len(pairs))
 
-    best_topics = None
-    best_score = -1.0
-
+    best_topics = None; best_score = -1.0
     for k in k_candidates:
         lda = LatentDirichletAllocation(n_components=k, learning_method="batch", random_state=42, max_iter=15)
         _ = lda.fit_transform(X)
@@ -194,34 +200,48 @@ def build_topics_lite(docs: List[str],
         good = sum(1 for _, pairs in ts if bad_ratio_from_pairs(pairs) < 0.20)
         score = good / float(k)
         if score > best_score:
-            best_score = score
-            best_topics = ts
+            best_score = score; best_topics = ts
 
     topics_obj = {"topics": []}
     if not best_topics:
         return topics_obj
 
     for tid, pairs in best_topics:
-        maxv = max((s for _, s in pairs), default=0.0) or 1.0
-        filtered = []
+        # 필터
+        kept = []
         for w, s in pairs:
             base = w.split()[0] if " " in w else w
-            if is_bad_token(base):
+            if is_bad_token(base): 
                 continue
-            prob = float(s) / maxv
-            filtered.append({"word": w, "prob": prob})
-        if not filtered:
-            filtered = [{"word": w, "prob": (float(s)/maxv)} for w, s in pairs]
-        topics_obj["topics"].append({"topic_id": int(tid), "top_words": filtered[:topn]})
+            kept.append((w, s))
+        if not kept:
+            kept = pairs[:]
+
+        # 정규화: max + 평탄 시 순위감쇠
+        scores = [max(float(s or 0.0), 0.0) for _, s in kept]
+        maxv = max(scores) if scores else 0.0
+        payload = []
+        if maxv > 0 and (max(scores) - min(scores)) > 1e-12:
+            for (w, s) in kept[:topn]:
+                prob = max(float(s or 0.0), 0.0) / maxv
+                payload.append({"word": w, "prob": prob})
+        else:
+            decay = 0.95
+            for rank, (w, _s) in enumerate(kept[:topn], start=0):
+                prob = max(0.2, decay**rank)  # 하한 0.2
+                payload.append({"word": w, "prob": prob})
+
+        topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
     return topics_obj
 
-# ================= Pro 토픽(BERTopic) — prob 포함 =================
+# ================= Pro 토픽(BERTopic) — prob 포함/안정화 =================
 def pro_build_topics_bertopic(docs, topn=10):
     try:
         from bertopic import BERTopic
         from bertopic.representation import KeyBERTInspired
         from sentence_transformers import SentenceTransformer
         from sklearn.feature_extraction.text import CountVectorizer
+        import numpy as np
     except Exception as e:
         raise RuntimeError(f"Pro 토픽 모드 준비 실패(패키지 없음): {e}")
 
@@ -236,47 +256,97 @@ def pro_build_topics_bertopic(docs, topn=10):
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(custom_stop)
     )
-    rep = KeyBERTInspired(top_n_words=12, mmr=True, diversity=0.7)
+    rep = KeyBERTInspired(top_n_words=15, mmr=True, diversity=0.75)
 
     model = BERTopic(
         embedding_model=emb,
         vectorizer_model=vectorizer_model,
         representation_model=rep,
-        min_topic_size=12,
+        min_topic_size=15,
         nr_topics=None,
         calculate_probabilities=False,
         verbose=False
     )
     topics, probs = model.fit_transform(docs)
 
+    # 아웃라이어/병합 강도 살짝 상향
     try:
-        model.reduce_outliers(docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.05)
+        model.reduce_outliers(docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.08)
     except Exception:
         pass
     try:
-        model.merge_topics(docs, topics, threshold=0.85)
+        model.merge_topics(docs, topics, threshold=0.88)
     except Exception:
         pass
 
-    topic_info = model.get_topics()
+    # c-TF-IDF 점수 직접 사용(정규화/순위감쇠)
+    try:
+        ctfidf = model.c_tf_idf_
+        terms = model.vectorizer_model.get_feature_names_out()
+        topics_obj = {"topics": []}
 
-    topics_obj = {"topics": []}
-    for tid, items in topic_info.items():
-        if tid == -1:
-            continue
-        head = items[:max(12, topn)]
-        maxv = max((float(s) for _, s in head), default=0.0) or 1.0
-        filtered = []
-        for w, s in head:
-            base = w.split()[0] if " " in w else w
-            if is_bad_token(base):
+        for tid in sorted(set(topics)):
+            if tid == -1:
                 continue
-            prob = float(s) / maxv
-            filtered.append({"word": w, "prob": prob})
-        if not filtered:
-            filtered = [{"word": w, "prob": (float(s)/maxv)} for w, s in head]
-        topics_obj["topics"].append({"topic_id": int(tid), "top_words": filtered[:topn]})
-    return topics_obj
+            vec = ctfidf[tid].toarray().ravel()
+            idx = vec.argsort()[::-1][:max(40, topn)]  # 후보폭 확대
+            pairs = [(terms[i], float(vec[i])) for i in idx]
+
+            kept = []
+            for w, s in pairs:
+                base = w.split()[0] if " " in w else w
+                if is_bad_token(base):
+                    continue
+                kept.append((w, s))
+            if not kept:
+                kept = pairs[:]
+
+            scores = [max(float(s or 0.0), 0.0) for _, s in kept]
+            maxv = max(scores) if scores else 0.0
+            payload = []
+            if maxv > 0 and (max(scores) - min(scores)) > 1e-12:
+                for (w, s) in kept[:topn]:
+                    prob = max(float(s or 0.0), 0.0) / maxv
+                    payload.append({"word": w, "prob": prob})
+            else:
+                decay = 0.95
+                for rank, (w, _s) in enumerate(kept[:topn], start=0):
+                    prob = max(0.2, decay**rank)
+                    payload.append({"word": w, "prob": prob})
+
+            topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
+        return topics_obj
+
+    except Exception:
+        # 폴백: get_topics() 사용
+        topic_info = model.get_topics()
+        topics_obj = {"topics": []}
+        for tid, items in topic_info.items():
+            if tid == -1:
+                continue
+            head = items[:max(40, topn)]
+            kept = []
+            for w, s in head:
+                base = w.split()[0] if " " in w else w
+                if is_bad_token(base):
+                    continue
+                kept.append((w, float(s or 0.0)))
+            if not kept:
+                kept = [(w, float(s or 0.0)) for w, s in head]
+            scores = [max(float(s or 0.0), 0.0) for _, s in kept]
+            maxv = max(scores) if scores else 0.0
+            payload = []
+            if maxv > 0 and (max(scores) - min(scores)) > 1e-12:
+                for (w, s) in kept[:topn]:
+                    prob = max(float(s or 0.0), 0.0) / maxv
+                    payload.append({"word": w, "prob": prob})
+            else:
+                decay = 0.95
+                for rank, (w, _s) in enumerate(kept[:topn], start=0):
+                    prob = max(0.2, decay**rank)
+                    payload.append({"word": w, "prob": prob})
+            topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
+        return topics_obj
 
 # ================= 인사이트 요약 =================
 def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
@@ -303,8 +373,10 @@ def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         gmodel = genai.GenerativeModel(model or "gemini-1.5-flash")
-        resp = gmodel.generate_content(prompt,
-            generation_config={"max_output_tokens": max_tokens or 2048, "temperature": temperature if temperature is not None else 0.3, "top_p": 0.9})
+        resp = gmodel.generate_content(
+            prompt,
+            generation_config={"max_output_tokens": max_tokens or 2048, "temperature": temperature if temperature is not None else 0.3, "top_p": 0.9}
+        )
         text = (getattr(resp, "text", None) or "").strip()
         if not text: raise RuntimeError("빈 응답")
         if not re.search(r"[\.!?]$|[다요]$", text):
@@ -315,7 +387,8 @@ def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
                 )
                 add = (getattr(resp2, "text", None) or "").strip()
                 if add: text = (text + " " + add).strip()
-            except Exception: pass
+            except Exception:
+                pass
         return text
     except Exception as e:
         return f"(요약 생성 실패: {e}) 최근 흐름과 상위 토픽 기준으로 우선 과제를 정리하세요."
@@ -424,10 +497,12 @@ def main():
     docs = (docs_today or []) + (wh_docs or [])
     dates = (dates_today or []) + (wh_dates or [])
 
+    # 시계열
     ts_obj = timeseries_by_date(dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
+    # 토픽
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
@@ -437,9 +512,11 @@ def main():
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
         topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
 
+    # prob 필드가 포함된 구조로 저장
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
+    # 인사이트
     api_key = os.getenv("GEMINI_API_KEY", "")
     model_name = str(LLM.get("model", "gemini-1.5-flash"))
     summary = gemini_insight(
@@ -450,6 +527,7 @@ def main():
         temperature=float(LLM.get("temperature", 0.3)),
     )
 
+    # 리포트용 간단 토픽 목록
     top_topics = []
     for t in topics_obj.get("topics", []):
         words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
@@ -460,6 +538,7 @@ def main():
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
+    # 강/약 신호 저장
     try:
         with open("outputs/keywords.json","r",encoding="utf-8") as f:
             keywords_obj = json.load(f)
@@ -467,6 +546,7 @@ def main():
         keywords_obj = {"keywords":[]}
     export_trend_and_weak_signals(docs, dates, keywords_obj)
 
+    # 실행 메타
     import datetime
     meta = {"module": "C", "mode": "PRO" if use_pro_mode() else "LITE", "time_utc": datetime.datetime.utcnow().isoformat() + "Z"}
     with open("outputs/run_meta_c.json", "w", encoding="utf-8") as f:

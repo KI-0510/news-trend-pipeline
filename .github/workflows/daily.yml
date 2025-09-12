@@ -128,7 +128,7 @@ jobs:
 
       # Warehouse Commit & Push
       - name: Commit & Push Warehouse (main only)
-        if: github.ref_name == 'main'
+        # if: github.ref_name == 'main'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -381,7 +381,7 @@ jobs:
 
       # outputs 커밋/푸시
       - name: Commit & Push outputs (main only)
-        if: github.ref_name == 'main'
+        # if: github.ref_name == 'main'
         shell: bash
         run: |
           set -e
