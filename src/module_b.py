@@ -73,7 +73,7 @@ def load_config():
         with open("config.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 6}
+        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 6, "domain_hints": []}
 
 def clean_text(t: str) -> str:
     if not t: return ""
@@ -129,6 +129,7 @@ DICT_DIR = "data/dictionaries"
 STOP_CFG = set([norm_kw_light(x) for x in (CFG.get("stopwords") or [])])
 STOP_EXT = set([norm_kw_light(x) for x in _load_lines(os.path.join(DICT_DIR, "stopwords_ext.txt"))])
 PHRASE_STOP = set([norm_kw_light(x) for x in _load_lines(os.path.join(DICT_DIR, "phrase_stopwords.txt"))])
+
 STOPWORDS = set(x for x in (STOP_CFG | STOP_EXT | PHRASE_STOP) if x)
 
 EN_STOP = {
@@ -138,18 +139,31 @@ EN_STOP = {
 }
 STOPWORDS |= set(EN_STOP)
 
-# 보도문/형식어 추가 컷(항상 보강 가능)
+# 보도문/형식어 추가 컷
 MORE_STOP = {
     "이날","11","11일","이라고","이라며","대비","가장","특히","세계","지난","따르면","모든","적극",
     "디스","프로","기술","미래","혁신","글로벌","전문","모델을","성과를","받았다","밝혔다","강조했다",
-    "국내","대한민국","서울","있는","새로운","여러","플랫폼","사업","핵심"
+    "국내","대한민국","서울","있는","새로운","여러","플랫폼","사업","핵심",
+    "개발","제조","제품","투자","제작","전자","차세대","있으며",
+    "그리고","그러나","또한","따라서","이와같이","수준","사례","발표","공개","소식","진행"
 }
 STOPWORDS |= set([norm_kw_light(x) for x in MORE_STOP])
 
 CURRENCY_PAT = re.compile(r"^[0-9,\.]+(원|달러|유로|엔|위안|억원|조원)$")
-DATE_PAT = re.compile(r"^\d{1,2}일$|^\d{4}년$|^\d{4}$")
+DATE_PAT = re.compile(r"^\d{1,2}일$|^\d{1,2}월$|^\d{4}년$|^\d{4}$")
 NUMERIC_ONLY = re.compile(r"^\d+$")
 BROKEN_KO = re.compile(r"^[ㄱ-ㅎㅏ-ㅣ]+$")
+
+# 오타/표기 교정 맵(가벼운 룰)
+FIX_MAP = {
+    "디스플레": "디스플레이",
+    "oled": "OLED",
+    "loT": "IoT",
+    "올레도스": "OLEDoS",
+    "레도스": "LEDoS",
+}
+def apply_fix_map(w: str) -> str:
+    return FIX_MAP.get(w, w)
 
 def is_meaningful_token(tok: str) -> bool:
     if not tok: return False
@@ -177,6 +191,7 @@ def extract_keywords_krwordrank(docs, topk=30):
         w_norm = normalize_keyword(w)
         w_norm = strip_korean_particle(w_norm)
         w_norm = strip_verb_ending(w_norm)
+        w_norm = apply_fix_map(w_norm)
         if not is_meaningful_token(w_norm): continue
         results.append({"keyword": w_norm, "score": float(score)})
     return results
@@ -196,9 +211,7 @@ def pro_extract_keywords_keybert(docs, topk=50):
     model = SentenceTransformer("jhgan/ko-sroberta-multitask")
     kb = KeyBERT(model=model)
 
-    # 너무 많을 때 과부하 방지 샘플링
     sample_docs = docs[:2000]
-    # 한 덩어리로 뽑은 뒤 후처리로 정리
     joined = [" ".join(sample_docs)]
 
     pairs = kb.extract_keywords(
@@ -208,14 +221,15 @@ def pro_extract_keywords_keybert(docs, topk=50):
         use_mmr=True,
         diversity=0.8,                    # 다양성↑
         use_maxsum=True,                  # 후보군 넓히기
-        nr_candidates=max(topk*8, 300),
-        top_n=max(150, topk*3)
+        nr_candidates=max(topk*12, 400),  # 확대
+        top_n=max(200, topk*4)            # 확대
     )
     out = []
     for p, s in pairs:
         p = (p or "").strip()
         if not p:
             continue
+        p = apply_fix_map(p)
         out.append({"keyword": p, "score": float(s)})
     return out
 
@@ -231,24 +245,49 @@ def top_bigrams_by_tfidf(docs, topn=70, min_df=6):
     pairs.sort(key=lambda x: x[1], reverse=True)
     out = []
     for t, _ in pairs[:topn]:
+        t = apply_fix_map(t)
         if not is_meaningful_token(t): continue
         out.append(t)
     return out
 
 def postprocess_keywords(docs, keywords, min_docfreq=6):
+    # min_docfreq 자동 튜닝
+    num_docs = len(docs)
+    if num_docs < 40: min_docfreq = max(3, min_docfreq // 2)  # 3
+    elif num_docs < 100: min_docfreq = max(5, min_docfreq - 1)  # 5
+    else: min_docfreq = max(7, min_docfreq)  # 7+
+
     df = defaultdict(int)
     for d in docs:
         tokens = set(re.findall(r"[가-힣]+|[A-Za-z0-9_]+", d))
         for t in tokens: df[t] += 1
+
+    # 유사어 통합(간단): 영문/한글 표기 통합 후보 반영
+    alias = {
+        "oled": "oled",
+        "올레드": "oled",
+        "microled": "microled",
+        "마이크로led": "microled",
+        "ij": "ij",
+        "inkjet": "inkjet",
+    }
+
+    def unify_alias(w: str) -> str:
+        wl = norm_kw_light(w)
+        return alias.get(wl, w)
+
     merged = {}
     for k in keywords:
         w = normalize_keyword(k["keyword"])
+        w = apply_fix_map(w)
+        w = unify_alias(w)
         if not is_meaningful_token(w): continue
         exact_df = df.get(w, 0)
         approx_df = max((df[t] for t in df if w in t or t in w), default=0)
         if max(exact_df, approx_df) < min_docfreq: continue
         if w not in merged or merged[w]["score"] < k["score"]:
             merged[w] = {"keyword": w, "score": float(k["score"])}
+
     return sorted(merged.values(), key=lambda x: x["score"], reverse=True)
 
 def load_entities_weight():
@@ -267,7 +306,7 @@ def load_entities_weight():
         pass
     return orgs, prods
 
-def mmr_diversify(candidates, topn=50, diversity=0.6):
+def mmr_diversify(candidates, topn=50, diversity=0.7):
     terms = [c["keyword"] for c in candidates]
     if not terms: return candidates[:topn]
     vec = TfidfVectorizer(analyzer="char", ngram_range=(3,5))
@@ -301,7 +340,8 @@ def main():
     t0 = time.time()
     cfg = CFG
     topk = int(cfg.get("top_n_keywords", 50))
-    min_docfreq = int(cfg.get("min_docfreq", 6))
+    base_min_df = int(cfg.get("min_docfreq", 6))
+    domain_hints = [norm_kw_light(x) for x in (cfg.get("domain_hints") or [])]
 
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
@@ -329,9 +369,14 @@ def main():
         print(f"[WARN] Pro 키워드 실패, Lite로 폴백: {e}")
         base_candidates = extract_keywords_krwordrank(docs, topk=topk)
 
-    # 2) 빅람 보강(+상위 30% 가중)
+    # 2) 빅람 보강(+상위 30% 가중 1.35배, min_df 자동 튜닝)
     try:
-        bigrams = top_bigrams_by_tfidf(docs, topn=70, min_df=min_docfreq)
+        # 문서 수 기반 min_df 조정
+        num_docs = len(docs)
+        if num_docs < 40: md = max(3, base_min_df // 2)
+        elif num_docs < 100: md = max(5, base_min_df - 1)
+        else: md = max(7, base_min_df)
+        bigrams = top_bigrams_by_tfidf(docs, topn=70, min_df=md)
         if bigrams:
             avg_score = (sum(k["score"] for k in base_candidates) / max(1, len(base_candidates))) if base_candidates else 1.0
             seen = {k["keyword"] for k in base_candidates}
@@ -339,28 +384,49 @@ def main():
             for idx, bg in enumerate(bigrams):
                 if not is_meaningful_token(bg): continue
                 if bg in seen: continue
-                score = avg_score * (1.2 if idx < cutoff else 1.0)
+                score = avg_score * (1.35 if idx < cutoff else 1.0)
                 base_candidates.append({"keyword": bg, "score": float(score)})
                 seen.add(bg)
     except Exception:
         pass
 
     # 3) 후처리(불용/숫자/날짜/화폐/깨진 토큰 컷 + 문서빈도)
-    keywords = postprocess_keywords(docs, base_candidates, min_docfreq=min_docfreq)
+    keywords = postprocess_keywords(docs, base_candidates, min_docfreq=base_min_df)
 
-    # 4) 엔터티 가중치 + 일반어 디버프
+    # 4) 엔터티 가중치 + 일반어 디버프 + 인명 디버프 + 도메인 힌트 가중
     orgs, prods = load_entities_weight()
     boosted = []
-    COMMON_DEBUFF = {"스마트","디지털","시장","글로벌","생활","기술","최근","지난해","세계","사업","플랫폼"}
+    COMMON_DEBUFF = {"스마트","디지털","시장","글로벌","생활","기술","최근","지난해","세계","사업","플랫폼","전자","제품","개발","제조","투자","제작","차세대"}
+    ENT_WHITELIST = set()  # 필요 시 화이트리스트 등록
+    domain_hints_set = set(domain_hints)
+
     for k in keywords:
-        kw = k["keyword"]; score = k["score"]
-        if kw in orgs or kw in prods: score *= 1.2
-        if kw in COMMON_DEBUFF: score *= 0.7
-        boosted.append({"keyword": kw, "score": score})
+        kw = k["keyword"]
+        score = k["score"]
+
+        # 엔터티 가중
+        if kw in orgs or kw in prods:
+            score *= 1.35
+
+        # 일반어 디버프
+        if kw in COMMON_DEBUFF:
+            score *= 0.55
+
+        # 인명(간단 패턴) 디버프
+        if re.fullmatch(r"[가-힣]{2,3}$", kw) and kw not in ENT_WHITELIST:
+            score *= 0.8
+
+        # 도메인 힌트 가중(부분 포함)
+        kw_l = norm_kw_light(kw)
+        if any(h in kw_l for h in domain_hints_set):
+            score *= 1.2
+
+        boosted.append({"keyword": kw, "score": float(score)})
+
     boosted.sort(key=lambda x: x["score"], reverse=True)
 
     # 5) MMR 다양화
-    diversified = mmr_diversify(boosted, topn=topk, diversity=0.6)
+    diversified = mmr_diversify(boosted, topn=topk, diversity=0.7)
 
     _vec, _X = build_tfidf(docs)
 
