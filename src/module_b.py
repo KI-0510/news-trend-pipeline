@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
-# Module B - Keywords (Integrated: config.json + data/dictionaries merge,
-# KR-WordRank+TF-IDF base, optional KeyBERT MMR, optional BERTopic topic boost)
+# Module B - Keywords (Integrated & Quality-boosted)
+# - config.json + data/dictionaries 리소스 병합
+# - KR-WordRank + TF-IDF 기반 (라이트), KeyBERT MMR 재랭킹 및 BERTopic 보정(프로)
+# - 숫자/날짜/통화/단위 필터 + 행정지명/인명/일반어 디버프 + 하드 드롭
+# - 값 정렬은 itemgetter(1) 공용 헬퍼로 통일(오타 방지)
 
 import os
 import re
@@ -12,7 +15,7 @@ from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
 
 import numpy as np
-from operator import itemgetter  # 안전한 값 기준 정렬 키 [doc]
+from operator import itemgetter  # 값 정렬 키 [doc]
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +47,7 @@ try:
 except Exception:
     BERTopic, UMAP, HDBSCAN = None, None, None
 
+
 # -------------------------
 # Utilities / IO
 # -------------------------
@@ -69,7 +73,8 @@ def latest_file(pattern: str) -> Optional[str]:
 
 # 공용: dict를 값(value) 기준 내림차순 정렬
 def sort_items_by_value_desc(d: Dict[str, float]):
-    return sorted(d.items(), key=itemgetter(1), reverse=True)  # (key,value) 2-튜플의 인덱스 1이 값 [8][7]
+    return sorted(d.items(), key=itemgetter(1), reverse=True)  # (key,value) 2-튜플의 인덱스 1이 값
+
 
 # -------------------------
 # Build docs from meta
@@ -83,6 +88,7 @@ def build_docs(items: List[dict]) -> List[str]:
         if txt:
             docs.append(txt)
     return docs
+
 
 # -------------------------
 # Normalization / noun-ish cleanup
@@ -114,9 +120,52 @@ def nounish_strip(sentence: str) -> str:
             out.append(t)
     return " ".join(out)
 
-def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str], use_nounish: bool=True) -> List[str]:
+
+# -------------------------
+# Patterns / Locations
+# -------------------------
+def compile_patterns(cfg: dict):
+    rp = cfg.get("regex_patterns", {}) or {}
+    def _comp(key, default):
+        try:
+            return re.compile(rp.get(key, default))
+        except Exception:
+            return re.compile(default)
+    pats = {
+        "NUMERIC_ONLY": _comp("NUMERIC_ONLY", r"^\d+$"),
+        "DATE_PAT": _comp("DATE_PAT", r"^\d{1,2}일$|^\d{1,2}월$|^\d{4}년$|^\d{4}$"),
+        "CURRENCY_PAT": _comp("CURRENCY_PAT", r"^[0-9,\.]+(원|달러|유로|엔|위안|억원|조원)$"),
+        "PERSON_NAME_PAT": _comp("PERSON_NAME_PAT", r"^[가-힣]{2,4}$"),
+        # 숫자+단위(%, 배, 건, 개, 명, 곳, 회, 대, 종, 분기 등)
+        "UNIT_TOKEN_PAT": re.compile(r"^\d+(?:[.,]\d+)?(%|배|건|개|명|곳|회|대|종|분기)$")
+    }
+    return pats
+
+_LOCATION_CORE = {
+    "서울","부산","대구","인천","광주","대전","울산","세종",
+    "경기","경기도","강원","강원도","충북","충남","전북","전남","경북","경남",
+    "제주","제주도","수원","용인","성남","고양","화성","부천","안산","안양","남양주",
+}
+_LOCATION_SUFFIX = {"도","시","군","구","읍","면","동","리"}
+
+def is_location_token(tok: str) -> bool:
+    if not tok: return False
+    if tok in _LOCATION_CORE:
+        return True
+    if len(tok) >= 2 and tok[-1] in _LOCATION_SUFFIX:
+        return True
+    return False
+
+
+# -------------------------
+# Preprocess with strict filters
+# -------------------------
+def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str],
+                    use_nounish: bool=True, patterns: Optional[dict]=None) -> List[str]:
     ps = set(phrase_stop or [])
     sw = set(stopwords or [])
+    P = patterns or {}
+
     out = []
     for d in docs:
         if not d:
@@ -125,13 +174,33 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
         for ph in ps:
             if ph:
                 t = t.replace(ph, " ")
+
         if use_nounish:
             t = nounish_strip(t)
-        toks = [w for w in t.split() if w not in sw]
+
+        toks = []
+        for w in t.split():
+            # 사전 불용어 제거
+            if w in sw:
+                continue
+            # 숫자/날짜/통화/단위 제거
+            if P.get("NUMERIC_ONLY") and P["NUMERIC_ONLY"].match(w):  # 숫자만
+                continue
+            if P.get("DATE_PAT") and P["DATE_PAT"].match(w):          # 날짜/연도
+                continue
+            if P.get("CURRENCY_PAT") and P["CURRENCY_PAT"].match(w):  # 통화
+                continue
+            if P.get("UNIT_TOKEN_PAT") and P["UNIT_TOKEN_PAT"].match(w):  # 숫자+단위
+                continue
+            if len(w) < 2:
+                continue
+            toks.append(w)
+
         t2 = " ".join(toks)
         if t2:
             out.append(t2)
     return out
+
 
 # -------------------------
 # Alias / brand-entity resources
@@ -162,8 +231,9 @@ def load_brand_entity_lists() -> Tuple[set, set]:
     entities = {e.strip() for e in entities if e.strip()}
     return brands, entities
 
+
 # -------------------------
-# Domain weighting
+# Domain weighting with debuffs
 # -------------------------
 def apply_domain_weights(scores: Dict[str, float],
                          domain_hints: List[str],
@@ -171,14 +241,20 @@ def apply_domain_weights(scores: Dict[str, float],
                          alias_map: Dict[str, str],
                          weight_cfg: Dict[str, float],
                          brands: Optional[set]=None,
-                         entities: Optional[set]=None) -> Dict[str, float]:
+                         entities: Optional[set]=None,
+                         patterns: Optional[dict]=None) -> Dict[str, float]:
     if not scores:
         return {}
+    P = patterns or {}
     boosted = {}
     db = float(weight_cfg.get("domain_hint_boost", 1.0))
     cd = float(weight_cfg.get("common_debuff", 1.0))
     entity_boost = float(weight_cfg.get("entity_boost", 1.35))
-    brand_boost = float(weight_cfg.get("brand_boost", 1.2))
+    brand_boost  = float(weight_cfg.get("brand_boost", 1.2))
+    person_debuf = float(weight_cfg.get("person_name_debuff", 0.8))
+    loc_debuf    = float(weight_cfg.get("location_debuff", 0.6))
+    num_debuf    = float(weight_cfg.get("number_debuff", 0.5))
+
     dh = set(domain_hints or [])
     cm = set(common_debuff or [])
     brands = brands or set()
@@ -187,16 +263,38 @@ def apply_domain_weights(scores: Dict[str, float],
     for k, v in scores.items():
         k2 = normalize_alias(k, alias_map)
         s = v
+
         if any(h.lower() in k2.lower() for h in dh):
             s *= db
         if k2 in cm or any(c.lower() == k2.lower() for c in cm):
             s *= cd
+
         if k2 in entities:
             s *= entity_boost
         if k2 in brands:
             s *= brand_boost
+
+        # 인명(2~4자 한글) 약화(엔티티 제외)
+        if P.get("PERSON_NAME_PAT") and P["PERSON_NAME_PAT"].fullmatch(k2):
+            if k2 not in entities and k2 not in brands:
+                s *= person_debuf
+
+        # 행정지명 약화
+        if is_location_token(k2):
+            s *= loc_debuf
+
+        # 숫자/날짜/통화/단위 토큰 약화(전처리 누락 대비)
+        if (P.get("NUMERIC_ONLY") and P["NUMERIC_ONLY"].match(k2)) \
+           or (P.get("DATE_PAT") and P["DATE_PAT"].match(k2)) \
+           or (P.get("CURRENCY_PAT") and P["CURRENCY_PAT"].match(k2)) \
+           or (P.get("UNIT_TOKEN_PAT") and P["UNIT_TOKEN_PAT"].match(k2)):
+            s *= num_debuf
+
+        if s <= 0:
+            continue
         boosted[k2] = max(boosted.get(k2, 0.0), s)
     return boosted
+
 
 # -------------------------
 # Stats / autotune
@@ -212,6 +310,7 @@ def autotune_kr(n_docs: int, avg_len: float, min_count_base: int=3) -> Tuple[int
     max_len = 12 if avg_len < 400 else 15
     return mc, max_len
 
+
 # -------------------------
 # KR-WordRank + TF-IDF (Light)
 # -------------------------
@@ -226,7 +325,7 @@ def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20, min_
         if max_length is None: max_length = ml
     extractor = KRWordRank(min_count=min_count, max_length=max_length, verbose=False)
     keywords, rank, _ = extractor.extract(docs, beta=beta, max_iter=max_iter)
-    sorted_items = sort_items_by_value_desc(keywords)  # 값 기준 정렬 고정 [8][7]
+    sorted_items = sort_items_by_value_desc(keywords)  # 값 기준 정렬
     return dict(sorted_items[: max(1, int(topk or 1))])
 
 def tfidf_weights(docs: List[str], vocab: List[str]) -> Dict[str, float]:
@@ -253,7 +352,7 @@ def hybrid_rank(docs: List[str], beta: float=0.85, max_iter: int=20, topk: int=2
     kr_n = norm(kr)
     idf_n = norm(idf)
     blended = {k: w_kr*kr_n.get(k,0.0) + w_tfidf*idf_n.get(k,0.0) for k in vocab}
-    sorted_items = sort_items_by_value_desc(blended)  # 값 기준 정렬 고정 [8][7]
+    sorted_items = sort_items_by_value_desc(blended)  # 값 기준 정렬
     return dict(sorted_items[: max(1, int(topk or 1))])
 
 def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
@@ -264,8 +363,9 @@ def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
     terms = vec.get_feature_names_out()
     avg = np.asarray(X.mean(axis=0)).ravel()
     pairs = list(zip(terms, avg))
-    pairs.sort(key=itemgetter(1), reverse=True)  # 값 기준 정렬 [8][7]
+    pairs.sort(key=itemgetter(1), reverse=True)  # 값 기준 정렬
     return dict(pairs[: max(1, int(topk or 1))])
+
 
 # -------------------------
 # KeyBERT MMR reranking (Pro)
@@ -290,6 +390,7 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
     except Exception:
         return {}
 
+
 # -------------------------
 # BERTopic topic context (optional)
 # -------------------------
@@ -313,6 +414,7 @@ def topic_context_keywords(docs: List[str], model_name: str, umap_neighbors: int
         return out
     except Exception:
         return {}
+
 
 # -------------------------
 # Main
@@ -343,6 +445,9 @@ def main():
 
     brands, entities = load_brand_entity_lists()
 
+    # Patterns
+    patterns = compile_patterns(cfg)
+
     topn_keywords = int(cfg.get("top_n_keywords", 50))
     use_pro = os.environ.get("USE_PRO", "").lower() in ("1","true","yes","y") or bool(cfg.get("use_pro", False))
 
@@ -356,7 +461,9 @@ def main():
     if not raw_docs:
         raise SystemExit("no documents")
 
-    pre_docs = preprocess_docs(raw_docs, phrase_stop=phrase_stop, stopwords=stopwords, use_nounish=True)
+    # Preprocess with strict filters
+    pre_docs = preprocess_docs(raw_docs, phrase_stop=phrase_stop, stopwords=stopwords,
+                               use_nounish=True, patterns=patterns)
     if not pre_docs:
         raise SystemExit("no valid docs after preprocessing")
 
@@ -420,7 +527,7 @@ def main():
             if k in topic_set:
                 combined[k] *= 1.05
 
-    # Domain/alias/brand/entity weights
+    # Domain/alias/brand/entity weights + debuffs
     combined = apply_domain_weights(
         combined,
         domain_hints=cfg.get("domain_hints", []),
@@ -428,11 +535,20 @@ def main():
         alias_map=alias_map,
         weight_cfg=weights,
         brands=brands,
-        entities=entities
+        entities=entities,
+        patterns=patterns
     )
 
+    # Hard drop: 숫자/날짜/통화/단위 최종 제거
+    def _hard_drop(tok: str) -> bool:
+        return (patterns["NUMERIC_ONLY"].match(tok)
+                or patterns["DATE_PAT"].match(tok)
+                or patterns["CURRENCY_PAT"].match(tok)
+                or patterns["UNIT_TOKEN_PAT"].match(tok))
+    combined = {k: v for k, v in combined.items() if not _hard_drop(k)}
+
     # Output
-    top_items = sort_items_by_value_desc(combined)[: topn_keywords]  # 값 기준 정렬 일관 적용 [8][7]
+    top_items = sort_items_by_value_desc(combined)[: topn_keywords]
 
     os.makedirs("outputs", exist_ok=True)
     with open("outputs/keywords.json", "w", encoding="utf-8") as f:
@@ -449,4 +565,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
