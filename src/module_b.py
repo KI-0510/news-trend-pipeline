@@ -68,12 +68,31 @@ def latest(globpat: str):
     files = sorted(glob.glob(globpat))
     return files[-1] if files else None
 
+# ================= 설정 로드 =================
 def load_config():
     try:
         with open("config.json", "r", encoding="utf-8") as f:
-            return json.load(f)
+            cfg = json.load(f) or {}
     except FileNotFoundError:
-        return {"top_n_keywords": 50, "stopwords": [], "dedup_threshold": 0.90, "min_docfreq": 6, "domain_hints": []}
+        cfg = {}
+    # 기본값 보강
+    cfg.setdefault("top_n_keywords", 50)
+    cfg.setdefault("min_docfreq", 6)
+    cfg.setdefault("min_docfreq_autotune", True)
+    cfg.setdefault("stopwords", [])
+    cfg.setdefault("phrase_stop", [])
+    cfg.setdefault("alias", {})
+    cfg.setdefault("common_debuff", [])
+    cfg.setdefault("domain_hints", [])
+    cfg.setdefault("weights", {
+        "entity_boost": 1.35,
+        "common_debuff": 0.55,
+        "person_name_debuff": 0.8,
+        "domain_hint_boost": 1.2,
+        "bigram_top30_boost": 1.35,
+        "mmr_diversity": 0.7
+    })
+    return cfg
 
 def clean_text(t: str) -> str:
     if not t: return ""
@@ -126,11 +145,13 @@ def norm_kw_light(s: str) -> str:
 
 CFG = load_config()
 DICT_DIR = "data/dictionaries"
+
 STOP_CFG = set([norm_kw_light(x) for x in (CFG.get("stopwords") or [])])
 STOP_EXT = set([norm_kw_light(x) for x in _load_lines(os.path.join(DICT_DIR, "stopwords_ext.txt"))])
-PHRASE_STOP = set([norm_kw_light(x) for x in _load_lines(os.path.join(DICT_DIR, "phrase_stopwords.txt"))])
+PHRASE_STOP = set([norm_kw_light(x) for x in (CFG.get("phrase_stop") or [])])
+PHRASE_STOP |= set([norm_kw_light(x) for x in _load_lines(os.path.join(DICT_DIR, "phrase_stopwords.txt"))])
 
-STOPWORDS = set(x for x in (STOP_CFG | STOP_EXT | PHRASE_STOP) if x)
+STOPWORDS = set(x for x in (STOP_CFG | STOP_EXT) if x)
 
 EN_STOP = {
     "the","and","to","of","in","for","on","with","at","by","from","as","is","are","be","it",
@@ -139,31 +160,51 @@ EN_STOP = {
 }
 STOPWORDS |= set(EN_STOP)
 
-# 보도문/형식어 추가 컷
+# 기본 상투어/형식어(코드 기본값) — config가 덮어씀
 MORE_STOP = {
     "이날","11","11일","이라고","이라며","대비","가장","특히","세계","지난","따르면","모든","적극",
     "디스","프로","기술","미래","혁신","글로벌","전문","모델을","성과를","받았다","밝혔다","강조했다",
     "국내","대한민국","서울","있는","새로운","여러","플랫폼","사업","핵심",
     "개발","제조","제품","투자","제작","전자","차세대","있으며",
-    "그리고","그러나","또한","따라서","이와같이","수준","사례","발표","공개","소식","진행"
+    "그리고","그러나","또한","따라서","이와같이","수준","사례","발표","공개","소식","진행",
+    # 문장 파편(보도문 상투어)
+    "것으로 보인다","것으로 예상된다","것으로 전망된다","이어가고 있다",
+    "업계에 따르면","서울 뉴시스","있다 특히","지난 일부터",
+    "디스플레이 하반기","하반기 실적","올해 상반기",
+    "개선될 것으로","환경을 제공한다","최고 수준의",
+    "고객 중심","신제품 출시","개인 맞춤형","기능","사용"
 }
 STOPWORDS |= set([norm_kw_light(x) for x in MORE_STOP])
 
+# 화폐/숫자/날짜/깨진 한글 컷
 CURRENCY_PAT = re.compile(r"^[0-9,\.]+(원|달러|유로|엔|위안|억원|조원)$")
 DATE_PAT = re.compile(r"^\d{1,2}일$|^\d{1,2}월$|^\d{4}년$|^\d{4}$")
 NUMERIC_ONLY = re.compile(r"^\d+$")
 BROKEN_KO = re.compile(r"^[ㄱ-ㅎㅏ-ㅣ]+$")
 
-# 오타/표기 교정 맵(가벼운 룰)
+# 오타/표기 교정 맵(코드 기본값) — config alias가 최우선
 FIX_MAP = {
     "디스플레": "디스플레이",
-    "oled": "OLED",
+    "oled": "oled",
     "loT": "IoT",
-    "올레도스": "OLEDoS",
-    "레도스": "LEDoS",
+    "올레도스": "oledos",
+    "레도스": "ledos",
+    "microled": "microled",
+    "마이크로led": "microled",
 }
+CFG_ALIAS = CFG.get("alias") or {}
+
 def apply_fix_map(w: str) -> str:
     return FIX_MAP.get(w, w)
+
+def unify_alias_with_cfg(w: str, cfg_alias: dict, fix_map: dict):
+    wl = norm_kw_light(w)
+    # config alias가 최우선
+    for k, v in (cfg_alias or {}).items():
+        if norm_kw_light(k) == wl:
+            return v
+    # 기본 교정
+    return fix_map.get(w, w)
 
 def is_meaningful_token(tok: str) -> bool:
     if not tok: return False
@@ -192,6 +233,7 @@ def extract_keywords_krwordrank(docs, topk=30):
         w_norm = strip_korean_particle(w_norm)
         w_norm = strip_verb_ending(w_norm)
         w_norm = apply_fix_map(w_norm)
+        w_norm = unify_alias_with_cfg(w_norm, CFG_ALIAS, FIX_MAP)
         if not is_meaningful_token(w_norm): continue
         results.append({"keyword": w_norm, "score": float(score)})
     return results
@@ -207,7 +249,6 @@ def pro_extract_keywords_keybert(docs, topk=50):
     if not docs:
         return []
 
-    # 임베딩 모델
     model = SentenceTransformer("jhgan/ko-sroberta-multitask")
     kb = KeyBERT(model=model)
 
@@ -230,6 +271,7 @@ def pro_extract_keywords_keybert(docs, topk=50):
         if not p:
             continue
         p = apply_fix_map(p)
+        p = unify_alias_with_cfg(p, CFG_ALIAS, FIX_MAP)
         out.append({"keyword": p, "score": float(s)})
     return out
 
@@ -246,6 +288,7 @@ def top_bigrams_by_tfidf(docs, topn=70, min_df=6):
     out = []
     for t, _ in pairs[:topn]:
         t = apply_fix_map(t)
+        t = unify_alias_with_cfg(t, CFG_ALIAS, FIX_MAP)
         if not is_meaningful_token(t): continue
         out.append(t)
     return out
@@ -253,17 +296,37 @@ def top_bigrams_by_tfidf(docs, topn=70, min_df=6):
 def postprocess_keywords(docs, keywords, min_docfreq=6):
     # min_docfreq 자동 튜닝
     num_docs = len(docs)
-    if num_docs < 40: min_docfreq = max(3, min_docfreq // 2)  # 3
-    elif num_docs < 100: min_docfreq = max(5, min_docfreq - 1)  # 5
-    else: min_docfreq = max(7, min_docfreq)  # 7+
+    autotune = bool(CFG.get("min_docfreq_autotune", True))
+    if autotune:
+        if num_docs < 40: min_docfreq = max(3, min_docfreq // 2)
+        elif num_docs < 100: min_docfreq = max(5, min_docfreq - 1)
+        else: min_docfreq = max(7, min_docfreq)
 
     df = defaultdict(int)
     for d in docs:
         tokens = set(re.findall(r"[가-힣]+|[A-Za-z0-9_]+", d))
         for t in tokens: df[t] += 1
 
-    # 유사어 통합(간단): 영문/한글 표기 통합 후보 반영
-    alias = {
+    alias_cfg = CFG.get("alias") or {}
+    phrase_stop_lc = set([norm_kw_light(x) for x in (CFG.get("phrase_stop") or [])])
+
+    def is_phrase_stopped(x: str) -> bool:
+        xl = norm_kw_light(x)
+        if xl in phrase_stop_lc:
+            return True
+        # 정규식 상투어 컷
+        if re.search(r"(것으로 보인다|것으로 예상된다|것으로 전망된다|이어가고 있다)$", x):
+            return True
+        if re.match(r"^(업계에 따르면|서울 뉴시스|따르면 .+?는)", x):
+            return True
+        if re.search(r"(최고 수준의|환경을 제공한다|개선될 것으로)$", x):
+            return True
+        if re.match(r"^(올해|상반기|하반기)", x):
+            return True
+        return False
+
+    # 유사어/표기 통합(간단): 영문/한글 표기 통합 후보
+    alias_base = {
         "oled": "oled",
         "올레드": "oled",
         "microled": "microled",
@@ -272,19 +335,30 @@ def postprocess_keywords(docs, keywords, min_docfreq=6):
         "inkjet": "inkjet",
     }
 
-    def unify_alias(w: str) -> str:
+    def unify_alias_simple(w: str) -> str:
         wl = norm_kw_light(w)
-        return alias.get(wl, w)
+        if wl in alias_base:
+            return alias_base[wl]
+        return w
 
     merged = {}
     for k in keywords:
         w = normalize_keyword(k["keyword"])
+        w = strip_korean_particle(w)
+        w = strip_verb_ending(w)
         w = apply_fix_map(w)
-        w = unify_alias(w)
-        if not is_meaningful_token(w): continue
+        w = unify_alias_with_cfg(w, alias_cfg, FIX_MAP)
+        w = unify_alias_simple(w)
+
+        if not is_meaningful_token(w): 
+            continue
+        if is_phrase_stopped(w):
+            continue
+
         exact_df = df.get(w, 0)
         approx_df = max((df[t] for t in df if w in t or t in w), default=0)
-        if max(exact_df, approx_df) < min_docfreq: continue
+        if max(exact_df, approx_df) < min_docfreq: 
+            continue
         if w not in merged or merged[w]["score"] < k["score"]:
             merged[w] = {"keyword": w, "score": float(k["score"])}
 
@@ -341,7 +415,17 @@ def main():
     cfg = CFG
     topk = int(cfg.get("top_n_keywords", 50))
     base_min_df = int(cfg.get("min_docfreq", 6))
+
+    weights = cfg.get("weights") or {}
+    entity_boost = float(weights.get("entity_boost", 1.35))
+    common_debuff_w = float(weights.get("common_debuff", 0.55))
+    person_name_debuff = float(weights.get("person_name_debuff", 0.8))
+    domain_hint_boost = float(weights.get("domain_hint_boost", 1.2))
+    bigram_top_boost = float(weights.get("bigram_top30_boost", 1.35))
+    mmr_diversity = float(weights.get("mmr_diversity", 0.7))
+
     domain_hints = [norm_kw_light(x) for x in (cfg.get("domain_hints") or [])]
+    domain_hints_set = set(domain_hints)
 
     meta_path = latest("data/news_meta_*.json")
     if not meta_path:
@@ -359,7 +443,7 @@ def main():
     post_n = len(docs)
     print(f"[INFO] 문서 중복 제거: {pre_n} -> {post_n}")
 
-    # 1) Pro/Lite 분기로 후보 뽑기
+    # 1) Pro/Lite 분기
     try:
         if use_pro_mode():
             base_candidates = pro_extract_keywords_keybert(docs, topk=topk)
@@ -369,13 +453,17 @@ def main():
         print(f"[WARN] Pro 키워드 실패, Lite로 폴백: {e}")
         base_candidates = extract_keywords_krwordrank(docs, topk=topk)
 
-    # 2) 빅람 보강(+상위 30% 가중 1.35배, min_df 자동 튜닝)
+    # 2) 빅그램 보강(+상위 30% 가중)
     try:
-        # 문서 수 기반 min_df 조정
         num_docs = len(docs)
-        if num_docs < 40: md = max(3, base_min_df // 2)
-        elif num_docs < 100: md = max(5, base_min_df - 1)
-        else: md = max(7, base_min_df)
+        autotune = bool(cfg.get("min_docfreq_autotune", True))
+        if autotune:
+            if num_docs < 40: md = max(3, base_min_df // 2)
+            elif num_docs < 100: md = max(5, base_min_df - 1)
+            else: md = max(7, base_min_df)
+        else:
+            md = base_min_df
+
         bigrams = top_bigrams_by_tfidf(docs, topn=70, min_df=md)
         if bigrams:
             avg_score = (sum(k["score"] for k in base_candidates) / max(1, len(base_candidates))) if base_candidates else 1.0
@@ -384,49 +472,46 @@ def main():
             for idx, bg in enumerate(bigrams):
                 if not is_meaningful_token(bg): continue
                 if bg in seen: continue
-                score = avg_score * (1.35 if idx < cutoff else 1.0)
+                score = avg_score * (bigram_top_boost if idx < cutoff else 1.0)
                 base_candidates.append({"keyword": bg, "score": float(score)})
                 seen.add(bg)
     except Exception:
         pass
 
-    # 3) 후처리(불용/숫자/날짜/화폐/깨진 토큰 컷 + 문서빈도)
+    # 3) 후처리(불용/날짜/화폐/문장형 컷 + 문서빈도)
     keywords = postprocess_keywords(docs, base_candidates, min_docfreq=base_min_df)
 
-    # 4) 엔터티 가중치 + 일반어 디버프 + 인명 디버프 + 도메인 힌트 가중
+    # 4) 가중치: 엔터티/일반어/인명/도메인 힌트
     orgs, prods = load_entities_weight()
     boosted = []
-    COMMON_DEBUFF = {"스마트","디지털","시장","글로벌","생활","기술","최근","지난해","세계","사업","플랫폼","전자","제품","개발","제조","투자","제작","차세대"}
-    ENT_WHITELIST = set()  # 필요 시 화이트리스트 등록
-    domain_hints_set = set(domain_hints)
+    COMMON_DEBUFF = set([norm_kw_light(x) for x in (cfg.get("common_debuff") or [])]) | {
+        "시장","글로벌","생활","기술","최근","지난해","세계","사업","플랫폼","전자","제품","개발","제조","투자","제작","차세대"
+    }
+    ENT_WHITELIST = set()  # 필요 시 사용
 
     for k in keywords:
         kw = k["keyword"]
+        kw_l = norm_kw_light(kw)
         score = k["score"]
 
-        # 엔터티 가중
         if kw in orgs or kw in prods:
-            score *= 1.35
+            score *= entity_boost
 
-        # 일반어 디버프
-        if kw in COMMON_DEBUFF:
-            score *= 0.55
+        if kw_l in COMMON_DEBUFF:
+            score *= common_debuff_w
 
-        # 인명(간단 패턴) 디버프
         if re.fullmatch(r"[가-힣]{2,3}$", kw) and kw not in ENT_WHITELIST:
-            score *= 0.8
+            score *= person_name_debuff
 
-        # 도메인 힌트 가중(부분 포함)
-        kw_l = norm_kw_light(kw)
         if any(h in kw_l for h in domain_hints_set):
-            score *= 1.2
+            score *= domain_hint_boost
 
         boosted.append({"keyword": kw, "score": float(score)})
 
     boosted.sort(key=lambda x: x["score"], reverse=True)
 
     # 5) MMR 다양화
-    diversified = mmr_diversify(boosted, topn=topk, diversity=0.7)
+    diversified = mmr_diversify(boosted, topn=topk, diversity=mmr_diversity)
 
     _vec, _X = build_tfidf(docs)
 
@@ -435,7 +520,7 @@ def main():
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"stats": {"num_docs": len(docs)}, "keywords": diversified}, f, ensure_ascii=False, indent=2)
 
-    # 6) 실행 메타 기록
+    # 6) 실행 메타
     import datetime
     meta = {
         "module": "B",
