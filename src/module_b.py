@@ -252,7 +252,7 @@ def pro_extract_keywords_keybert(docs: List[str], topk: int = 50) -> List[Dict[s
     return [{"keyword": normalize_keyword(p), "score": float(s)} for p, s in pairs if p]
 
 def top_bigrams_by_tfidf(docs: List[str], topn: int = 70, min_df: int = 6) -> List[str]:
-    vec = TfidfVectorizer(ngram_range=(2, 2), min_df=min_df, max_features=7000,
+    vec = TfidfVectorizer(ngram_range=(1, 2), min_df=min_df, max_features=7000,
                           token_pattern=r"[가-힣A-Za-z0-9_]{2,}")
     X = vec.fit_transform(docs)
     if X.shape[1] == 0: return []
