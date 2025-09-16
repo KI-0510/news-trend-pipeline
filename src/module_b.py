@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Module B - Keywords (Integrated & Quality-boosted)
 # - config.json + data/dictionaries 리소스 병합
-# - KR-WordRank + TF-IDF 기반 (라이트), KeyBERT MMR 재랭킹 및 BERTopic 보정(프로)
+# - KR-WordRank + TF-IDF 기반 (라이트), 문서별 KeyBERT MMR 재랭킹 및 BERTopic 보정(프로)
 # - 숫자/날짜/통화/단위 필터 + 행정지명/인명/일반어 디버프 + 하드 드롭
 # - 값 정렬은 itemgetter(1) 공용 헬퍼로 통일(오타 방지)
 
@@ -15,7 +15,7 @@ from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
 
 import numpy as np
-from operator import itemgetter  # 값 정렬 키 [doc]
+from operator import itemgetter  # 값 정렬 키
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -32,8 +32,9 @@ except Exception:
 
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
 except Exception:
-    TfidfVectorizer = None
+    TfidfVectorizer, cosine_similarity = None, None
 
 try:
     from keybert import KeyBERT
@@ -83,11 +84,28 @@ def build_docs(items: List[dict]) -> List[str]:
     docs = []
     for it in items:
         title = (it.get("title") or it.get("title_og") or "").strip()
-        body = (it.get("body") or it.get("description") or it.get("description_og") or "").strip()
+        body  = (it.get("body") or it.get("description") or it.get("description_og") or "").strip()
         txt = (title + " " + body).strip()
         if txt:
             docs.append(txt)
     return docs
+
+def dedup_docs_by_cosine(docs: List[str], threshold: float = 0.90) -> List[str]:
+    if TfidfVectorizer is None or cosine_similarity is None or len(docs) <= 1:
+        return docs
+    vec = TfidfVectorizer(max_features=7000, ngram_range=(1, 2))
+    X = vec.fit_transform(docs)
+    sim = cosine_similarity(X, dense_output=False)
+    keep_indices = []
+    removed = set()
+    for i in range(len(docs)):
+        if i in removed: continue
+        keep_indices.append(i)
+        for j in range(i + 1, len(docs)):
+            if j in removed: continue
+            if sim[i, j] >= threshold:
+                removed.add(j)
+    return [docs[i] for i in keep_indices]
 
 
 # -------------------------
@@ -368,7 +386,7 @@ def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
 
 
 # -------------------------
-# KeyBERT MMR reranking (Pro)
+# KeyBERT MMR reranking (Pro, per-document)
 # -------------------------
 def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: int,
                        use_mmr: bool=True, diversity: float=0.5, ngram_range: Tuple[int,int]=(1,3)) -> Dict[str,float]:
@@ -460,6 +478,9 @@ def main():
     raw_docs = build_docs(items)
     if not raw_docs:
         raise SystemExit("no documents")
+
+    # Dedup (optional)
+    raw_docs = dedup_docs_by_cosine(raw_docs, threshold=0.90)
 
     # Preprocess with strict filters
     pre_docs = preprocess_docs(raw_docs, phrase_stop=phrase_stop, stopwords=stopwords,
