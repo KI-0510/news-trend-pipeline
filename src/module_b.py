@@ -206,6 +206,18 @@ def unify_alias_with_cfg(w: str, cfg_alias: dict, fix_map: dict):
 
 # 어색한 끝말 컷(문장 파편/연결어미)
 TAIL_BAD_RE = re.compile(r"(하기\s?위|위해|위한|하며|하고|하는|으로|로|에|에서|부터|까지)$")
+# 문장형 보도문 꼬리/파편 컷(강화)
+BAD_ENDING_PAT = re.compile(
+    r"(?:"
+    r".*(?:을|를)\s*활용한$|"
+    r".*(?:하|되)겠다$|"
+    r".*(?:했|혔)다$|"
+    r".*(?:이|라)며$|"
+    r".*(?:하|되)는\s*(?:핵심|기술|방안)$|"
+    r".*(?:을|를)\s*통(?:해)?$|"
+    r".*(?:다|고|라)는$"
+    r")"
+)
 
 def is_meaningful_token(tok: str) -> bool:
     if not tok: return False
@@ -217,8 +229,9 @@ def is_meaningful_token(tok: str) -> bool:
     if CURRENCY_PAT.fullmatch(t): return False
     if BROKEN_KO.fullmatch(t): return False
     if len(t) <= 2 and t.endswith("스"): return False
-    # 어색한 꼬리(문장 파편) 컷
+    # 어색한 꼬리 컷
     if TAIL_BAD_RE.search(t): return False
+    if len(t) >= 4 and BAD_ENDING_PAT.search(t): return False
     # 끝 공백 컷
     if re.search(r"\s$", tok): return False
     return True
@@ -367,9 +380,14 @@ def postprocess_keywords(docs, keywords, min_docfreq=6):
         if w not in merged or merged[w]["score"] < k["score"]:
             merged[w] = {"keyword": w, "score": float(k["score"])}
 
-    # 끝 단계 세이프가드(어색한 꼬리/끝 공백 컷)
+    # 끝 단계 세이프가드(어색한 꼬리/끝 공백/문장형 꼬리 컷)
     results = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
-    results = [r for r in results if not TAIL_BAD_RE.search(r["keyword"]) and not re.search(r"\s$", r["keyword"])]
+    results = [
+        r for r in results
+        if not TAIL_BAD_RE.search(r["keyword"])
+        and not (len(r["keyword"]) >= 4 and BAD_ENDING_PAT.search(r["keyword"]))
+        and not re.search(r"\s$", r["keyword"])
+    ]
     return results
 
 def load_entities_weight():
