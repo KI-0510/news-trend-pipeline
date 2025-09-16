@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Module B - Keywords (Integrated: config+data/dictionaries, KR-WordRank+TF-IDF, optional KeyBERT MMR, optional BERTopic boost)
+# Module B - Keywords (Integrated: config.json + data/dictionaries merge,
+# KR-WordRank+TF-IDF base, optional KeyBERT MMR, optional BERTopic topic boost)
 
 import os
 import re
@@ -11,8 +12,7 @@ from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
 
 import numpy as np
-
-from operator import itemgetter  # 안전하고 빠른 값 정렬 키 [doc]
+from operator import itemgetter  # 안전한 값 기준 정렬 키 [doc]
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -44,9 +44,8 @@ try:
 except Exception:
     BERTopic, UMAP, HDBSCAN = None, None, None
 
-
 # -------------------------
-# IO helpers / config
+# Utilities / IO
 # -------------------------
 def load_json(path: str, default=None):
     if default is None:
@@ -68,6 +67,9 @@ def latest_file(pattern: str) -> Optional[str]:
     files = sorted(glob.glob(pattern))
     return files[-1] if files else None
 
+# 공용: dict를 값(value) 기준 내림차순 정렬
+def sort_items_by_value_desc(d: Dict[str, float]):
+    return sorted(d.items(), key=itemgetter(1), reverse=True)  # (key,value) 2-튜플의 인덱스 1이 값 [8][7]
 
 # -------------------------
 # Build docs from meta
@@ -81,7 +83,6 @@ def build_docs(items: List[dict]) -> List[str]:
         if txt:
             docs.append(txt)
     return docs
-
 
 # -------------------------
 # Normalization / noun-ish cleanup
@@ -132,7 +133,6 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
             out.append(t2)
     return out
 
-
 # -------------------------
 # Alias / brand-entity resources
 # -------------------------
@@ -155,14 +155,12 @@ def normalize_alias(token: str, alias_map: Dict[str, str]) -> str:
 
 def load_brand_entity_lists() -> Tuple[set, set]:
     brands = set(load_lines("data/dictionaries/brands.txt"))
-    # Support multiple common filenames for entities
     entities = set()
     for p in ("data/dictionaries/entities.txt", "data/dictionaries/entities_org.txt", "data/dictionaries/entites.txt"):
         entities.update(load_lines(p))
     brands = {b.strip() for b in brands if b.strip()}
     entities = {e.strip() for e in entities if e.strip()}
     return brands, entities
-
 
 # -------------------------
 # Domain weighting
@@ -200,7 +198,6 @@ def apply_domain_weights(scores: Dict[str, float],
         boosted[k2] = max(boosted.get(k2, 0.0), s)
     return boosted
 
-
 # -------------------------
 # Stats / autotune
 # -------------------------
@@ -215,13 +212,11 @@ def autotune_kr(n_docs: int, avg_len: float, min_count_base: int=3) -> Tuple[int
     max_len = 12 if avg_len < 400 else 15
     return mc, max_len
 
-
 # -------------------------
 # KR-WordRank + TF-IDF (Light)
 # -------------------------
-def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20,
-                       min_count: Optional[int]=None, max_length: Optional[int]=None,
-                       topk: int=200) -> Dict[str, float]:
+def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20, min_count: Optional[int]=None,
+                       max_length: Optional[int]=None, topk: int=200) -> Dict[str, float]:
     if KRWordRank is None:
         return {}
     n_docs, avg_len = compute_doc_stats(docs)
@@ -229,14 +224,10 @@ def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20,
         mc, ml = autotune_kr(n_docs, avg_len)
         if min_count is None: min_count = mc
         if max_length is None: max_length = ml
-
     extractor = KRWordRank(min_count=min_count, max_length=max_length, verbose=False)
     keywords, rank, _ = extractor.extract(docs, beta=beta, max_iter=max_iter)
-
-    # FIX: 값(value) 기준 정렬 → itemgetter(1) 사용
-    sorted_items = sorted(keywords.items(), key=itemgetter(1), reverse=True)
+    sorted_items = sort_items_by_value_desc(keywords)  # 값 기준 정렬 고정 [8][7]
     return dict(sorted_items[: max(1, int(topk or 1))])
-
 
 def tfidf_weights(docs: List[str], vocab: List[str]) -> Dict[str, float]:
     if TfidfVectorizer is None or not docs:
@@ -262,7 +253,8 @@ def hybrid_rank(docs: List[str], beta: float=0.85, max_iter: int=20, topk: int=2
     kr_n = norm(kr)
     idf_n = norm(idf)
     blended = {k: w_kr*kr_n.get(k,0.0) + w_tfidf*idf_n.get(k,0.0) for k in vocab}
-    return dict(sorted(blended.items(), key=lambda x: x[21], reverse=True)[:topk])
+    sorted_items = sort_items_by_value_desc(blended)  # 값 기준 정렬 고정 [8][7]
+    return dict(sorted_items[: max(1, int(topk or 1))])
 
 def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
     if TfidfVectorizer is None or not docs:
@@ -272,9 +264,8 @@ def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
     terms = vec.get_feature_names_out()
     avg = np.asarray(X.mean(axis=0)).ravel()
     pairs = list(zip(terms, avg))
-    pairs.sort(key=lambda x: x[21], reverse=True)
-    return dict(pairs[:topk])
-
+    pairs.sort(key=itemgetter(1), reverse=True)  # 값 기준 정렬 [8][7]
+    return dict(pairs[: max(1, int(topk or 1))])
 
 # -------------------------
 # KeyBERT MMR reranking (Pro)
@@ -288,7 +279,7 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
         extracted = kb.extract_keywords(
             doc,
             keyphrase_ngram_range=ngram_range,
-            stop_words=None,
+            stop_words=None,  # 전처리에서 불용어 제거
             use_mmr=use_mmr,
             diversity=diversity,
             top_n=max(topn, len(candidates))
@@ -298,7 +289,6 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
         return dict(rer[:topn]) if rer else {}
     except Exception:
         return {}
-
 
 # -------------------------
 # BERTopic topic context (optional)
@@ -323,7 +313,6 @@ def topic_context_keywords(docs: List[str], model_name: str, umap_neighbors: int
         return out
     except Exception:
         return {}
-
 
 # -------------------------
 # Main
@@ -417,7 +406,7 @@ def main():
             rer_n = {k: (rer_n.get(k,0.0)-mn)/(mx-mn+1e-12) for k in all_keys}
             combined = {k: 0.4*base_n.get(k,0.0) + 0.6*rer_n.get(k,0.0) for k in all_keys}
 
-    # Optional: topic context boost
+    # Optional: topic context boost (Pro)
     if use_pro and BERTopic is not None and len(pre_docs) >= 20:
         model_name = cfg.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
         umap_neighbors = int(cfg.get("umap_neighbors", 15))
@@ -443,7 +432,7 @@ def main():
     )
 
     # Output
-    top_items = sorted(combined.items(), key=lambda x: x[21], reverse=True)[:topn_keywords]
+    top_items = sort_items_by_value_desc(combined)[: topn_keywords]  # 값 기준 정렬 일관 적용 [8][7]
 
     os.makedirs("outputs", exist_ok=True)
     with open("outputs/keywords.json", "w", encoding="utf-8") as f:
