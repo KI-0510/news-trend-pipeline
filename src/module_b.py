@@ -12,6 +12,8 @@ from collections import defaultdict
 
 import numpy as np
 
+from operator import itemgetter  # 안전하고 빠른 값 정렬 키 [doc]
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -217,8 +219,9 @@ def autotune_kr(n_docs: int, avg_len: float, min_count_base: int=3) -> Tuple[int
 # -------------------------
 # KR-WordRank + TF-IDF (Light)
 # -------------------------
-def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20, min_count: Optional[int]=None,
-                       max_length: Optional[int]=None, topk: int=200) -> Dict[str, float]:
+def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20,
+                       min_count: Optional[int]=None, max_length: Optional[int]=None,
+                       topk: int=200) -> Dict[str, float]:
     if KRWordRank is None:
         return {}
     n_docs, avg_len = compute_doc_stats(docs)
@@ -226,9 +229,14 @@ def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20, min_
         mc, ml = autotune_kr(n_docs, avg_len)
         if min_count is None: min_count = mc
         if max_length is None: max_length = ml
+
     extractor = KRWordRank(min_count=min_count, max_length=max_length, verbose=False)
     keywords, rank, _ = extractor.extract(docs, beta=beta, max_iter=max_iter)
-    return dict(sorted(keywords.items(), key=lambda x: x[21], reverse=True)[:topk])
+
+    # FIX: 값(value) 기준 정렬 → itemgetter(1) 사용
+    sorted_items = sorted(keywords.items(), key=itemgetter(1), reverse=True)
+    return dict(sorted_items[: max(1, int(topk or 1))])
+
 
 def tfidf_weights(docs: List[str], vocab: List[str]) -> Dict[str, float]:
     if TfidfVectorizer is None or not docs:
