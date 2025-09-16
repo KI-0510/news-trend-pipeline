@@ -9,7 +9,7 @@
   ],
   "per_query_display": 10,
   "pages": 1,
-  "top_n_keywords": 50,
+  "top_n_keywords": 30,
   "min_docfreq": 6,
   "min_docfreq_autotune": true,
   "stopwords": [
