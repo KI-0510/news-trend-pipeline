@@ -8,7 +8,7 @@
   ],
   "per_query_display": 10,
   "pages": 1,
-  "top_n_keywords": 30,
+  "top_n_keywords": 20,
 
   "min_docfreq": 6,
   "min_docfreq_autotune": true,
