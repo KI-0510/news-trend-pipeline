@@ -199,12 +199,13 @@ def apply_fix_map(w: str) -> str:
 
 def unify_alias_with_cfg(w: str, cfg_alias: dict, fix_map: dict):
     wl = norm_kw_light(w)
-    # config alias가 최우선
     for k, v in (cfg_alias or {}).items():
         if norm_kw_light(k) == wl:
             return v
-    # 기본 교정
     return fix_map.get(w, w)
+
+# 어색한 끝말 컷(문장 파편/연결어미)
+TAIL_BAD_RE = re.compile(r"(하기\s?위|위해|위한|하며|하고|하는|으로|로|에|에서|부터|까지)$")
 
 def is_meaningful_token(tok: str) -> bool:
     if not tok: return False
@@ -216,6 +217,10 @@ def is_meaningful_token(tok: str) -> bool:
     if CURRENCY_PAT.fullmatch(t): return False
     if BROKEN_KO.fullmatch(t): return False
     if len(t) <= 2 and t.endswith("스"): return False
+    # 어색한 꼬리(문장 파편) 컷
+    if TAIL_BAD_RE.search(t): return False
+    # 끝 공백 컷
+    if re.search(r"\s$", tok): return False
     return True
 
 # ================= Lite 키워드(KRWordRank) =================
@@ -275,7 +280,7 @@ def pro_extract_keywords_keybert(docs, topk=50):
         out.append({"keyword": p, "score": float(s)})
     return out
 
-# ================= 빅람/후처리/가중/MMR =================
+# ================= 빅그램/후처리/가중/MMR =================
 def top_bigrams_by_tfidf(docs, topn=70, min_df=6):
     vec = TfidfVectorizer(ngram_range=(2,2), min_df=min_df, max_features=7000,
                           token_pattern=r"[가-힣A-Za-z0-9_]{2,}")
@@ -325,7 +330,7 @@ def postprocess_keywords(docs, keywords, min_docfreq=6):
             return True
         return False
 
-    # 유사어/표기 통합(간단): 영문/한글 표기 통합 후보
+    # 유사어/표기 통합(간단)
     alias_base = {
         "oled": "oled",
         "올레드": "oled",
@@ -350,19 +355,22 @@ def postprocess_keywords(docs, keywords, min_docfreq=6):
         w = unify_alias_with_cfg(w, alias_cfg, FIX_MAP)
         w = unify_alias_simple(w)
 
-        if not is_meaningful_token(w): 
+        if not is_meaningful_token(w):
             continue
         if is_phrase_stopped(w):
             continue
 
         exact_df = df.get(w, 0)
         approx_df = max((df[t] for t in df if w in t or t in w), default=0)
-        if max(exact_df, approx_df) < min_docfreq: 
+        if max(exact_df, approx_df) < min_docfreq:
             continue
         if w not in merged or merged[w]["score"] < k["score"]:
             merged[w] = {"keyword": w, "score": float(k["score"])}
 
-    return sorted(merged.values(), key=lambda x: x["score"], reverse=True)
+    # 끝 단계 세이프가드(어색한 꼬리/끝 공백 컷)
+    results = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
+    results = [r for r in results if not TAIL_BAD_RE.search(r["keyword"]) and not re.search(r"\s$", r["keyword"])]
+    return results
 
 def load_entities_weight():
     ent_path = "outputs/export/entities.csv"
@@ -383,24 +391,51 @@ def load_entities_weight():
 def mmr_diversify(candidates, topn=50, diversity=0.7):
     terms = [c["keyword"] for c in candidates]
     if not terms: return candidates[:topn]
+    # 유사도(문자 n-gram 기반)
     vec = TfidfVectorizer(analyzer="char", ngram_range=(3,5))
     M = vec.fit_transform(terms)
     sim = cosine_similarity(M)
+
+    # 포함관계 중복 제거(긴 키워드 우선)
+    def _included_by_any(term, selected_terms):
+        tl = norm_kw_light(term)
+        if len(tl) < 4:  # 너무 짧은 토큰은 제외 기준 완화
+            return False
+        for s in selected_terms:
+            sl = norm_kw_light(s)
+            if len(sl) < 4:
+                continue
+            if tl in sl:
+                return True
+        return False
+
     selected = []
     used = set()
     for i, _ in enumerate(candidates):
-        if len(selected) >= topn: break
+        if len(selected) >= topn:
+            break
+        cur = candidates[i]["keyword"]
+        sel_terms = [candidates[j]["keyword"] for j in selected]
+        # 포함관계로 이미 커버되면 스킵
+        if _included_by_any(cur, sel_terms):
+            continue
         ok = True
         for j in selected:
             if sim[i, j] >= diversity:
                 ok = False; break
         if ok:
             selected.append(i); used.add(i)
+
     if len(selected) < topn:
         for i in range(len(candidates)):
             if i in used: continue
+            cur = candidates[i]["keyword"]
+            sel_terms = [candidates[j]["keyword"] for j in selected]
+            if _included_by_any(cur, sel_terms):
+                continue
             selected.append(i)
             if len(selected) >= topn: break
+
     return [candidates[i] for i in selected]
 
 def build_tfidf(docs):
@@ -510,17 +545,19 @@ def main():
 
     boosted.sort(key=lambda x: x["score"], reverse=True)
 
-    # 5) MMR 다양화
+    # 5) MMR 다양화(+포함관계 중복 제거)
     diversified = mmr_diversify(boosted, topn=topk, diversity=mmr_diversity)
 
+    # 6) TF-IDF 벡터(향후 확장 대비)
     _vec, _X = build_tfidf(docs)
 
+    # 7) 저장
     os.makedirs("outputs", exist_ok=True)
     out_path = "outputs/keywords.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"stats": {"num_docs": len(docs)}, "keywords": diversified}, f, ensure_ascii=False, indent=2)
 
-    # 6) 실행 메타
+    # 8) 실행 메타
     import datetime
     meta = {
         "module": "B",
