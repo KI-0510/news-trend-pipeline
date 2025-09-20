@@ -3,11 +3,11 @@
 import os, re, glob, json, math, datetime, unicodedata, random
 from typing import List, Dict, Any, Tuple, Optional
 from collections import Counter
+import numpy as np
 
 # Lite
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
-import numpy as np
 
 # Pro (optional)
 try:
@@ -26,7 +26,7 @@ def _maybe_import_gemini():
         return None
 
 # -------------------------
-# Config loader (reuse-friendly)
+# Config loader
 # -------------------------
 def load_config(path: str = "config.json") -> dict:
     try:
@@ -229,7 +229,6 @@ def make_timeseries(items: List[dict]) -> Dict[str, Any]:
 # Topic modeling – Lite (LDA) with tuning
 # -------------------------
 def topic_diversity(components: np.ndarray, terms: np.ndarray, topn: int = 10) -> float:
-    # proportion of unique top words over total top words
     top_words = []
     for k in range(components.shape[0]):
         idx = components[k].argsort()[::-1][:topn]
@@ -249,12 +248,9 @@ def fit_best_lda(X, terms, k_list, random_state=42, max_iter=20) -> Tuple[Latent
             max_iter=max_iter
         )
         lda.fit(X)
-        # log-likelihood (higher is better)
-        ll = float(lda.score(X))
-        # topic diversity (0~1)
-        div = topic_diversity(lda.components_, terms, topn=10)
-        # combined score
-        score = ll + 5.0 * div  # small weight for diversity
+        ll = float(lda.score(X))       # log-likelihood (higher better)
+        div = topic_diversity(lda.components_, terms, topn=10)  # 0~1
+        score = ll + 5.0 * div
         if score > best_score:
             best, best_score = lda, score
     return best, best.components_
@@ -366,6 +362,8 @@ def name_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Di
 
     for t in topics_obj.get("topics", []):
         words = [w.get("word","") for w in (t.get("top_words") or [])][:8]
+        if not words:
+            continue
         prompt = (
             "다음 한국어 키워드 목록을 2~4단어의 간결한 토픽 이름으로 요약해 주세요.\n"
             f"키워드: {', '.join(words)}\n"
@@ -373,12 +371,48 @@ def name_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Di
         )
         try:
             resp = model.generate_content(prompt)
-            name = (resp.text or "").strip()
+            name = (getattr(resp, "text", None) or "").strip()
             if name:
                 t["topic_name"] = name
         except Exception:
-            # 실패 시 스킵
-            pass
+            continue
+    return topics_obj
+
+# -------------------------
+# LLM-based topic insight summary (optional; Gemini)
+# -------------------------
+def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Dict[str, Any]:
+    provider = (llm.get("provider") or "").lower()
+    if provider != "gemini":
+        return topics_obj
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    genai = _maybe_import_gemini()
+    if not api_key or genai is None:
+        return topics_obj
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(llm.get("model", "gemini-1.5-flash"))
+    except Exception:
+        return topics_obj
+
+    for t in topics_obj.get("topics", []):
+        words = [w.get("word","") for w in (t.get("top_words") or []) if w.get("word")][:10]
+        if not words:
+            continue
+        prompt = (
+            f"토픽 키워드: {', '.join(words)}\n"
+            "디스플레이/반도체 도메인 관점에서 2~3문장으로 간결 요약해 주세요.\n"
+            "- 한국어로 작성\n"
+            "- 추측·미확인 정보 금지\n"
+            "- 무엇(기술/제품/공정)과 왜 중요한지 중심"
+        )
+        try:
+            resp = model.generate_content(prompt)
+            text = (getattr(resp, "text", None) or "").strip()
+            if text:
+                t["insight"] = text
+        except Exception:
+            continue
     return topics_obj
 
 # -------------------------
@@ -391,7 +425,11 @@ def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5) -
         s = sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))
         scored.append((t, s))
     scored.sort(key=lambda x: x[1], reverse=True)
-    top = [{"topic_id": int(t["topic_id"]), "label": (t.get("topic_name") or (t["top_words"][0]["word"] if t["top_words"] else f"Topic {t['topic_id']}"))} for t, _ in scored[:topk]]
+    top = [{
+        "topic_id": int(t["topic_id"]),
+        "label": (t.get("topic_name") or (t["top_words"][0]["word"] if t["top_words"] else f"Topic {t['topic_id']}")),
+        "insight": t.get("insight", "")
+    } for t, _ in scored[:topk]]
     daily = ts_obj.get("daily", [])
     summary = f"주요 {len(top)}개 토픽이 도출되었고, 최근 {len(daily)}일 시계열을 기반으로 트렌드가 산출되었습니다."
     evidence = [{"topic_id": it["topic_id"], "words": [w["word"] for w in (topics[it["topic_id"]]["top_words"] if it["topic_id"] < len(topics) else [])[:5]]} for it in top]
@@ -434,8 +472,9 @@ def main():
     # 4) 토픽 후처리(불용어/정규식/지명/숫자·날짜·단위 컷)
     topics_obj = post_filter_topics(topics_obj, stopwords=stopwords, P=P)
 
-    # 5) LLM 토픽 이름(선택; 키가 있으면 작동)
+    # 5) (선택) 토픽 이름 + 2~3문장 요약
     topics_obj = name_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
+    topics_obj = summarize_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
 
     # 6) 인사이트(요약·상위 토픽 레이블·증거)
     insights_obj = build_insights(topics_obj, ts_obj, topk=min(5, max(1, len(topics_obj.get("topics",[])))))
@@ -452,7 +491,8 @@ def main():
         "docs": len(corpus),
         "topics": len(topics_obj.get("topics", [])),
         "ts_days": len(ts_obj.get("daily", [])),
-        "llm_naming": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini")
+        "llm_naming": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini"),
+        "llm_summary": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini")
     })
 
     print(f"[INFO][C] done | topics={len(topics_obj.get('topics', []))} days={len(ts_obj.get('daily', []))}")
