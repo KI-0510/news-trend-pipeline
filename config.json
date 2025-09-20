@@ -2,9 +2,9 @@
   "dry_run": true,
   "use_pro": false,
   "queries": [
-    "디스플레이",
-    "OLED",
-    "AI"
+    "디스플레이", "OLED 디스플레이", "OLED 패널", "LCD 디스플레이", "LCD 패널",
+    "OLED", "LCD", "TV", "스마트폰", "노트북",
+    "모니터"
   ],
   "per_query_display": 10,
   "pages": 1,
