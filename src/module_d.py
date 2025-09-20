@@ -269,8 +269,8 @@ def build_prompt(context: Dict[str, Any], want: int = 5) -> str:
 
 def strip_code_fence(text: str) -> str:
     t = (text or "").strip()
-    tick3 = "\x60\x60\x60"  # 백틱 3개를 안전하게 표현
-    # 패턴 빌드(멀티라인 플래그)
+    tick3 = "\x60\x60\x60"  # 백틱 3개를 안전하게 표현 [백틱 = \x60]
+    # 멀티라인 정규식으로 코드펜스 오프너/클로저 제거
     open_pat = re.compile(rf"^{tick3}[\t ]*\w*[\t ]*\n", re.M)
     close_pat = re.compile(rf"\n{tick3}[\t ]*$", re.M)
     t = open_pat.sub("", t)
@@ -279,14 +279,15 @@ def strip_code_fence(text: str) -> str:
 
 def clean_json_text2(t: str) -> str:
     t = strip_code_fence(t or "")
-    if "```
-        # 잔여 fence가 있을 경우 보수 제거
-        t = t.replace("```json", "``````", "\n")
+    tick3 = "\x60\x60\x60"  # ``` 를 안전하게 표현
+    if tick3 in t:
+        t = t.replace(f"{tick3}json", tick3).replace(tick3, "\n")
     t = t.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
     t = re.sub(r"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u2028\u2029]", "", t)
     t = re.sub(r",\s*(\}|\])", r"\1", t)
     t = t.lstrip("\ufeff").strip()
     return t
+
 
 def parse_json_array_or_object(t: str):
     s = clean_json_text2(t)
