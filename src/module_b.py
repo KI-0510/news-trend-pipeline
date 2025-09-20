@@ -193,7 +193,8 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
         toks = []
         for w in t.split():
             # 사전 불용어 제거
-            if w in sw:
+            # 조사 자체 토큰은 스킵
+            if w in {"은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐"}:
                 continue
             # 숫자/날짜/통화/단위 제거
             if P.get("NUMERIC_ONLY") and P["NUMERIC_ONLY"].match(w):  # 숫자만
@@ -572,7 +573,13 @@ def main():
     # Pro: per-document KeyBERT MMR reranking and aggregation (UPDATED)
     if use_pro and KeyBERT is not None and combined:
         # 1) 후보군 확장: 2~3그램 복합어 추가
-        ngram_cands = build_ngram_candidates(pre_docs, stopwords=stopwords, ngram_range=(2,3), min_df=2, max_df=0.95, topk=300)
+        _JOSA_SET = set(["은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐"])
+        ngram_cands = build_ngram_candidates(
+            pre_docs,
+            stopwords=sorted(set(stopwords) | _JOSA_SET),
+            ngram_range=(2,3),
+            min_df=2, max_df=0.95, topk=300
+        )
         cand = list(set(list(combined.keys()) + ngram_cands))
 
         model_name = cfg.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
