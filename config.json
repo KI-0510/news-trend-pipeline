@@ -84,7 +84,7 @@
   "weights": {
     "entity_boost": 1.35,
     "brand_boost": 1.2,
-    "common_debuff": 0.35,
+    "common_debuff": 0.4,
     "person_name_debuff": 0.8,
     "location_debuff": 0.6,
     "number_debuff": 0.5,
