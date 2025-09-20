@@ -53,6 +53,46 @@ def llm_config(cfg: dict) -> dict:
 CFG = load_config()
 LLM = llm_config(CFG)
 
+# 공통 GenerationConfig + 안전 파싱 + 재시도 유틸
+def _gen_cfg(llm: dict):
+    return {
+        "temperature": float(llm.get("temperature", 0.3)),
+        "max_output_tokens": int(llm.get("max_output_tokens", 1024)),
+    }
+
+def _extract_text(resp):
+    # response.text 대신 candidates → parts에서 안전 추출
+    try:
+        cands = getattr(resp, "candidates", []) or []
+        if not cands:
+            return ""
+        parts = getattr(cands[0], "content", None)
+        parts = getattr(parts, "parts", []) if parts else []
+        texts = []
+        for p in parts:
+            t = getattr(p, "text", None)
+            if t:
+                texts.append(t)
+        return " ".join(texts).strip()
+    except Exception:
+        return ""
+
+def _retry_if_maxtokens(model, prompt, gen_cfg, shrink_hint=None):
+    # 1차 시도
+    resp = model.generate_content(prompt, generation_config=gen_cfg)
+    txt = _extract_text(resp)
+    # MAX_TOKENS(=2)면 축약 프롬프트로 1회 재시도
+    try:
+        fr = getattr(resp.candidates[0], "finish_reason", None)
+    except Exception:
+        fr = None
+    if (not txt) and fr == 2 and shrink_hint:
+        cfg2 = dict(gen_cfg)
+        cfg2["max_output_tokens"] = int(gen_cfg.get("max_output_tokens", 1024)) * 2
+        resp2 = model.generate_content(f"{prompt}\n{shrink_hint}", generation_config=cfg2)
+        txt = _extract_text(resp2)
+    return txt
+
 # -------------------------
 # Mode / logging
 # -------------------------
@@ -443,8 +483,9 @@ def name_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Di
             "출력은 따옴표 없이 한국어 토픽 이름만 한 줄로 주세요."
         )
         try:
-            resp = model.generate_content(prompt)
-            name = (getattr(resp, "text", None) or "").strip()
+            gen_cfg = _gen_cfg(llm)
+            resp = model.generate_content(prompt, generation_config=gen_cfg)
+            name = _extract_text(resp)
             if name:
                 t["topic_name"] = name
         except Exception:
@@ -481,8 +522,13 @@ def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) 
             "- 무엇(기술/제품/공정)과 왜 중요한지 중심"
         )
         try:
-            resp = model.generate_content(prompt)
-            text = (getattr(resp, "text", None) or "").strip()
+            gen_cfg = _gen_cfg(llm)
+            text = _retry_if_maxtokens(
+                model,
+                prompt,
+                gen_cfg,
+                shrink_hint="- 최대 2문장, 200자 이내로 요약."
+            )
             if text:
                 t["insight"] = text
         except Exception:
@@ -540,8 +586,13 @@ def summarize_timeseries_with_llm(ts_obj: Dict[str, Any], cfg: dict, llm: dict) 
     )
 
     try:
-        resp = model.generate_content(prompt)
-        text = (getattr(resp, "text", None) or "").strip()
+        gen_cfg = _gen_cfg(llm)
+        text = _retry_if_maxtokens(
+            model,
+            prompt,
+            gen_cfg,
+            shrink_hint="- 2문장, 180자 이내로 간결 요약."
+        )
         return text
     except Exception:
         return ""
