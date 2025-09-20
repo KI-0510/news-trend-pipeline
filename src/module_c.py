@@ -131,6 +131,18 @@ def merged_stopwords(cfg: dict) -> Tuple[List[str], List[str]]:
     )
     return phrase, stop
 
+def to_stopword_list(sw) -> list[str]:
+    # 문자열만 남기고 공백 정리 + 중복 제거(순서 유지)
+    items = []
+    seen = set()
+    for s in (sw or []):
+        t = str(s).strip()
+        if not t or t in seen:
+            continue
+        seen.add(t)
+        items.append(t)
+    return items
+
 # -------------------------
 # Text normalize / tokenize (module_b와 동일 철학)
 # -------------------------
@@ -264,8 +276,9 @@ def topics_lite(corpus: List[str], stopwords: List[str], cfg: dict, topn=10, ran
     cv = CountVectorizer(
         ngram_range=(1,3), min_df=min_df, max_df=max_df,
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
-        stop_words=set(stopwords or [])
+        stop_words=to_stopword_list(stopwords)
     )
+    
     X = cv.fit_transform(corpus)
     if X.shape[1] == 0:
         return {"topics": []}
