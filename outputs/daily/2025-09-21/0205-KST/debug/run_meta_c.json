@@ -1,0 +1,9 @@
+{
+  "use_pro": false,
+  "docs": 81,
+  "topics": 11,
+  "ts_days": 3,
+  "llm_naming": true,
+  "llm_summary": true,
+  "llm_trend_summary": true
+}
