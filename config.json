@@ -9,7 +9,6 @@
   "per_query_display": 10,
   "pages": 1,
   "top_n_keywords": 20,
-
   "min_docfreq": 3,
   "min_docfreq_autotune": true,
 
@@ -58,6 +57,13 @@
     "패널"
   ],
 
+  "regex_stopwords": [
+    "^(있다|있는|있었|있으).*$",
+    "^(이제|이렇게|그런).*$",
+    "^뉴스$",
+    "^(통해|지난|아이)$"
+  ],
+
   "alias": {
     "디스플레": "디스플레이",
     "oled": "OLED",
@@ -79,11 +85,9 @@
     "number_debuff": 0.5,
     "domain_hint_boost": 1.5,
     "out_of_domain_debuff": 0.4,
-
     "bigram_top30_boost": 1.35,
     "trigram_top_boost": 1.25,
     "entity_exact_boost": 1.5,
-
     "mmr_diversity": 0.55,
     "title_boost": 1.6,
     "lead_boost": 1.3,
