@@ -102,6 +102,12 @@
   "keybert_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
   "max_docs_rerank": 80,
 
+  "topic_min_df": 3,
+  "topic_max_df": 0.95,
+  "lda_k_candidates": [7,8,9,10,11],
+  "min_topic_size": 15,
+  "topic_topn_words": 10
+  
   "umap_neighbors": 15,
   "min_cluster_size": 12,
 
