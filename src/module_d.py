@@ -130,11 +130,15 @@ def extract_orgs(text: str) -> List[str]:
     out = [o for o in out if not is_bad_org_token(o)]
     return out
 
-def load_topic_labels(topics_obj: Dict[str, Any], topn=5) -> List[Dict[str, Any]]:
+def load_topic_labels(topics_obj: dict, topn: int = 5) -> list[dict]:
     labels = []
-    for t in topics_obj.get("topics", []):
-        words = [w.get("word","") for w in (t.get("top_words") or [])][:topn]
-        labels.append({"topic_id": t.get("topic_id"), "words": [w for w in words if w]})
+    for t in (topics_obj.get("topics") or []):
+        name = (t.get("topic_name") or "").strip()
+        if name:
+            labels.append({"topic_id": int(t.get("topic_id", 0)), "label": name})
+        else:
+            words = [w.get("word","") for w in (t.get("top_words") or [])][:topn]
+            labels.append({"topic_id": int(t.get("topic_id", 0)), "label": " / ".join(words)})
     return labels
 
 def export_company_topic_matrix(meta_items: List[Dict[str,Any]], topic_labels: List[Dict[str,Any]]) -> None:
