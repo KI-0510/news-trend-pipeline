@@ -84,7 +84,7 @@
     "trigram_top_boost": 1.25,
     "entity_exact_boost": 1.5,
 
-    "mmr_diversity": 0.60,
+    "mmr_diversity": 0.55,
     "title_boost": 1.6,
     "lead_boost": 1.3,
     "firstpara_boost": 1.2
