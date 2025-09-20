@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
-# Module C – Topics, Timeseries, Insights (Lite=LDA with tuning, Pro=BERTopic with min_topic_size)
-import os, re, glob, json, math, datetime, unicodedata, random
+# Module C – Topics, Timeseries, Insights
+# - 전처리: module_b와 동일 철학(불용어/정규식/조사·어미 컷 + alias 정규화)
+# - Lite=LDA(튜닝: k 후보 + 확률 정규화), Pro=BERTopic(min_topic_size + 확률 정규화)
+# - 토픽 후처리: 불용어/지명/숫자·날짜·단위 컷 + 어워드 과다 토픽 억제
+# - 인사이트: 도메인 겹침/노이즈 겹침 가중 점수로 상위 토픽 선정
+# - LLM(Gemini)로 topic_name/2~3문장 요약(insight) 선택적 생성
+
+import os, re, glob, json, datetime, unicodedata, random
 from typing import List, Dict, Any, Tuple, Optional
 from collections import Counter
 import numpy as np
@@ -131,8 +137,7 @@ def merged_stopwords(cfg: dict) -> Tuple[List[str], List[str]]:
     )
     return phrase, stop
 
-def to_stopword_list(sw) -> list[str]:
-    # 문자열만 남기고 공백 정리 + 중복 제거(순서 유지)
+def to_stopword_list(sw) -> List[str]:
     items = []
     seen = set()
     for s in (sw or []):
@@ -142,6 +147,23 @@ def to_stopword_list(sw) -> list[str]:
         seen.add(t)
         items.append(t)
     return items
+
+# -------------------------
+# Alias normalization
+# -------------------------
+ALIAS_MAP: Dict[str,str] = (CFG.get("alias") or {})
+
+def normalize_alias_token(tok: str) -> str:
+    if not tok: return tok
+    if tok in ALIAS_MAP:
+        return ALIAS_MAP[tok]
+    low = tok.lower()
+    if low in ALIAS_MAP:
+        return ALIAS_MAP[low]
+    return tok
+
+def apply_alias(tokens: List[str]) -> List[str]:
+    return [normalize_alias_token(t) for t in tokens]
 
 # -------------------------
 # Text normalize / tokenize (module_b와 동일 철학)
@@ -193,6 +215,8 @@ def preprocess_docs(raw_docs: List[str], phrase_stop: List[str], stopwords: List
                 continue
             if len(w) < 2: continue
             toks.append(w)
+        # alias 정규화
+        toks = apply_alias(toks)
         t2 = " ".join(toks)
         if t2: out.append(t2)
     return out
@@ -238,7 +262,7 @@ def make_timeseries(items: List[dict]) -> Dict[str, Any]:
     return {"daily": rows}
 
 # -------------------------
-# Topic modeling – Lite (LDA) with tuning
+# Topic modeling – Lite (LDA) with tuning and proper probs
 # -------------------------
 def topic_diversity(components: np.ndarray, terms: np.ndarray, topn: int = 10) -> float:
     top_words = []
@@ -266,7 +290,6 @@ def fit_best_lda(X, terms, k_list, random_state=42, max_iter=20) -> Tuple[Latent
         if score > best_score:
             best, best_score = lda, score
     return best, best.components_
-
 
 def topics_lite(corpus: List[str], stopwords: List[str], cfg: dict, topn=10, random_state=42) -> Dict[str, Any]:
     if not corpus:
@@ -304,7 +327,6 @@ def topics_lite(corpus: List[str], stopwords: List[str], cfg: dict, topn=10, ran
         idx_top = idx_sorted[:max(10, topn)]
         vals = comps[tid][idx_top].astype(float)
 
-        # 확률 정규화(합=1), 분산 거의 없으면 감쇠 폴백
         s = float(vals.sum())
         if s > 0:
             probs = (vals / s).tolist()
@@ -324,7 +346,6 @@ def topics_lite(corpus: List[str], stopwords: List[str], cfg: dict, topn=10, ran
             words.append({"word": w, "prob": p})
         topics.append({"topic_id": int(tid), "top_words": words})
     return {"topics": topics}
-
 
 # -------------------------
 # Topic modeling – Pro (BERTopic) with proper probs
@@ -373,10 +394,11 @@ def topics_pro(corpus: List[str], cfg: dict, topn=10, random_state=42) -> Dict[s
         out.append({"topic_id": int(t), "top_words": words})
     return {"topics": out}
 
+# -------------------------
+# Topic post-filter + award-heavy drop
+# -------------------------
+AWARD_HINTS = {"수상","본상","금상","은상","대상","공모전","어워드","레드닷","red dot","if","idea","디자인"}
 
-# -------------------------
-# Topic post-filter
-# -------------------------
 def post_filter_topics(topics_obj: Dict[str, Any], stopwords: List[str], P: dict) -> Dict[str, Any]:
     sw = set(stopwords or [])
     filtered = []
@@ -389,9 +411,15 @@ def post_filter_topics(topics_obj: Dict[str, Any], stopwords: List[str], P: dict
             if is_location_token(ww): continue
             if P["NUMERIC_ONLY"].match(ww) or P["DATE_PAT"].match(ww) or P["CURRENCY_PAT"].match(ww) or P["UNIT_TOKEN_PAT"].match(ww):
                 continue
-            kept.append({"word": ww, "prob": float(w.get("prob", 0.2))})
-        if kept:
-            filtered.append({"topic_id": int(t.get("topic_id", 0)), "top_words": kept})
+            kept.append({"word": ww, "prob": float(w.get("prob", 0.0))})
+        if not kept:
+            continue
+        # 어워드 과다 토픽 드롭(상위 10 단어 중 5개 이상 어워드 힌트 포함)
+        top10 = [w["word"] for w in kept[:10]]
+        cnt_aw = sum(1 for x in top10 if any(h in x.lower() for h in AWARD_HINTS))
+        if cnt_aw >= 5:
+            continue
+        filtered.append({"topic_id": int(t.get("topic_id", 0)), "top_words": kept})
     return {"topics": filtered}
 
 # -------------------------
@@ -467,20 +495,37 @@ def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) 
     return topics_obj
 
 # -------------------------
-# Insights (간단 규칙 기반)
+# Insights (도메인/노이즈 가중 기반)
 # -------------------------
+DOMAIN_HINTS = set([(x or "").strip().lower() for x in CFG.get("domain_hints", [])])
+NOISE_HINTS  = set([(x or "").strip().lower() for x in CFG.get("common_debuff", [])])
+
+def domain_overlap(words: List[str]) -> float:
+    w = [w.lower() for w in words]
+    # 부분 포함 허용(힌트가 복합어일 수 있음)
+    return sum(1 for x in w if any(h in x for h in DOMAIN_HINTS)) / max(1, len(w))
+
+def noise_overlap(words: List[str]) -> float:
+    w = [w.lower() for w in words]
+    return sum(1 for x in w if x in NOISE_HINTS) / max(1, len(w))
+
 def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5) -> Dict[str, Any]:
     topics = topics_obj.get("topics", [])
     scored = []
     for t in topics:
-        s = sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))
-        scored.append((t, s))
-    scored.sort(key=lambda x: x[1], reverse=True)
+        words = [w.get("word","") for w in (t.get("top_words") or [])][:10]
+        base = sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))
+        ds = domain_overlap(words)
+        ns = noise_overlap(words)
+        s = base + 0.6*ds - 0.3*ns  # 운영하며 튜닝 가능
+        scored.append((t, s, ds))
+    scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
     top = [{
         "topic_id": int(t["topic_id"]),
         "label": (t.get("topic_name") or (t["top_words"][0]["word"] if t["top_words"] else f"Topic {t['topic_id']}")),
         "insight": t.get("insight", "")
-    } for t, _ in scored[:topk]]
+    } for t,_,_ in scored[:topk]]
+
     daily = ts_obj.get("daily", [])
     summary = f"주요 {len(top)}개 토픽이 도출되었고, 최근 {len(daily)}일 시계열을 기반으로 트렌드가 산출되었습니다."
     evidence = [{"topic_id": it["topic_id"], "words": [w["word"] for w in (topics[it["topic_id"]]["top_words"] if it["topic_id"] < len(topics) else [])[:5]]} for it in top]
@@ -507,27 +552,27 @@ def main():
     # 1) 시계열
     ts_obj = make_timeseries(items)
 
-    # 2) 코퍼스 전처리 (module_b와 동일 사전/정규식/조사·어미 컷)
+    # 2) 코퍼스 전처리
     raw_docs = build_docs_from_meta(items)
     phrase_stop, stopwords = merged_stopwords(cfg)
     P = compile_patterns(cfg)
     corpus = preprocess_docs(raw_docs, phrase_stop, stopwords, P)
 
-    # 3) 토픽 (Lite=LDA 튜닝, Pro=BERTopic with min_topic_size)
+    # 3) 토픽
     topn = int(cfg.get("topic_topn_words", 10))
     if use_pro and BERTopic is not None:
         topics_obj = topics_pro(corpus, cfg=cfg, topn=topn, random_state=42)
     else:
         topics_obj = topics_lite(corpus, stopwords=stopwords, cfg=cfg, topn=topn, random_state=42)
 
-    # 4) 토픽 후처리(불용어/정규식/지명/숫자·날짜·단위 컷)
+    # 4) 토픽 후처리
     topics_obj = post_filter_topics(topics_obj, stopwords=stopwords, P=P)
 
-    # 5) (선택) 토픽 이름 + 2~3문장 요약
+    # 5) (선택) LLM 토픽 이름/요약
     topics_obj = name_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
     topics_obj = summarize_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
 
-    # 6) 인사이트(요약·상위 토픽 레이블·증거)
+    # 6) 인사이트(상위 토픽 선정)
     insights_obj = build_insights(topics_obj, ts_obj, topk=min(5, max(1, len(topics_obj.get("topics",[])))))
 
     # 7) 저장
