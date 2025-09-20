@@ -93,6 +93,26 @@ def _retry_if_maxtokens(model, prompt, gen_cfg, shrink_hint=None):
         txt = _extract_text(resp2)
     return txt
 
+def _topk_topics(topics_obj: Dict[str,Any], k: int = 5) -> Tuple[List[Dict[str,Any]], List[int]]:
+    tops = topics_obj.get("topics", []) or []
+    # 점수: 상위 단어 확률 합
+    scored = [(i, t, sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))) for i, t in enumerate(tops)]
+    scored.sort(key=lambda x: x[2], reverse=True)
+    pick = scored[:max(0, int(k))]
+    idxs = [i for (i, _t, _s) in pick]
+    subset = [tops[i] for i in idxs]
+    return subset, idxs
+
+def _merge_llm_fields(orig_topics: List[Dict[str,Any]], llm_topics_subset: List[Dict[str,Any]], idxs: List[int]) -> List[Dict[str,Any]]:
+    out = list(orig_topics)
+    for pos, t in zip(idxs, llm_topics_subset):
+        # topic_name / insight만 덮어쓰기
+        if "topic_name" in t:
+            out[pos]["topic_name"] = t["topic_name"]
+        if "insight" in t:
+            out[pos]["insight"] = t["insight"]
+    return out
+
 # -------------------------
 # Mode / logging
 # -------------------------
@@ -674,9 +694,20 @@ def main():
     # 4) 토픽 후처리
     topics_obj = post_filter_topics(topics_obj, stopwords=stopwords, P=P)
 
-    # 5) (선택) LLM 토픽 이름/요약
-    topics_obj = name_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
-    topics_obj = summarize_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
+    # 5) (선택) LLM 토픽 이름/요약    
+    # 변경: 상위 5개만 LLM 호출
+    TOPK_FOR_LLM = int(os.getenv("TOPK_FOR_LLM", "5") or "5")
+    
+    subset, idxs = _topk_topics(topics_obj, k=TOPK_FOR_LLM)
+    partial = {"topics": [dict(t) for t in subset]}  # 얕은 복사
+    
+    # 토픽명/요약 LLM을 부분 집합에만 수행
+    partial = name_topics_with_llm(partial, cfg=cfg, llm=llm)
+    partial = summarize_topics_with_llm(partial, cfg=cfg, llm=llm)
+    
+    # 결과를 원본 topics_obj에 병합
+    topics_full = topics_obj.get("topics", []) or []
+    topics_obj["topics"] = _merge_llm_fields(topics_full, partial.get("topics", []), idxs)
 
     # 6) (선택) LLM 시계열 해석
     trend_summary_text = summarize_timeseries_with_llm(ts_obj, cfg=cfg, llm=llm)
