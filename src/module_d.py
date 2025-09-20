@@ -61,6 +61,48 @@ def to_kst_date_str(s: str) -> str:
         d = today
     return d.strftime("%Y-%m-%d")
 
+# --- LLM 안전 호출 유틸(모듈 C와 동일) ---
+def _gen_cfg(llm: dict):
+    return {
+        "temperature": float(llm.get("temperature", 0.3)),
+        "max_output_tokens": int(llm.get("max_output_tokens", 2048)),  # D는 2048~4096 권장
+    }
+
+def _extract_text(resp):
+    try:
+        cands = getattr(resp, "candidates", []) or []
+        if not cands:
+            return ""
+        parts = getattr(cands[0], "content", None)
+        parts = getattr(parts, "parts", []) if parts else []
+        texts = []
+        for p in parts:
+            t = getattr(p, "text", None)
+            if t:
+                texts.append(t)
+        return " ".join(texts).strip()
+    except Exception:
+        return ""
+
+def llm_generate(model, prompt, llm_cfg, shrink_hint=None):
+    gen_cfg = _gen_cfg(llm_cfg)
+    resp = model.generate_content(prompt, generation_config=gen_cfg)
+    txt = _extract_text(resp)
+    try:
+        fr = getattr(resp.candidates[0], "finish_reason", None)
+    except Exception:
+        fr = None
+    if (not txt) and fr == 2 and shrink_hint:  # MAX_TOKENS
+        cfg2 = dict(gen_cfg)
+        cfg2["max_output_tokens"] = int(gen_cfg.get("max_output_tokens", 2048)) * 2
+        resp2 = model.generate_content(f"{prompt}\n{shrink_hint}", generation_config=cfg2)
+        txt = _extract_text(resp2)
+    if (not txt) and fr == 3:  # SAFETY
+        resp3 = model.generate_content(prompt + "\n- 안전 가이드라인을 준수하고 민감/금지 컨텐츠는 언급하지 마세요.", generation_config=gen_cfg)
+        txt = _extract_text(resp3)
+    return txt or ""
+
+
 # ========== 회사×토픽 매트릭스: ORG 잡음 제거 ==========
 ORG_BAD_PATTERNS = [
     r"^\d{1,2}일$", r"^\d{4}$", r"^\d+(억원|조원|달러|원)$",
