@@ -267,22 +267,24 @@ def fit_best_lda(X, terms, k_list, random_state=42, max_iter=20) -> Tuple[Latent
             best, best_score = lda, score
     return best, best.components_
 
+
 def topics_lite(corpus: List[str], stopwords: List[str], cfg: dict, topn=10, random_state=42) -> Dict[str, Any]:
     if not corpus:
         return {"topics": []}
     min_df = int(cfg.get("topic_min_df", 3))
     max_df = float(cfg.get("topic_max_df", 0.95))
     k_cands = cfg.get("lda_k_candidates", [7,8,9,10,11])
+
     cv = CountVectorizer(
         ngram_range=(1,3), min_df=min_df, max_df=max_df,
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=to_stopword_list(stopwords)
     )
-    
     X = cv.fit_transform(corpus)
     if X.shape[1] == 0:
         return {"topics": []}
     terms = cv.get_feature_names_out()
+
     if isinstance(k_cands, list) and len(k_cands) >= 2:
         lda, comps = fit_best_lda(X, terms, k_cands, random_state=random_state, max_iter=20)
     else:
@@ -295,21 +297,37 @@ def topics_lite(corpus: List[str], stopwords: List[str], cfg: dict, topn=10, ran
         )
         lda.fit(X)
         comps = lda.components_
+
     topics = []
     for tid in range(comps.shape[0]):
-        idx = comps[tid].argsort()[::-1]
-        weights = comps[tid][idx]
-        s = float(weights.sum()) if weights.sum() > 0 else 1.0
+        idx_sorted = comps[tid].argsort()[::-1]
+        idx_top = idx_sorted[:max(10, topn)]
+        vals = comps[tid][idx_top].astype(float)
+
+        # 확률 정규화(합=1), 분산 거의 없으면 감쇠 폴백
+        s = float(vals.sum())
+        if s > 0:
+            probs = (vals / s).tolist()
+        else:
+            probs = [0.0] * len(vals)
+
+        if (max(probs) - min(probs)) < 1e-9:
+            decay = 0.95
+            probs = [max(0.2, decay**r) for r in range(len(vals))]
+            s2 = sum(probs) or 1.0
+            probs = [p / s2 for p in probs]
+
         words = []
-        for j in range(min(len(idx), max(10, topn))):
-            w = terms[idx[j]]
-            p = float(weights[j]/s) if s > 0 else 0.0
-            words.append({"word": w, "prob": max(0.2, p)})
-        topics.append({"topic_id": int(tid), "top_words": words[:topn]})
+        for j, i_term in enumerate(idx_top[:topn]):
+            w = terms[i_term]
+            p = float(probs[j])
+            words.append({"word": w, "prob": p})
+        topics.append({"topic_id": int(tid), "top_words": words})
     return {"topics": topics}
 
+
 # -------------------------
-# Topic modeling – Pro (BERTopic)
+# Topic modeling – Pro (BERTopic) with proper probs
 # -------------------------
 def topics_pro(corpus: List[str], cfg: dict, topn=10, random_state=42) -> Dict[str, Any]:
     if BERTopic is None or not corpus:
@@ -317,6 +335,7 @@ def topics_pro(corpus: List[str], cfg: dict, topn=10, random_state=42) -> Dict[s
     n_neighbors = int(cfg.get("umap_neighbors", 15))
     min_cluster_size = int(cfg.get("min_cluster_size", 12))
     min_topic_size = int(cfg.get("min_topic_size", 15))
+
     umap_model = UMAP(n_neighbors=n_neighbors, n_components=10, metric="cosine", low_memory=True, random_state=random_state)
     hdb_model = HDBSCAN(min_cluster_size=min_cluster_size, metric="euclidean")
     tm = BERTopic(
@@ -329,12 +348,31 @@ def topics_pro(corpus: List[str], cfg: dict, topn=10, random_state=42) -> Dict[s
     )
     topics, _ = tm.fit_transform(corpus)
     info = tm.get_topic_info()
+
     out = []
     for t in info["Topic"].tolist():
-        if int(t) < 0: continue
-        words = [{"word": w, "prob": max(0.2, float(p))} for (w, p) in tm.get_topic(int(t))[:max(10, topn)]]
-        out.append({"topic_id": int(t), "top_words": words[:topn]})
+        if int(t) < 0:
+            continue
+        top_pairs = tm.get_topic(int(t))[:max(10, topn)]  # [(word, ctfidf), ...]
+        terms = [w for (w, _p) in top_pairs]
+        vals = np.array([float(_p or 0.0) for (_w, _p) in top_pairs], dtype=float)
+
+        s = float(vals.sum())
+        if s > 0:
+            probs = (vals / s).tolist()
+        else:
+            probs = [0.0] * len(vals)
+
+        if (max(probs) - min(probs)) < 1e-9:
+            decay = 0.95
+            probs = [max(0.2, decay**r) for r in range(len(vals))]
+            s2 = sum(probs) or 1.0
+            probs = [p / s2 for p in probs]
+
+        words = [{"word": terms[i], "prob": float(probs[i])} for i in range(min(len(terms), topn))]
+        out.append({"topic_id": int(t), "top_words": words})
     return {"topics": out}
+
 
 # -------------------------
 # Topic post-filter
