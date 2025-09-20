@@ -102,7 +102,6 @@ def llm_generate(model, prompt, llm_cfg, shrink_hint=None):
         txt = _extract_text(resp3)
     return txt or ""
 
-
 # ========== 회사×토픽 매트릭스: ORG 잡음 제거 ==========
 ORG_BAD_PATTERNS = [
     r"^\d{1,2}일$", r"^\d{4}$", r"^\d+(억원|조원|달러|원)$",
@@ -140,7 +139,6 @@ def extract_orgs(text: str) -> List[str]:
         return []
     toks = re.findall(r"[가-힣A-Za-z0-9\-\+\.]{2,}", text)
     toks = [norm_org_token(t) for t in toks if t and len(t.strip()) >= 2]
-
     # 화이트리스트(있으면 우선)
     def _load_lines(p):
         try:
@@ -150,7 +148,6 @@ def extract_orgs(text: str) -> List[str]:
             return []
     ENT_ORG = set(_load_lines("data/dictionaries/entities_org.txt"))
     BRANDS  = set(_load_lines("data/dictionaries/brands.txt"))
-
     cand = []
     for t in toks:
         if is_bad_org_token(t):
@@ -158,7 +155,6 @@ def extract_orgs(text: str) -> List[str]:
         if re.match(r"^[가-힣A-Za-z]+[0-9]{1,3}[A-Za-z]?$", t):  # 모델형 제외
             continue
         cand.append(t)
-
     cnt = Counter(cand)
     out = []
     for w, c in cnt.most_common(50):
@@ -185,7 +181,6 @@ def export_company_topic_matrix(meta_items: List[Dict[str,Any]], topic_labels: L
     for tl in topic_labels:
         ws = set([w for w in tl["words"] if w])
         topic_wordsets.append((tl["topic_id"], ws))
-
     matrix = defaultdict(lambda: defaultdict(int))
     for it in meta_items:
         text = (it.get("body") or it.get("description") or "") or ""
@@ -201,7 +196,6 @@ def export_company_topic_matrix(meta_items: List[Dict[str,Any]], topic_labels: L
                         hit += 1
                 if hit > 0:
                     matrix[org][tid] += hit
-
     all_tids = sorted(set([tid for _, d in matrix.items() for tid in d.keys()]))
     with open("outputs/export/company_topic_matrix.csv", "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
@@ -275,7 +269,7 @@ def build_prompt(context: Dict[str, Any], want: int = 5) -> str:
 
 def strip_code_fence(text: str) -> str:
     t = (text or "").strip()
-    t = re.sub(r"^```[\t ]*\w*[\t ]*\n", "", t, flags=re.M)
+    t = re.sub(r"^```
     t = re.sub(r"\n```[\t ]*$", "", t, flags=re.M)
     return t.strip()
 
@@ -361,7 +355,7 @@ def extract_ndjson_lines(t: str, max_items=10):
         line = line.strip()
         if not line:
             continue
-        line = re.sub(r"^[\-\*\d\.\)\s]+", "", line)
+        line = re.sub(r"^[\-*\d\.\)\s]+", "", line)
         try:
             obj = json.loads(clean_json_text2(line))
             if isinstance(obj, dict):
@@ -427,14 +421,12 @@ def normalize_item(it: Dict[str, Any]) -> Dict[str, Any]:
     risks = it.get("risks") or it.get("risk") or []
     score = it.get("priority_score", it.get("score", 0))
     score = max(0.0, min(5.0, to_float(score, 0.0)))
-
     idea = clip_text(idea, 100)
     problem = clip_text(problem, 300)
     target = clip_text(target, 120)
     value = clip_text(value, 220)
     solution = as_list(solution, max_len=4)
     risks = as_list(risks, max_len=3)
-
     out = {
         "idea": idea,
         "problem": problem,
@@ -511,32 +503,33 @@ def load_context_for_prompt() -> Dict[str, Any]:
 
     return {"summary": summary, "keywords": kw_simple, "topics": tp_simple, "trends": trend_rows, "events": events_simple}
 
-def call_gemini(prompt: str) -> str:
-    import google.generativeai as genai
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY 환경 변수가 없습니다.")
-    genai.configure(api_key=api_key)
-    model_name = str(LLM2.get("model", "gemini-1.5-flash"))
-    max_tokens = int(LLM2.get("max_output_tokens", 2048))
-    temperature = float(LLM2.get("temperature", 0.3))
-    model = genai.GenerativeModel(model_name)
-    resp = model.generate_content(
-        prompt,
-        generation_config={"max_output_tokens": max_tokens, "temperature": temperature, "top_p": 0.9}
-    )
-    text = (getattr(resp, "text", None) or "").strip()
-    return text
-
 def make_opportunities_llm(meta_items: List[Dict[str,Any]]) -> List[Dict[str,Any]]:
+    # 프롬프트 구성
     want = 5
     context = load_context_for_prompt()
     prompt = build_prompt(context, want=want)
-    try:
-        raw_text = call_gemini(prompt)
-    except Exception as e:
-        print(f"[ERROR] Gemini 호출 실패: {e}")
+
+    # LLM 호출 (안전 래퍼)
+    import google.generativeai as genai
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        print("[ERROR] GEMINI_API_KEY 환경 변수가 없습니다.")
         return []
+    genai.configure(api_key=api_key)
+    model_name = str(LLM2.get("model", "gemini-1.5-flash"))
+    model = genai.GenerativeModel(model_name)
+
+    raw_text = llm_generate(
+        model,
+        prompt,
+        LLM2,
+        shrink_hint="- 표는 생략하고 6~8줄 서술형으로 요약하세요."
+    )
+    if not raw_text:
+        print("[ERROR] LLM 응답이 비어 있습니다.")
+        return []
+
+    # 파싱 → 정규화
     ideas_raw = extract_ideas_any(raw_text, want=want) or []
     items = []
     for it in ideas_raw:
@@ -546,6 +539,7 @@ def make_opportunities_llm(meta_items: List[Dict[str,Any]]) -> List[Dict[str,Any
                 items.append(norm)
         except Exception:
             continue
+
     items.sort(key=lambda x: x.get("priority_score", 0.0), reverse=True)
     return items[:want]
 
@@ -599,6 +593,7 @@ def enrich_with_signals(ideas: List[Dict[str,Any]],
             ts_z_vals.append(float(tr.get("z_like",0.0)))
         except Exception:
             ts_z_vals.append(0.0)
+
     cur_hi = max([1] + ts_cur_vals) if ts_cur_vals else 1
     cur_lo = min([0] + ts_cur_vals) if ts_cur_vals else 0
     z_hi  = max([0.0] + ts_z_vals) if ts_z_vals else 0.0
@@ -613,6 +608,7 @@ def enrich_with_signals(ideas: List[Dict[str,Any]],
 
         s_market = 0.75 * normalize_score(cur, cur_lo, cur_hi) + 0.25 * normalize_score(it.get("priority_score",0.0), 0.0, 5.0)
         s_urg = normalize_score(z, z_lo, z_hi)
+
         evt_boost = 0.0
         if event_hit.get("LAUNCH",0)>0: evt_boost += 0.10
         if event_hit.get("PARTNERSHIP",0)>0: evt_boost += 0.08
@@ -650,6 +646,7 @@ def enrich_with_signals(ideas: List[Dict[str,Any]],
         it["solution"] = it.get("solution") or ["파일럿→제휴→인증 확보"]
         it["risks"] = it.get("risks") or ["규제/표준 불확실성", "비용/ROI 불확실성"]
         it["priority_score"] = it.get("priority_score", 0.0)
+
         out.append(it)
 
     out.sort(key=lambda x: (x.get("priority_score",0.0), x.get("score",0.0)), reverse=True)
@@ -669,6 +666,7 @@ def fill_opportunities_to_five(ideas: list, keywords_obj: dict, want: int = 5) -
 
     titles = [it.get("idea") or it.get("title") or "" for it in existing if (it.get("idea") or it.get("title"))]
     vec = TfidfVectorizer(analyzer="char", ngram_range=(3,5))
+
     if titles:
         M = vec.fit_transform(titles + [c[0] for c in cands])
         base = M[:len(titles)]
@@ -702,6 +700,7 @@ def fill_opportunities_to_five(ideas: list, keywords_obj: dict, want: int = 5) -
         }
         existing.append(sk)
         used.add(term)
+
     return existing[:want]
 
 # ========== 메인 ==========
@@ -711,6 +710,7 @@ def main():
 
     meta_path = latest("data/news_meta_*.json")
     meta_items = load_json(meta_path, [])
+
     keywords_obj = load_json("outputs/keywords.json", {"keywords":[]})
     topics_obj   = load_json("outputs/topics.json", {"topics":[]})
 
