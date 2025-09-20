@@ -4,7 +4,6 @@
 # - KR-WordRank + TF-IDF 기반 (라이트), 문서별 KeyBERT MMR 재랭킹 및 BERTopic 보정(프로)
 # - 숫자/날짜/통화/단위 필터 + 행정지명/인명/일반어 디버프 + 하드 드롭
 # - 값 정렬은 itemgetter(1) 공용 헬퍼로 통일(오타 방지)
-
 import os
 import re
 import glob
@@ -13,7 +12,6 @@ import math
 import logging
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
-
 import numpy as np
 from operator import itemgetter  # 값 정렬 키
 
@@ -48,6 +46,11 @@ try:
 except Exception:
     BERTopic, UMAP, HDBSCAN = None, None, None
 
+# NEW: 안전 임포트 (n-gram 후보 생성용)
+try:
+    from sklearn.feature_extraction.text import CountVectorizer
+except Exception:
+    CountVectorizer = None
 
 # -------------------------
 # Utilities / IO
@@ -75,7 +78,6 @@ def latest_file(pattern: str) -> Optional[str]:
 # 공용: dict를 값(value) 기준 내림차순 정렬
 def sort_items_by_value_desc(d: Dict[str, float]):
     return sorted(d.items(), key=itemgetter(1), reverse=True)  # (key,value) 2-튜플의 인덱스 1이 값
-
 
 # -------------------------
 # Build docs from meta
@@ -107,12 +109,10 @@ def dedup_docs_by_cosine(docs: List[str], threshold: float = 0.90) -> List[str]:
                 removed.add(j)
     return [docs[i] for i in keep_indices]
 
-
 # -------------------------
 # Normalization / noun-ish cleanup
 # -------------------------
 _HANGUL_ALNUM = re.compile(r"[가-힣A-Za-z0-9]+")
-
 def basic_normalize(txt: str) -> str:
     t = kr_normalize((txt or "").strip(), english=False, number=True)
     toks = _HANGUL_ALNUM.findall(t)
@@ -120,7 +120,6 @@ def basic_normalize(txt: str) -> str:
 
 _JOSA = ("은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐")
 _EOMI = ("했다","하였다","한다","했다가","하며","해서","하는","되다","되면","되었","된다","되니","되어","됐다","됐다가","했다며")
-
 def nounish_strip(sentence: str) -> str:
     toks = sentence.split()
     out = []
@@ -138,7 +137,6 @@ def nounish_strip(sentence: str) -> str:
             out.append(t)
     return " ".join(out)
 
-
 # -------------------------
 # Patterns / Locations
 # -------------------------
@@ -154,8 +152,8 @@ def compile_patterns(cfg: dict):
         "DATE_PAT": _comp("DATE_PAT", r"^\d{1,2}일$|^\d{1,2}월$|^\d{4}년$|^\d{4}$"),
         "CURRENCY_PAT": _comp("CURRENCY_PAT", r"^[0-9,\.]+(원|달러|유로|엔|위안|억원|조원)$"),
         "PERSON_NAME_PAT": _comp("PERSON_NAME_PAT", r"^[가-힣]{2,4}$"),
-        # 숫자+단위(%, 배, 건, 개, 명, 곳, 회, 대, 종, 분기 등)
-        "UNIT_TOKEN_PAT": re.compile(r"^\d+(?:[.,]\d+)?(%|배|건|개|명|곳|회|대|종|분기)$")
+        # 숫자+단위(확장: 세대/nm/나노/인치 포함)
+        "UNIT_TOKEN_PAT": _comp("UNIT_TOKEN_PAT", r"^\d+(?:[.,]\d+)?(%|배|건|개|명|곳|회|대|종|분기|세대|nm|나노|인치)$"),
     }
     return pats
 
@@ -174,7 +172,6 @@ def is_location_token(tok: str) -> bool:
         return True
     return False
 
-
 # -------------------------
 # Preprocess with strict filters
 # -------------------------
@@ -183,7 +180,6 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
     ps = set(phrase_stop or [])
     sw = set(stopwords or [])
     P = patterns or {}
-
     out = []
     for d in docs:
         if not d:
@@ -192,10 +188,8 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
         for ph in ps:
             if ph:
                 t = t.replace(ph, " ")
-
         if use_nounish:
             t = nounish_strip(t)
-
         toks = []
         for w in t.split():
             # 사전 불용어 제거
@@ -213,12 +207,10 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
             if len(w) < 2:
                 continue
             toks.append(w)
-
         t2 = " ".join(toks)
         if t2:
             out.append(t2)
     return out
-
 
 # -------------------------
 # Alias / brand-entity resources
@@ -249,9 +241,86 @@ def load_brand_entity_lists() -> Tuple[set, set]:
     entities = {e.strip() for e in entities if e.strip()}
     return brands, entities
 
+# -------------------------
+# NEW: Docfreq filter / sampler / n-gram candidates / domain relevance
+# -------------------------
+def docfreq_map(candidates: List[str], docs: List[str]) -> Dict[str, int]:
+    df = {c: 0 for c in candidates}
+    for d in docs:
+        for c in candidates:
+            if " " in c:
+                if c in d:
+                    df[c] += 1
+            else:
+                if re.search(rf"(?<!\S){re.escape(c)}(?!\S)", d):
+                    df[c] += 1
+    return df
+
+def filter_by_docfreq(scores: Dict[str, float], docs: List[str], min_df: int = 3, autotune: bool = True) -> Dict[str, float]:
+    if not scores:
+        return {}
+    n_docs = len(docs)
+    if autotune:
+        if n_docs >= 60:  min_df = max(min_df, 4)
+        if n_docs >= 120: min_df = max(min_df, 5)
+    df = docfreq_map(list(scores.keys()), docs)
+    return {k: v for k, v in scores.items() if df.get(k, 0) >= max(1, int(min_df))}
+
+def even_sample(lst: List[str], k: int) -> List[str]:
+    if k <= 0 or not lst:
+        return []
+    if len(lst) <= k:
+        return lst[:]
+    step = max(1, len(lst) // k)
+    return lst[::step][:k]
+
+def build_ngram_candidates(docs: List[str], stopwords: List[str], ngram_range=(2,3), min_df=2, max_df=0.95, topk=300) -> List[str]:
+    if CountVectorizer is None or not docs:
+        return []
+    try:
+        cv = CountVectorizer(ngram_range=ngram_range, min_df=min_df, max_df=max_df,
+                             token_pattern=r"[가-힣A-Za-z0-9_]{2,}")
+        X = cv.fit_transform(docs)
+        terms = cv.get_feature_names_out()
+        freqs = np.asarray(X.sum(axis=0)).ravel()
+        pairs = [(t, int(freqs[i])) for i, t in enumerate(terms)]
+        pairs.sort(key=itemgetter(1), reverse=True)
+        sw = set(stopwords or [])
+        out = []
+        for t, _ in pairs:
+            toks = t.split()
+            if any(tok in sw for tok in toks):
+                continue
+            out.append(t)
+            if len(out) >= topk:
+                break
+        return out
+    except Exception:
+        return []
+
+def adjust_by_domain_relevance(scores: Dict[str, float], docs: List[str], domain_hints: List[str], debuff: float = 0.4) -> Dict[str, float]:
+    # 간단 공출현율 기반: 도메인 힌트가 등장하는 문서에서의 등장 비율이 낮으면 약화
+    if not scores or not docs:
+        return scores
+    hints = [h.lower() for h in (domain_hints or []) if h]
+    if not hints:
+        return scores
+    df = docfreq_map(list(scores.keys()), docs)
+    hint_docs = [d for d in docs if any(h in d.lower() for h in hints)]
+    if not hint_docs:
+        return scores
+    df_hint = docfreq_map(list(scores.keys()), hint_docs)
+    out = {}
+    for k, v in scores.items():
+        total = max(1, df.get(k, 0))
+        in_hint = df_hint.get(k, 0)
+        rate = in_hint / total
+        s = v * (1.0 if rate >= 0.5 else (0.7 if rate >= 0.3 else debuff))
+        out[k] = s
+    return out
 
 # -------------------------
-# Domain weighting with debuffs
+# Domain weighting with debuffs (UPDATED)
 # -------------------------
 def apply_domain_weights(scores: Dict[str, float],
                          domain_hints: List[str],
@@ -272,6 +341,10 @@ def apply_domain_weights(scores: Dict[str, float],
     person_debuf = float(weight_cfg.get("person_name_debuff", 0.8))
     loc_debuf    = float(weight_cfg.get("location_debuff", 0.6))
     num_debuf    = float(weight_cfg.get("number_debuff", 0.5))
+    out_domain_debuff = float(weight_cfg.get("out_of_domain_debuff", 0.4))
+
+    # 외부 사전(도메인 외) 로드
+    out_of_domain = set(load_lines("data/dictionaries/out_of_domain.txt"))
 
     dh = set(domain_hints or [])
     cm = set(common_debuff or [])
@@ -292,7 +365,10 @@ def apply_domain_weights(scores: Dict[str, float],
         if k2 in brands:
             s *= brand_boost
 
-        # 인명(2~4자 한글) 약화(엔티티 제외)
+        if k2 in out_of_domain:
+            s *= out_domain_debuff
+
+        # 인명(2~4자 한글) 약화(엔티티/브랜드 제외)
         if P.get("PERSON_NAME_PAT") and P["PERSON_NAME_PAT"].fullmatch(k2):
             if k2 not in entities and k2 not in brands:
                 s *= person_debuf
@@ -313,7 +389,6 @@ def apply_domain_weights(scores: Dict[str, float],
         boosted[k2] = max(boosted.get(k2, 0.0), s)
     return boosted
 
-
 # -------------------------
 # Stats / autotune
 # -------------------------
@@ -327,7 +402,6 @@ def autotune_kr(n_docs: int, avg_len: float, min_count_base: int=3) -> Tuple[int
     mc = min(max(3, mc), 12)
     max_len = 12 if avg_len < 400 else 15
     return mc, max_len
-
 
 # -------------------------
 # KR-WordRank + TF-IDF (Light)
@@ -384,7 +458,6 @@ def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
     pairs.sort(key=itemgetter(1), reverse=True)  # 값 기준 정렬
     return dict(pairs[: max(1, int(topk or 1))])
 
-
 # -------------------------
 # KeyBERT MMR reranking (Pro, per-document)
 # -------------------------
@@ -407,7 +480,6 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
         return dict(rer[:topn]) if rer else {}
     except Exception:
         return {}
-
 
 # -------------------------
 # BERTopic topic context (optional)
@@ -433,7 +505,6 @@ def topic_context_keywords(docs: List[str], model_name: str, umap_neighbors: int
     except Exception:
         return {}
 
-
 # -------------------------
 # Main
 # -------------------------
@@ -448,7 +519,6 @@ def main():
         set(cfg.get("phrase_stop", []) or [])
         | set(load_lines("data/dictionaries/phrase_stopwords.txt"))
     )
-
     stopwords = sorted(
         set(cfg.get("stopwords", []) or [])
         | set(load_lines("data/dictionaries/stopwords_ext.txt"))
@@ -499,13 +569,18 @@ def main():
 
     combined = base_scores.copy()
 
-    # Pro: per-document KeyBERT MMR reranking and aggregation
+    # Pro: per-document KeyBERT MMR reranking and aggregation (UPDATED)
     if use_pro and KeyBERT is not None and combined:
-        cand = list(combined.keys())
+        # 1) 후보군 확장: 2~3그램 복합어 추가
+        ngram_cands = build_ngram_candidates(pre_docs, stopwords=stopwords, ngram_range=(2,3), min_df=2, max_df=0.95, topk=300)
+        cand = list(set(list(combined.keys()) + ngram_cands))
+
         model_name = cfg.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-        diversity = float(cfg.get("mmr_diversity", 0.5))
+        diversity = float(cfg.get("mmr_diversity", 0.55))
         max_docs_rerank = int(cfg.get("max_docs_rerank", 80))
-        sel_docs = pre_docs[:max_docs_rerank]
+
+        # 2) 균등 샘플링으로 치우침 방지
+        sel_docs = even_sample(pre_docs, max_docs_rerank)
 
         agg, cnt = defaultdict(float), defaultdict(int)
         for d in sel_docs:
@@ -528,7 +603,7 @@ def main():
                 mn, mx = min(vals), max(vals)
                 return {k: (d.get(k,0.0)-mn)/(mx-mn+1e-12) for k in all_keys}
             base_n = norm(combined)
-            rer_n = {k: (agg[k]/max(1,cnt[k])) for k in all_keys}
+            rer_n  = {k: (agg[k]/max(1,cnt[k])) for k in all_keys}
             vals = list(rer_n.values())
             mn, mx = (min(vals), max(vals)) if vals else (0.0, 1.0)
             rer_n = {k: (rer_n.get(k,0.0)-mn)/(mx-mn+1e-12) for k in all_keys}
@@ -548,7 +623,14 @@ def main():
             if k in topic_set:
                 combined[k] *= 1.05
 
-    # Domain/alias/brand/entity weights + debuffs
+    # NEW: 1차 정제(문서빈도) + 도메인 관련도 보정(공출현율)
+    min_df_cfg = int(cfg.get("min_docfreq", 3))
+    auto_df = bool(cfg.get("min_docfreq_autotune", True))
+    combined = filter_by_docfreq(combined, pre_docs, min_df=min_df_cfg, autotune=auto_df)
+    combined = adjust_by_domain_relevance(combined, pre_docs, cfg.get("domain_hints", []),
+                                          debuff=float(weights.get("out_of_domain_debuff", 0.4)))
+
+    # Domain/alias/brand/entity weights + debuffs (UPDATED)
     combined = apply_domain_weights(
         combined,
         domain_hints=cfg.get("domain_hints", []),
@@ -570,7 +652,6 @@ def main():
 
     # Output
     top_items = sort_items_by_value_desc(combined)[: topn_keywords]
-
     os.makedirs("outputs", exist_ok=True)
     with open("outputs/keywords.json", "w", encoding="utf-8") as f:
         json.dump({"keywords": [{"keyword": k, "score": float(s)} for k, s in top_items]}, f, ensure_ascii=False, indent=2)
