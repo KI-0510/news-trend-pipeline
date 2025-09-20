@@ -4,6 +4,7 @@
 # - KR-WordRank + TF-IDF 기반 (라이트), 문서별 KeyBERT MMR 재랭킹 및 BERTopic 보정(프로)
 # - 숫자/날짜/통화/단위 필터 + 행정지명/인명/일반어 디버프 + 하드 드롭
 # - 값 정렬은 itemgetter(1) 공용 헬퍼로 통일(오타 방지)
+
 import os
 import re
 import glob
@@ -75,6 +76,7 @@ def latest_file(pattern: str) -> Optional[str]:
     files = sorted(glob.glob(pattern))
     return files[-1] if files else None
 
+# MMR 다양성 재랭킹 (Lite/Pro 공용)
 def mmr_diversify_terms(sorted_pairs: List[Tuple[str, float]], topn: int = 50, diversity: float = 0.55) -> List[Tuple[str, float]]:
     def char_bigrams(s: str):
         s = (s or "").strip()
@@ -101,7 +103,6 @@ def mmr_diversify_terms(sorted_pairs: List[Tuple[str, float]], topn: int = 50, d
                 best_score, best_i = mmr, i
         selected.append(cand.pop(best_i))
     return selected
-
 
 # 공용: dict를 값(value) 기준 내림차순 정렬
 def sort_items_by_value_desc(d: Dict[str, float]):
@@ -148,6 +149,7 @@ def basic_normalize(txt: str) -> str:
 
 _JOSA = ("은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐")
 _EOMI = ("했다","하였다","한다","했다가","하며","해서","하는","되다","되면","되었","된다","되니","되어","됐다","됐다가","했다며")
+
 def nounish_strip(sentence: str) -> str:
     toks = sentence.split()
     out = []
@@ -208,6 +210,7 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
     ps = set(phrase_stop or [])
     sw = set(stopwords or [])
     P = patterns or {}
+
     out = []
     for d in docs:
         if not d:
@@ -218,24 +221,37 @@ def preprocess_docs(docs: List[str], phrase_stop: List[str], stopwords: List[str
                 t = t.replace(ph, " ")
         if use_nounish:
             t = nounish_strip(t)
+
         toks = []
         for w in t.split():
-            # 사전 불용어 제거
-            # 조사 자체 토큰은 스킵
+            # 1) 조사 자체 토큰 스킵
             if w in {"은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐"}:
                 continue
-            # 숫자/날짜/통화/단위 제거
-            if P.get("NUMERIC_ONLY") and P["NUMERIC_ONLY"].match(w):  # 숫자만
+
+            # 2) 간단 어미/인용형 컷 적용
+            for suf in ("이라고","라고","며","면서","지만","다는","라고도","다고","고"):
+                if w.endswith(suf) and len(w) >= len(suf) + 2:
+                    w = w[:-len(suf)]
+                    break
+
+            # 3) 불용어(사전+ext) 매칭
+            if w in sw:
                 continue
-            if P.get("DATE_PAT") and P["DATE_PAT"].match(w):          # 날짜/연도
+
+            # 4) 숫자/날짜/통화/단위 제거
+            if P.get("NUMERIC_ONLY") and P["NUMERIC_ONLY"].match(w):
                 continue
-            if P.get("CURRENCY_PAT") and P["CURRENCY_PAT"].match(w):  # 통화
+            if P.get("DATE_PAT") and P["DATE_PAT"].match(w):
                 continue
-            if P.get("UNIT_TOKEN_PAT") and P["UNIT_TOKEN_PAT"].match(w):  # 숫자+단위
+            if P.get("CURRENCY_PAT") and P["CURRENCY_PAT"].match(w):
                 continue
+            if P.get("UNIT_TOKEN_PAT") and P["UNIT_TOKEN_PAT"].match(w):
+                continue
+
             if len(w) < 2:
                 continue
             toks.append(w)
+
         t2 = " ".join(toks)
         if t2:
             out.append(t2)
@@ -271,7 +287,7 @@ def load_brand_entity_lists() -> Tuple[set, set]:
     return brands, entities
 
 # -------------------------
-# NEW: Docfreq filter / sampler / n-gram candidates / domain relevance
+# Docfreq filter / sampler / n-gram candidates / domain relevance
 # -------------------------
 def docfreq_map(candidates: List[str], docs: List[str]) -> Dict[str, int]:
     df = {c: 0 for c in candidates}
@@ -600,7 +616,7 @@ def main():
 
     # Pro: per-document KeyBERT MMR reranking and aggregation (UPDATED)
     if use_pro and KeyBERT is not None and combined:
-        # 1) 후보군 확장: 2~3그램 복합어 추가
+        # 1) 후보군 확장: 2~3그램 복합어 추가 (조사 포함 후보 차단)
         _JOSA_SET = set(["은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐"])
         ngram_cands = build_ngram_candidates(
             pre_docs,
@@ -684,6 +700,24 @@ def main():
                 or patterns["CURRENCY_PAT"].match(tok)
                 or patterns["UNIT_TOKEN_PAT"].match(tok))
     combined = {k: v for k, v in combined.items() if not _hard_drop(k)}
+
+    # Final hard drop: stopwords + phrase + optional regex
+    stop_final = set(stopwords) | set(cfg.get("stopwords", []))  # 사전+config 병합
+
+    # 선택: config에 regex_stopwords가 있을 경우 컴파일
+    regex_list = []
+    for pat in (cfg.get("regex_stopwords", []) or []):
+        try:
+            regex_list.append(re.compile(pat))
+        except Exception:
+            pass
+
+    def _is_regex_stop(s: str) -> bool:
+        return any(r.search(s) for r in regex_list)
+
+    # 불용어/정규식 최종 제거
+    combined = {k: v for k, v in combined.items()
+                if (k not in stop_final) and (not _is_regex_stop(k))}
 
     # Output with Lite MMR diversification
     top_pairs = sort_items_by_value_desc(combined)[: max(100, topn_keywords)]
