@@ -478,8 +478,17 @@ def build_markdown(keywords, topics, ts, insights, opps, fig_dir="fig", out_md="
     lines.append("## Topics\n")
     if tlist:
         for t in tlist:
-            words = ", ".join([w.get("word", "") for w in t.get("top_words", [])[:6]])
-            lines.append(f"- Topic #{t.get('topic_id')}: {words}")
+            tid = t.get("topic_id")
+            top_words = [w.get("word", "") for w in t.get("top_words", []) if w.get("word")]
+            head = (t.get("topic_name") or ", ".join(top_words[:3]) or f"Topic #{tid}")
+            # 대표 단어 3~6개 병기
+            words_preview = ", ".join(top_words[:6])
+            lines.append(f"- {head} (#{tid})")
+            if words_preview:
+                lines.append(f"  - 대표 단어: {words_preview}")
+            if t.get("insight"):
+                one_liner = (t.get("insight") or "").replace("\n", " ").strip()
+                lines.append(f"  - 요약: {one_liner}")
     else:
         lines.append("- (데이터 없음)")
     lines.append(f"\n![Topics]({fig_dir}/topics.png)\n")
