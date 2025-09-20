@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 # Module C – Topics, Timeseries, Insights
 # - 전처리: module_b와 동일 철학(불용어/정규식/조사·어미 컷 + alias 정규화)
-# - Lite=LDA(튜닝: k 후보 + 확률 정규화), Pro=BERTopic(min_topic_size + 확률 정규화)
-# - 토픽 후처리: 불용어/지명/숫자·날짜·단위 컷 (어워드 하드 드롭 제거)
-# - 인사이트: 도메인 겹침/노이즈 겹침 가중 점수로 상위 토픽 선정
-# - LLM(Gemini): 토픽명/토픽 요약(‘디스플레이’ 관점), 시계열 해석(trend_summary) 선택 생성
+# - Lite=LDA(튜닝 + 확률 정규화), Pro=BERTopic(min_topic_size + 확률 정규화)
+# - 토픽 후처리: 불용어/지명/숫자·날짜·단위 컷(어워드 하드 드롭 제거) + 최종 alias 정규화
+# - 인사이트: 도메인 겹침/노이즈 겹침 가중 점수(강화: +0.9*ds, -0.5*ns)
+# - LLM(Gemini): 토픽명/요약(‘디스플레이’ 관점), 시계열 해석(trend_summary)
+# - 최적화: 상위 K개 토픽에만 LLM 적용 + top_topics 사후 보강(LABEL/INSIGHT 보장)
 
 import os, re, glob, json, datetime, unicodedata, random
 from typing import List, Dict, Any, Tuple, Optional
@@ -52,66 +53,6 @@ def llm_config(cfg: dict) -> dict:
 
 CFG = load_config()
 LLM = llm_config(CFG)
-
-# 공통 GenerationConfig + 안전 파싱 + 재시도 유틸
-def _gen_cfg(llm: dict):
-    return {
-        "temperature": float(llm.get("temperature", 0.3)),
-        "max_output_tokens": int(llm.get("max_output_tokens", 1024)),
-    }
-
-def _extract_text(resp):
-    # response.text 대신 candidates → parts에서 안전 추출
-    try:
-        cands = getattr(resp, "candidates", []) or []
-        if not cands:
-            return ""
-        parts = getattr(cands[0], "content", None)
-        parts = getattr(parts, "parts", []) if parts else []
-        texts = []
-        for p in parts:
-            t = getattr(p, "text", None)
-            if t:
-                texts.append(t)
-        return " ".join(texts).strip()
-    except Exception:
-        return ""
-
-def _retry_if_maxtokens(model, prompt, gen_cfg, shrink_hint=None):
-    # 1차 시도
-    resp = model.generate_content(prompt, generation_config=gen_cfg)
-    txt = _extract_text(resp)
-    # MAX_TOKENS(=2)면 축약 프롬프트로 1회 재시도
-    try:
-        fr = getattr(resp.candidates[0], "finish_reason", None)
-    except Exception:
-        fr = None
-    if (not txt) and fr == 2 and shrink_hint:
-        cfg2 = dict(gen_cfg)
-        cfg2["max_output_tokens"] = int(gen_cfg.get("max_output_tokens", 1024)) * 2
-        resp2 = model.generate_content(f"{prompt}\n{shrink_hint}", generation_config=cfg2)
-        txt = _extract_text(resp2)
-    return txt
-
-def _topk_topics(topics_obj: Dict[str,Any], k: int = 5) -> Tuple[List[Dict[str,Any]], List[int]]:
-    tops = topics_obj.get("topics", []) or []
-    # 점수: 상위 단어 확률 합
-    scored = [(i, t, sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))) for i, t in enumerate(tops)]
-    scored.sort(key=lambda x: x[2], reverse=True)
-    pick = scored[:max(0, int(k))]
-    idxs = [i for (i, _t, _s) in pick]
-    subset = [tops[i] for i in idxs]
-    return subset, idxs
-
-def _merge_llm_fields(orig_topics: List[Dict[str,Any]], llm_topics_subset: List[Dict[str,Any]], idxs: List[int]) -> List[Dict[str,Any]]:
-    out = list(orig_topics)
-    for pos, t in zip(idxs, llm_topics_subset):
-        # topic_name / insight만 덮어쓰기
-        if "topic_name" in t:
-            out[pos]["topic_name"] = t["topic_name"]
-        if "insight" in t:
-            out[pos]["insight"] = t["insight"]
-    return out
 
 # -------------------------
 # Mode / logging
@@ -198,8 +139,7 @@ def merged_stopwords(cfg: dict) -> Tuple[List[str], List[str]]:
     return phrase, stop
 
 def to_stopword_list(sw) -> List[str]:
-    items = []
-    seen = set()
+    items, seen = [], set()
     for s in (sw or []):
         t = str(s).strip()
         if not t or t in seen:
@@ -226,7 +166,7 @@ def apply_alias(tokens: List[str]) -> List[str]:
     return [normalize_alias_token(t) for t in tokens]
 
 # -------------------------
-# Text normalize / tokenize (module_b와 동일 철학)
+# Text normalize / tokenize
 # -------------------------
 _HAN_ALNUM = re.compile(r"[가-힣A-Za-z0-9]+")
 
@@ -454,7 +394,7 @@ def topics_pro(corpus: List[str], cfg: dict, topn=10, random_state=42) -> Dict[s
     return {"topics": out}
 
 # -------------------------
-# Topic post-filter (award hard-drop 제거)
+# Topic post-filter (award hard-drop 제거) + alias 최종 정규화
 # -------------------------
 def post_filter_topics(topics_obj: Dict[str, Any], stopwords: List[str], P: dict) -> Dict[str, Any]:
     sw = set(stopwords or [])
@@ -463,18 +403,58 @@ def post_filter_topics(topics_obj: Dict[str, Any], stopwords: List[str], P: dict
         kept = []
         for w in (t.get("top_words") or []):
             ww = (w.get("word") or "").strip()
-            if not ww:
-                continue
-            if ww in sw:
-                continue
-            if is_location_token(ww):
-                continue
+            if not ww: continue
+            if ww in sw: continue
+            if is_location_token(ww): continue
             if P["NUMERIC_ONLY"].match(ww) or P["DATE_PAT"].match(ww) or P["CURRENCY_PAT"].match(ww) or P["UNIT_TOKEN_PAT"].match(ww):
                 continue
+            ww = normalize_alias_token(ww)  # 토픽 출력단 최종 표기 정규화
             kept.append({"word": ww, "prob": float(w.get("prob", 0.0))})
         if kept:
             filtered.append({"topic_id": int(t.get("topic_id", 0)), "top_words": kept})
     return {"topics": filtered}
+
+# -------------------------
+# LLM helpers: generation config / safe extract / retry
+# -------------------------
+def _gen_cfg(llm: dict):
+    return {
+        "temperature": float(llm.get("temperature", 0.3)),
+        "max_output_tokens": int(llm.get("max_output_tokens", 1024)),
+    }
+
+def _extract_text(resp):
+    try:
+        cands = getattr(resp, "candidates", []) or []
+        if not cands:
+            return ""
+        parts = getattr(cands[0], "content", None)
+        parts = getattr(parts, "parts", []) if parts else []
+        texts = []
+        for p in parts:
+            t = getattr(p, "text", None)
+            if t:
+                texts.append(t)
+        return " ".join(texts).strip()
+    except Exception:
+        return ""
+
+def _retry_if_maxtokens(model, prompt, gen_cfg, shrink_hint=None):
+    resp = model.generate_content(prompt, generation_config=gen_cfg)
+    txt = _extract_text(resp)
+    try:
+        fr = getattr(resp.candidates[0], "finish_reason", None)
+    except Exception:
+        fr = None
+    if (not txt) and fr == 2 and shrink_hint:
+        cfg2 = dict(gen_cfg)
+        cfg2["max_output_tokens"] = int(gen_cfg.get("max_output_tokens", 1024)) * 2
+        resp2 = model.generate_content(f"{prompt}\n{shrink_hint}", generation_config=cfg2)
+        txt = _extract_text(resp2)
+    if (not txt) and fr == 3:
+        resp3 = model.generate_content(prompt + "\n- 안전 가이드라인을 준수하고 민감/금지 컨텐츠는 언급하지 마세요.", generation_config=gen_cfg)
+        txt = _extract_text(resp3)
+    return txt
 
 # -------------------------
 # LLM-based topic naming (optional; Gemini)
@@ -493,6 +473,7 @@ def name_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Di
     except Exception:
         return topics_obj
 
+    gen_cfg = _gen_cfg(llm)
     for t in topics_obj.get("topics", []):
         words = [w.get("word","") for w in (t.get("top_words") or [])][:8]
         if not words:
@@ -503,7 +484,6 @@ def name_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Di
             "출력은 따옴표 없이 한국어 토픽 이름만 한 줄로 주세요."
         )
         try:
-            gen_cfg = _gen_cfg(llm)
             resp = model.generate_content(prompt, generation_config=gen_cfg)
             name = _extract_text(resp)
             if name:
@@ -514,7 +494,6 @@ def name_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Di
 
 # -------------------------
 # LLM-based topic insight summary (optional; Gemini)
-#  - ‘디스플레이’ 도메인 관점으로 요약
 # -------------------------
 def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Dict[str, Any]:
     provider = (llm.get("provider") or "").lower()
@@ -530,6 +509,7 @@ def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) 
     except Exception:
         return topics_obj
 
+    gen_cfg = _gen_cfg(llm)
     for t in topics_obj.get("topics", []):
         words = [w.get("word","") for w in (t.get("top_words") or []) if w.get("word")][:10]
         if not words:
@@ -542,15 +522,12 @@ def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) 
             "- 무엇(기술/제품/공정)과 왜 중요한지 중심"
         )
         try:
-            gen_cfg = _gen_cfg(llm)
             text = _retry_if_maxtokens(
-                model,
-                prompt,
-                gen_cfg,
+                model, prompt, gen_cfg,
                 shrink_hint="- 최대 2문장, 200자 이내로 요약."
             )
             if text:
-                t["insight"] = text
+                t["insight"] = text.strip()
         except Exception:
             continue
     return topics_obj
@@ -605,20 +582,18 @@ def summarize_timeseries_with_llm(ts_obj: Dict[str, Any], cfg: dict, llm: dict) 
         "- 사실 기반으로 작성하고 과도한 추측은 지양"
     )
 
+    gen_cfg = _gen_cfg(llm)
     try:
-        gen_cfg = _gen_cfg(llm)
         text = _retry_if_maxtokens(
-            model,
-            prompt,
-            gen_cfg,
+            model, prompt, gen_cfg,
             shrink_hint="- 2문장, 180자 이내로 간결 요약."
         )
-        return text
+        return text or ""
     except Exception:
         return ""
 
 # -------------------------
-# Insights (도메인/노이즈 가중 기반)
+# Insights (도메인/노이즈 가중 강화)
 # -------------------------
 DOMAIN_HINTS = set([(x or "").strip().lower() for x in CFG.get("domain_hints", [])])
 NOISE_HINTS  = set([(x or "").strip().lower() for x in CFG.get("common_debuff", [])])
@@ -631,7 +606,7 @@ def noise_overlap(words: List[str]) -> float:
     w = [w.lower() for w in words]
     return sum(1 for x in w if x in NOISE_HINTS) / max(1, len(w))
 
-def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5, trend_summary_text: str = "") -> Dict[str, Any]:
+def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5) -> Dict[str, Any]:
     topics = topics_obj.get("topics", [])
     scored = []
     for t in topics:
@@ -639,7 +614,7 @@ def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5, t
         base = sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))
         ds = domain_overlap(words)
         ns = noise_overlap(words)
-        s = base + 0.6*ds - 0.3*ns
+        s = base + 0.9*ds - 0.5*ns
         scored.append((t, s, ds))
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
 
@@ -652,9 +627,27 @@ def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5, t
     daily = ts_obj.get("daily", [])
     summary = f"주요 {len(top)}개 토픽이 도출되었고, 최근 {len(daily)}일 시계열을 기반으로 트렌드가 산출되었습니다."
     evidence = [{"topic_id": it["topic_id"], "words": [w["word"] for w in (topics[it["topic_id"]]["top_words"] if it["topic_id"] < len(topics) else [])[:5]]} for it in top]
-    out = {"summary": summary, "top_topics": top, "evidence": evidence}
-    if trend_summary_text:
-        out["trend_summary"] = trend_summary_text
+    return {"summary": summary, "top_topics": top, "evidence": evidence}
+
+# -------------------------
+# LLM 최적화 유틸(상위 K만 대상)
+# -------------------------
+def _topk_topics(topics_obj: Dict[str,Any], k: int = 5) -> Tuple[List[Dict[str,Any]], List[int]]:
+    tops = topics_obj.get("topics", []) or []
+    scored = [(i, t, sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))) for i, t in enumerate(tops)]
+    scored.sort(key=lambda x: x[2], reverse=True)
+    pick = scored[:max(0, int(k))]
+    idxs = [i for (i, _t, _s) in pick]
+    subset = [tops[i] for i in idxs]
+    return subset, idxs
+
+def _merge_llm_fields(orig_topics: List[Dict[str,Any]], llm_topics_subset: List[Dict[str,Any]], idxs: List[int]) -> List[Dict[str,Any]]:
+    out = list(orig_topics)
+    for pos, t in zip(idxs, llm_topics_subset):
+        if "topic_name" in t:
+            out[pos]["topic_name"] = t["topic_name"]
+        if "insight" in t:
+            out[pos]["insight"] = t["insight"]
     return out
 
 # -------------------------
@@ -694,31 +687,52 @@ def main():
     # 4) 토픽 후처리
     topics_obj = post_filter_topics(topics_obj, stopwords=stopwords, P=P)
 
-    # 5) (선택) LLM 토픽 이름/요약    
-    # 변경: 상위 5개만 LLM 호출
+    # 5) (선택) LLM 토픽 이름/요약 – 상위 K개만 수행
     TOPK_FOR_LLM = int(os.getenv("TOPK_FOR_LLM", "5") or "5")
-    
     subset, idxs = _topk_topics(topics_obj, k=TOPK_FOR_LLM)
-    partial = {"topics": [dict(t) for t in subset]}  # 얕은 복사
-    
-    # 토픽명/요약 LLM을 부분 집합에만 수행
+    partial = {"topics": [dict(t) for t in subset]}
     partial = name_topics_with_llm(partial, cfg=cfg, llm=llm)
     partial = summarize_topics_with_llm(partial, cfg=cfg, llm=llm)
-    
-    # 결과를 원본 topics_obj에 병합
     topics_full = topics_obj.get("topics", []) or []
     topics_obj["topics"] = _merge_llm_fields(topics_full, partial.get("topics", []), idxs)
 
-    # 6) (선택) LLM 시계열 해석
-    trend_summary_text = summarize_timeseries_with_llm(ts_obj, cfg=cfg, llm=llm)
-
-    # 7) 인사이트(상위 토픽 선정 + trend_summary 포함)
+    # 6) 인사이트(상위 토픽 선정)
     insights_obj = build_insights(
-        topics_obj,
-        ts_obj,
-        topk=min(5, max(1, len(topics_obj.get("topics",[])))),
-        trend_summary_text=trend_summary_text
+        topics_obj, ts_obj,
+        topk=min(5, max(1, len(topics_obj.get("topics",[]))))
     )
+
+    # 6-1) top_topics 보강: label/insight 비어 있는 항목만 부분 LLM 적용
+    need_ids = []
+    for tt in insights_obj.get("top_topics", []):
+        lab = (tt.get("label") or "").strip()
+        ins = (tt.get("insight") or "").strip()
+        if (not ins) or (len(lab) <= 3):
+            need_ids.append(int(tt["topic_id"]))
+
+    if need_ids:
+        tops = topics_obj.get("topics", [])
+        subset2 = [t for t in tops if int(t.get("topic_id")) in need_ids]
+        partial2 = {"topics": [dict(t) for t in subset2]}
+        partial2 = name_topics_with_llm(partial2, cfg=cfg, llm=llm)
+        partial2 = summarize_topics_with_llm(partial2, cfg=cfg, llm=llm)
+        patch = {int(t["topic_id"]): t for t in partial2.get("topics", [])}
+        for i, t in enumerate(tops):
+            tid = int(t.get("topic_id", -1))
+            if tid in patch:
+                if patch[tid].get("topic_name"): tops[i]["topic_name"] = patch[tid]["topic_name"]
+                if patch[tid].get("insight"):    tops[i]["insight"]    = patch[tid]["insight"]
+        topics_obj["topics"] = tops
+        # 보강 반영 후 상위 토픽 재선정
+        insights_obj = build_insights(
+            topics_obj, ts_obj,
+            topk=min(5, max(1, len(topics_obj.get("topics",[]))))
+        )
+
+    # 7) (선택) LLM 시계열 해석
+    trend_summary_text = summarize_timeseries_with_llm(ts_obj, cfg=cfg, llm=llm)
+    if trend_summary_text:
+        insights_obj["trend_summary"] = trend_summary_text
 
     # 8) 저장
     ensure_dir("outputs")
@@ -734,7 +748,8 @@ def main():
         "ts_days": len(ts_obj.get("daily", [])),
         "llm_naming": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini"),
         "llm_summary": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini"),
-        "llm_trend_summary": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini")
+        "llm_trend_summary": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini"),
+        "topk_for_llm": int(os.getenv("TOPK_FOR_LLM", "5") or "5")
     })
 
     print(f"[INFO][C] done | topics={len(topics_obj.get('topics', []))} days={len(ts_obj.get('daily', []))}")
