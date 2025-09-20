@@ -75,6 +75,34 @@ def latest_file(pattern: str) -> Optional[str]:
     files = sorted(glob.glob(pattern))
     return files[-1] if files else None
 
+def mmr_diversify_terms(sorted_pairs: List[Tuple[str, float]], topn: int = 50, diversity: float = 0.55) -> List[Tuple[str, float]]:
+    def char_bigrams(s: str):
+        s = (s or "").strip()
+        return {s[i:i+2] for i in range(len(s) - 1)} if len(s) >= 2 else {s}
+    cand = [(k, float(s)) for k, s in sorted_pairs]
+    rep = {k: char_bigrams(k) for k, _ in cand}
+    selected: List[Tuple[str, float]] = []
+    while cand and len(selected) < topn:
+        best_i, best_score = 0, -1e9
+        for i, (k, sc) in enumerate(cand):
+            if not selected:
+                mmr = sc
+            else:
+                max_sim = 0.0
+                for ks, _ in selected:
+                    a, b = rep[k], rep[ks]
+                    inter = len(a & b)
+                    union = len(a | b) or 1
+                    sim = inter / union
+                    if sim > max_sim:
+                        max_sim = sim
+                mmr = diversity * sc - (1.0 - diversity) * max_sim
+            if mmr > best_score:
+                best_score, best_i = mmr, i
+        selected.append(cand.pop(best_i))
+    return selected
+
+
 # 공용: dict를 값(value) 기준 내림차순 정렬
 def sort_items_by_value_desc(d: Dict[str, float]):
     return sorted(d.items(), key=itemgetter(1), reverse=True)  # (key,value) 2-튜플의 인덱스 1이 값
@@ -657,8 +685,11 @@ def main():
                 or patterns["UNIT_TOKEN_PAT"].match(tok))
     combined = {k: v for k, v in combined.items() if not _hard_drop(k)}
 
-    # Output
-    top_items = sort_items_by_value_desc(combined)[: topn_keywords]
+    # Output with Lite MMR diversification
+    top_pairs = sort_items_by_value_desc(combined)[: max(100, topn_keywords)]
+    top_pairs = mmr_diversify_terms(top_pairs, topn=topn_keywords, diversity=float(cfg.get("mmr_diversity", 0.55)))
+    top_items = top_pairs
+
     os.makedirs("outputs", exist_ok=True)
     with open("outputs/keywords.json", "w", encoding="utf-8") as f:
         json.dump({"keywords": [{"keyword": k, "score": float(s)} for k, s in top_items]}, f, ensure_ascii=False, indent=2)
