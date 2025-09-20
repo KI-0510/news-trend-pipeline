@@ -2,9 +2,9 @@
 # Module C – Topics, Timeseries, Insights
 # - 전처리: module_b와 동일 철학(불용어/정규식/조사·어미 컷 + alias 정규화)
 # - Lite=LDA(튜닝: k 후보 + 확률 정규화), Pro=BERTopic(min_topic_size + 확률 정규화)
-# - 토픽 후처리: 불용어/지명/숫자·날짜·단위 컷 + 어워드 과다 토픽 억제
+# - 토픽 후처리: 불용어/지명/숫자·날짜·단위 컷 (어워드 하드 드롭 제거)
 # - 인사이트: 도메인 겹침/노이즈 겹침 가중 점수로 상위 토픽 선정
-# - LLM(Gemini)로 topic_name/2~3문장 요약(insight) 선택적 생성
+# - LLM(Gemini): 토픽명/토픽 요약(‘디스플레이’ 관점), 시계열 해석(trend_summary) 선택 생성
 
 import os, re, glob, json, datetime, unicodedata, random
 from typing import List, Dict, Any, Tuple, Optional
@@ -215,7 +215,6 @@ def preprocess_docs(raw_docs: List[str], phrase_stop: List[str], stopwords: List
                 continue
             if len(w) < 2: continue
             toks.append(w)
-        # alias 정규화
         toks = apply_alias(toks)
         t2 = " ".join(toks)
         if t2: out.append(t2)
@@ -284,8 +283,8 @@ def fit_best_lda(X, terms, k_list, random_state=42, max_iter=20) -> Tuple[Latent
             max_iter=max_iter
         )
         lda.fit(X)
-        ll = float(lda.score(X))       # log-likelihood (higher better)
-        div = topic_diversity(lda.components_, terms, topn=10)  # 0~1
+        ll = float(lda.score(X))
+        div = topic_diversity(lda.components_, terms, topn=10)
         score = ll + 5.0 * div
         if score > best_score:
             best, best_score = lda, score
@@ -374,7 +373,7 @@ def topics_pro(corpus: List[str], cfg: dict, topn=10, random_state=42) -> Dict[s
     for t in info["Topic"].tolist():
         if int(t) < 0:
             continue
-        top_pairs = tm.get_topic(int(t))[:max(10, topn)]  # [(word, ctfidf), ...]
+        top_pairs = tm.get_topic(int(t))[:max(10, topn)]
         terms = [w for (w, _p) in top_pairs]
         vals = np.array([float(_p or 0.0) for (_w, _p) in top_pairs], dtype=float)
 
@@ -395,10 +394,8 @@ def topics_pro(corpus: List[str], cfg: dict, topn=10, random_state=42) -> Dict[s
     return {"topics": out}
 
 # -------------------------
-# Topic post-filter + award-heavy drop
+# Topic post-filter (award hard-drop 제거)
 # -------------------------
-AWARD_HINTS = {"수상","본상","금상","은상","대상","공모전","어워드","레드닷","red dot","if","idea","디자인"}
-
 def post_filter_topics(topics_obj: Dict[str, Any], stopwords: List[str], P: dict) -> Dict[str, Any]:
     sw = set(stopwords or [])
     filtered = []
@@ -406,20 +403,17 @@ def post_filter_topics(topics_obj: Dict[str, Any], stopwords: List[str], P: dict
         kept = []
         for w in (t.get("top_words") or []):
             ww = (w.get("word") or "").strip()
-            if not ww: continue
-            if ww in sw: continue
-            if is_location_token(ww): continue
+            if not ww:
+                continue
+            if ww in sw:
+                continue
+            if is_location_token(ww):
+                continue
             if P["NUMERIC_ONLY"].match(ww) or P["DATE_PAT"].match(ww) or P["CURRENCY_PAT"].match(ww) or P["UNIT_TOKEN_PAT"].match(ww):
                 continue
             kept.append({"word": ww, "prob": float(w.get("prob", 0.0))})
-        if not kept:
-            continue
-        # 어워드 과다 토픽 드롭(상위 10 단어 중 5개 이상 어워드 힌트 포함)
-        top10 = [w["word"] for w in kept[:10]]
-        cnt_aw = sum(1 for x in top10 if any(h in x.lower() for h in AWARD_HINTS))
-        if cnt_aw >= 5:
-            continue
-        filtered.append({"topic_id": int(t.get("topic_id", 0)), "top_words": kept})
+        if kept:
+            filtered.append({"topic_id": int(t.get("topic_id", 0)), "top_words": kept})
     return {"topics": filtered}
 
 # -------------------------
@@ -459,6 +453,7 @@ def name_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Di
 
 # -------------------------
 # LLM-based topic insight summary (optional; Gemini)
+#  - ‘디스플레이’ 도메인 관점으로 요약
 # -------------------------
 def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) -> Dict[str, Any]:
     provider = (llm.get("provider") or "").lower()
@@ -480,7 +475,7 @@ def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) 
             continue
         prompt = (
             f"토픽 키워드: {', '.join(words)}\n"
-            "디스플레이/반도체 도메인 관점에서 2~3문장으로 간결 요약해 주세요.\n"
+            "디스플레이 도메인 관점에서 2~3문장으로 간결 요약해 주세요.\n"
             "- 한국어로 작성\n"
             "- 추측·미확인 정보 금지\n"
             "- 무엇(기술/제품/공정)과 왜 중요한지 중심"
@@ -495,6 +490,63 @@ def summarize_topics_with_llm(topics_obj: Dict[str, Any], cfg: dict, llm: dict) 
     return topics_obj
 
 # -------------------------
+# LLM-based timeseries summary (optional; Gemini)
+# -------------------------
+def summarize_timeseries_with_llm(ts_obj: Dict[str, Any], cfg: dict, llm: dict) -> str:
+    provider = (llm.get("provider") or "").lower()
+    if provider != "gemini":
+        return ""
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    genai = _maybe_import_gemini()
+    if not api_key or genai is None:
+        return ""
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(llm.get("model", "gemini-1.5-flash"))
+    except Exception:
+        return ""
+
+    daily = ts_obj.get("daily", []) or []
+    if not daily:
+        return ""
+
+    dates = [it.get("date","") for it in daily]
+    counts = [int(it.get("count",0) or 0) for it in daily]
+    n = len(counts)
+    total = int(sum(counts))
+    mean = float(total / max(1, n))
+    mx = max(counts) if counts else 0
+    mx_idx = counts.index(mx) if counts else 0
+    mx_date = dates[mx_idx] if dates else ""
+    last = counts[-1] if counts else 0
+
+    k = 7
+    cur7 = counts[-k:] if n >= k else counts[:]
+    prev7 = counts[-2*k:-k] if n >= 2*k else counts[max(0, n-2*k):max(0, n-k)]
+    cur7_avg = float(sum(cur7) / max(1, len(cur7)))
+    prev7_avg = float(sum(prev7) / max(1, len(prev7))) if prev7 else 0.0
+    lift = (cur7_avg - prev7_avg) / (prev7_avg + 1e-9) if prev7_avg > 0 else (1.0 if cur7_avg > 0 else 0.0)
+
+    preview = ", ".join([f"{d}:{c}" for d,c in list(zip(dates[-min(14,n):], counts[-min(14,n):]))])
+    prompt = (
+        "아래는 최근 일자별 기사 수 시계열입니다.\n"
+        f"- 전체 일자 수: {n}, 총합: {total}, 평균: {mean:.2f}\n"
+        f"- 최대치: {mx} ({mx_date}), 마지막 값: {last}\n"
+        f"- 최근7일 평균: {cur7_avg:.2f}, 직전7일 평균: {prev7_avg:.2f}, 변화율: {lift*100:.1f}%\n"
+        f"- 최근 14일 미니 프리뷰: {preview}\n\n"
+        "디스플레이 도메인 관점에서 2~3문장으로 간결 해석해 주세요.\n"
+        "- 추세(상승/하락/변동성), 피크/저점의 의미, 단기/중기 시사점을 언급\n"
+        "- 사실 기반으로 작성하고 과도한 추측은 지양"
+    )
+
+    try:
+        resp = model.generate_content(prompt)
+        text = (getattr(resp, "text", None) or "").strip()
+        return text
+    except Exception:
+        return ""
+
+# -------------------------
 # Insights (도메인/노이즈 가중 기반)
 # -------------------------
 DOMAIN_HINTS = set([(x or "").strip().lower() for x in CFG.get("domain_hints", [])])
@@ -502,14 +554,13 @@ NOISE_HINTS  = set([(x or "").strip().lower() for x in CFG.get("common_debuff", 
 
 def domain_overlap(words: List[str]) -> float:
     w = [w.lower() for w in words]
-    # 부분 포함 허용(힌트가 복합어일 수 있음)
     return sum(1 for x in w if any(h in x for h in DOMAIN_HINTS)) / max(1, len(w))
 
 def noise_overlap(words: List[str]) -> float:
     w = [w.lower() for w in words]
     return sum(1 for x in w if x in NOISE_HINTS) / max(1, len(w))
 
-def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5) -> Dict[str, Any]:
+def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5, trend_summary_text: str = "") -> Dict[str, Any]:
     topics = topics_obj.get("topics", [])
     scored = []
     for t in topics:
@@ -517,9 +568,10 @@ def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5) -
         base = sum(float(w.get("prob",0.0)) for w in (t.get("top_words") or []))
         ds = domain_overlap(words)
         ns = noise_overlap(words)
-        s = base + 0.6*ds - 0.3*ns  # 운영하며 튜닝 가능
+        s = base + 0.6*ds - 0.3*ns
         scored.append((t, s, ds))
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
+
     top = [{
         "topic_id": int(t["topic_id"]),
         "label": (t.get("topic_name") or (t["top_words"][0]["word"] if t["top_words"] else f"Topic {t['topic_id']}")),
@@ -529,7 +581,10 @@ def build_insights(topics_obj: Dict[str, Any], ts_obj: Dict[str, Any], topk=5) -
     daily = ts_obj.get("daily", [])
     summary = f"주요 {len(top)}개 토픽이 도출되었고, 최근 {len(daily)}일 시계열을 기반으로 트렌드가 산출되었습니다."
     evidence = [{"topic_id": it["topic_id"], "words": [w["word"] for w in (topics[it["topic_id"]]["top_words"] if it["topic_id"] < len(topics) else [])[:5]]} for it in top]
-    return {"summary": summary, "top_topics": top, "evidence": evidence}
+    out = {"summary": summary, "top_topics": top, "evidence": evidence}
+    if trend_summary_text:
+        out["trend_summary"] = trend_summary_text
+    return out
 
 # -------------------------
 # Main
@@ -572,23 +627,32 @@ def main():
     topics_obj = name_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
     topics_obj = summarize_topics_with_llm(topics_obj, cfg=cfg, llm=llm)
 
-    # 6) 인사이트(상위 토픽 선정)
-    insights_obj = build_insights(topics_obj, ts_obj, topk=min(5, max(1, len(topics_obj.get("topics",[])))))
+    # 6) (선택) LLM 시계열 해석
+    trend_summary_text = summarize_timeseries_with_llm(ts_obj, cfg=cfg, llm=llm)
 
-    # 7) 저장
+    # 7) 인사이트(상위 토픽 선정 + trend_summary 포함)
+    insights_obj = build_insights(
+        topics_obj,
+        ts_obj,
+        topk=min(5, max(1, len(topics_obj.get("topics",[])))),
+        trend_summary_text=trend_summary_text
+    )
+
+    # 8) 저장
     ensure_dir("outputs")
     save_json("outputs/topics.json", topics_obj)
     save_json("outputs/trend_timeseries.json", ts_obj)
     save_json("outputs/trend_insights.json", insights_obj)
 
-    # 8) 디버그 메타
+    # 9) 디버그 메타
     save_json("outputs/debug/run_meta_c.json", {
         "use_pro": use_pro,
         "docs": len(corpus),
         "topics": len(topics_obj.get("topics", [])),
         "ts_days": len(ts_obj.get("daily", [])),
         "llm_naming": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini"),
-        "llm_summary": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini")
+        "llm_summary": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini"),
+        "llm_trend_summary": bool(os.getenv("GEMINI_API_KEY", "")) and (LLM.get("provider") == "gemini")
     })
 
     print(f"[INFO][C] done | topics={len(topics_obj.get('topics', []))} days={len(ts_obj.get('daily', []))}")
