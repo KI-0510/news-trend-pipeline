@@ -1,0 +1,139 @@
+{
+  "ideas": [
+    {
+      "idea": "패널",
+      "title": "패널",
+      "problem": "패널 관련 시장/도입/규격 이슈를 해결할 기회.",
+      "target_customer": "기업(B2B)",
+      "value_prop": "패널 도입으로 비용/품질/경험을 개선.",
+      "solution": [
+        "파일럿",
+        "파트너십",
+        "인증/규격 검토",
+        "조달/유통 테스트"
+      ],
+      "risks": [
+        "규제/표준 불확실성",
+        "ROI 불확실성"
+      ],
+      "priority_score": 3.0,
+      "score": 60.0,
+      "score_breakdown": {
+        "market": 0.5,
+        "urgency": 0.5,
+        "feasibility": 0.6,
+        "risk": 0.0,
+        "notes": {}
+      },
+      "evidence": []
+    },
+    {
+      "idea": "카메라",
+      "title": "카메라",
+      "problem": "카메라 관련 시장/도입/규격 이슈를 해결할 기회.",
+      "target_customer": "기업(B2B)",
+      "value_prop": "카메라 도입으로 비용/품질/경험을 개선.",
+      "solution": [
+        "파일럿",
+        "파트너십",
+        "인증/규격 검토",
+        "조달/유통 테스트"
+      ],
+      "risks": [
+        "규제/표준 불확실성",
+        "ROI 불확실성"
+      ],
+      "priority_score": 3.0,
+      "score": 60.0,
+      "score_breakdown": {
+        "market": 0.5,
+        "urgency": 0.5,
+        "feasibility": 0.6,
+        "risk": 0.0,
+        "notes": {}
+      },
+      "evidence": []
+    },
+    {
+      "idea": "인텔",
+      "title": "인텔",
+      "problem": "인텔 관련 시장/도입/규격 이슈를 해결할 기회.",
+      "target_customer": "기업(B2B)",
+      "value_prop": "인텔 도입으로 비용/품질/경험을 개선.",
+      "solution": [
+        "파일럿",
+        "파트너십",
+        "인증/규격 검토",
+        "조달/유통 테스트"
+      ],
+      "risks": [
+        "규제/표준 불확실성",
+        "ROI 불확실성"
+      ],
+      "priority_score": 3.0,
+      "score": 60.0,
+      "score_breakdown": {
+        "market": 0.5,
+        "urgency": 0.5,
+        "feasibility": 0.6,
+        "risk": 0.0,
+        "notes": {}
+      },
+      "evidence": []
+    },
+    {
+      "idea": "삼성",
+      "title": "삼성",
+      "problem": "삼성 관련 시장/도입/규격 이슈를 해결할 기회.",
+      "target_customer": "기업(B2B)",
+      "value_prop": "삼성 도입으로 비용/품질/경험을 개선.",
+      "solution": [
+        "파일럿",
+        "파트너십",
+        "인증/규격 검토",
+        "조달/유통 테스트"
+      ],
+      "risks": [
+        "규제/표준 불확실성",
+        "ROI 불확실성"
+      ],
+      "priority_score": 3.0,
+      "score": 60.0,
+      "score_breakdown": {
+        "market": 0.5,
+        "urgency": 0.5,
+        "feasibility": 0.6,
+        "risk": 0.0,
+        "notes": {}
+      },
+      "evidence": []
+    },
+    {
+      "idea": "반도체",
+      "title": "반도체",
+      "problem": "반도체 관련 시장/도입/규격 이슈를 해결할 기회.",
+      "target_customer": "기업(B2B)",
+      "value_prop": "반도체 도입으로 비용/품질/경험을 개선.",
+      "solution": [
+        "파일럿",
+        "파트너십",
+        "인증/규격 검토",
+        "조달/유통 테스트"
+      ],
+      "risks": [
+        "규제/표준 불확실성",
+        "ROI 불확실성"
+      ],
+      "priority_score": 3.0,
+      "score": 60.0,
+      "score_breakdown": {
+        "market": 0.5,
+        "urgency": 0.5,
+        "feasibility": 0.6,
+        "risk": 0.0,
+        "notes": {}
+      },
+      "evidence": []
+    }
+  ]
+}
