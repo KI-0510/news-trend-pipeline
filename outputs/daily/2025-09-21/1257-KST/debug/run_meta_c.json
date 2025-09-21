@@ -1,0 +1,10 @@
+{
+  "use_pro": false,
+  "docs": 79,
+  "topics": 11,
+  "ts_days": 4,
+  "llm_naming": true,
+  "llm_summary": true,
+  "llm_trend_summary": true,
+  "topk_for_llm": 5
+}
