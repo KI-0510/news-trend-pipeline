@@ -1,4 +1,4 @@
-{
+ㅡ{
   "dry_run": true,
   "use_pro": false,
   "queries": [
@@ -149,7 +149,7 @@
   "llm": {
     "provider": "gemini",
     "model": "gemini-2.5-flash",
-    "max_output_tokens": 2048,
+    "max_output_tokens": 2048,123
     "temperature": 0.3
   },
 
