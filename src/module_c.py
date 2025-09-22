@@ -187,19 +187,21 @@ def _ensure_prob_payload(obj: dict, topn: int = 10, decay: float = 0.95, floor: 
 
 # ================= Lite 토픽(LDA) — prob 포함 =================
 def build_topics_lite(docs: List[str],
-                      max_features=12000,
-                      min_df=8,
-                      topn=12) -> Dict[str, Any]:
-    # config.json에서 토픽 후보 개수를 읽어오도록 수정합니다.
-    k_candidates = CFG.get("topic_k_candidates", [8, 10, 12, 14])
-    
-    print(f"[DEBUG][C] LITE builder 진입 | k_candidates={k_candidates}")
+                      max_features=8000,
+                      min_df=6,
+                      topn=10) -> Dict[str, Any]:
+    k_candidates = CFG.get("topic_k_candidates", [7, 8, 9, 10, 11])
+    # config.json에서 max_df 값을 읽어옵니다.
+    max_df_val = float(CFG.get("topic_max_df", 0.90))
+
+    print(f"[DEBUG][C] LITE builder 진입 | k_candidates={k_candidates} max_df={max_df_val}")
     if not docs:
         return {"topics": []}
     vec = CountVectorizer(
-        ngram_range=(1,3),
+        ngram_range=(1,2),
         max_features=max_features,
         min_df=min_df,
+        max_df=max_df_val, # <--- 여기에 적용!
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(set(EN_STOP)|set(KO_FUNC))
     )
