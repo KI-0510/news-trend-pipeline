@@ -13,6 +13,7 @@ import math
 import logging
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
+from src.config import load_config
 
 import numpy as np
 from operator import itemgetter  # 값 정렬 키
@@ -438,7 +439,7 @@ def topic_context_keywords(docs: List[str], model_name: str, umap_neighbors: int
 # Main
 # -------------------------
 def main():
-    CFG = load_json("config.json", {})
+    CFG = load_config()
     weights = CFG.get("weights", {}) or {}
 
     # Merge config + data/dictionaries resources
