@@ -191,7 +191,7 @@ def build_topics_lite(docs: List[str],
                       min_df=8,
                       topn=12) -> Dict[str, Any]:
     # config.json에서 토픽 후보 개수를 읽어오도록 수정합니다.
-    k_candidates = CFG.get("topic_k_candidates", [8, 10, 9, 12, 14])
+    k_candidates = CFG.get("topic_k_candidates", [8, 10, 12, 14])
     
     print(f"[DEBUG][C] LITE builder 진입 | k_candidates={k_candidates}")
     if not docs:
