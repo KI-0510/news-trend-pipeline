@@ -13,7 +13,7 @@ import math
 import logging
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
-from src.config import load_config
+from config import load_config
 
 import numpy as np
 from operator import itemgetter  # 값 정렬 키
