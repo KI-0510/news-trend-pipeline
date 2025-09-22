@@ -6,7 +6,7 @@ import re
 import html
 import requests
 from bs4 import BeautifulSoup
-from config import load_config
+from src.config import load_config
 CFG = load_config()
 
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
