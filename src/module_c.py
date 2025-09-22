@@ -536,10 +536,12 @@ def main():
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
         else:
-            topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
+            # 아래 줄에서 k_candidates 인수를 삭제했습니다.
+            topics_obj = build_topics_lite(docs_today or [], max_features=8000, min_df=6, topn=10)
     except Exception as e:
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
-        topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
+        # 아래 줄에서도 k_candidates 인수를 삭제했습니다.
+        topics_obj = build_topics_lite(docs_today or [], max_features=8000, min_df=6, topn=10)
 
     # 저장 직전 prob 강제 주입 + 샘플 로그
     topics_obj = _ensure_prob_payload(topics_obj, topn=10, decay=0.95, floor=0.2)
@@ -590,6 +592,6 @@ def main():
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
-
+    
 if __name__ == "__main__":
     main()
