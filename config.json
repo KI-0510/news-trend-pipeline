@@ -2,7 +2,7 @@
   "dry_run": true,
   "use_pro": false,
   "queries": [
-    "디스플레이", "OLED 디스플레이", "OLED 패널", "LCD 디스플레이", "LCD 패널",
+    "디스플레이", "애플", "삼성", "LG",
     "OLED", "LCD", "TV", "스마트폰", "노트북",
     "모니터"
   ],
@@ -113,7 +113,7 @@
 
   "llm": {
     "provider": "gemini",
-    "model": "gemini-2.0-flash",
+    "model": "gemini-2.0-flash-001",
     "max_output_tokens": 2048,
     "temperature": 0.3
   },
