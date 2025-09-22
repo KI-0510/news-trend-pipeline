@@ -546,6 +546,8 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         w.writeheader(); [w.writerow(r) for r in weak]
 
 # ================= 메인 =================
+# src/module_c.py (main 함수 부분을 찾아 전체 덮어쓰기)
+
 def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
@@ -566,12 +568,12 @@ def main():
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
         else:
-            # 아래 줄에서 k_candidates 인수를 삭제했습니다.
-            topics_obj = build_topics_lite(docs_today or [], max_features=8000, min_df=6, topn=10)
+            # 아래 줄에서 min_df 인수를 삭제했습니다.
+            topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
     except Exception as e:
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
-        # 아래 줄에서도 k_candidates 인수를 삭제했습니다.
-        topics_obj = build_topics_lite(docs_today or [], max_features=8000, min_df=6, topn=10)
+        # 아래 줄에서도 min_df 인수를 삭제했습니다.
+        topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
 
     # 저장 직전 prob 강제 주입 + 샘플 로그
     topics_obj = _ensure_prob_payload(topics_obj, topn=10, decay=0.95, floor=0.2)
@@ -586,7 +588,6 @@ def main():
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
     # 인사이트
-    # keywords.json 파일을 읽어오는 코드를 추가합니다.
     try:
         with open("outputs/keywords.json", "r", encoding="utf-8") as f:
             keywords_obj = json.load(f)
@@ -599,7 +600,6 @@ def main():
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
-        # context에 top_keywords를 추가로 전달합니다.
         context={"topics": topics_obj.get("topics", []), "timeseries": ts_obj.get("daily", []), "keywords": top_keywords},
         max_tokens=int(LLM.get("max_output_tokens", 2048)),
         temperature=float(LLM.get("temperature", 0.3)),
@@ -617,11 +617,6 @@ def main():
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
     # 강/약 신호 저장
-    try:
-        with open("outputs/keywords.json","r",encoding="utf-8") as f:
-            keywords_obj = json.load(f)
-    except Exception:
-        keywords_obj = {"keywords":[]}
     export_trend_and_weak_signals(docs, dates, keywords_obj)
 
     # 실행 메타
@@ -631,6 +626,6 @@ def main():
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
-    
+
 if __name__ == "__main__":
     main()
