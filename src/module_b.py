@@ -142,8 +142,8 @@ def nounish_strip(sentence: str) -> str:
 # -------------------------
 # Patterns / Locations
 # -------------------------
-def compile_patterns(cfg: dict):
-    rp = cfg.get("regex_patterns", {}) or {}
+def compile_patterns(CFG: dict):
+    rp = CFG.get("regex_patterns", {}) or {}
     def _comp(key, default):
         try:
             return re.compile(rp.get(key, default))
@@ -162,7 +162,7 @@ def compile_patterns(cfg: dict):
 _LOCATION_CORE = {
     "서울","부산","대구","인천","광주","대전","울산","세종",
     "경기","경기도","강원","강원도","충북","충남","전북","전남","경북","경남",
-    "제주","제주도","수원","용인","성남","고양","화성","부천","안산","안양","남양주",
+    "제주","제주도","수원","용인","성남","고양","화성","부천","안산","안양","남양주"
 }
 _LOCATION_SUFFIX = {"도","시","군","구","읍","면","동","리"}
 
@@ -257,7 +257,7 @@ def apply_domain_weights(scores: Dict[str, float],
                          domain_hints: List[str],
                          common_debuff: List[str],
                          alias_map: Dict[str, str],
-                         weight_cfg: Dict[str, float],
+                         weight_CFG: Dict[str, float],
                          brands: Optional[set]=None,
                          entities: Optional[set]=None,
                          patterns: Optional[dict]=None) -> Dict[str, float]:
@@ -265,13 +265,13 @@ def apply_domain_weights(scores: Dict[str, float],
         return {}
     P = patterns or {}
     boosted = {}
-    db = float(weight_cfg.get("domain_hint_boost", 1.0))
-    cd = float(weight_cfg.get("common_debuff", 1.0))
-    entity_boost = float(weight_cfg.get("entity_boost", 1.35))
-    brand_boost  = float(weight_cfg.get("brand_boost", 1.2))
-    person_debuf = float(weight_cfg.get("person_name_debuff", 0.8))
-    loc_debuf    = float(weight_cfg.get("location_debuff", 0.6))
-    num_debuf    = float(weight_cfg.get("number_debuff", 0.5))
+    db = float(weight_CFG.get("domain_hint_boost", 1.0))
+    cd = float(weight_CFG.get("common_debuff", 1.0))
+    entity_boost = float(weight_CFG.get("entity_boost", 1.35))
+    brand_boost  = float(weight_CFG.get("brand_boost", 1.2))
+    person_debuf = float(weight_CFG.get("person_name_debuff", 0.8))
+    loc_debuf    = float(weight_CFG.get("location_debuff", 0.6))
+    num_debuf    = float(weight_CFG.get("number_debuff", 0.5))
 
     dh = set(domain_hints or [])
     cm = set(common_debuff or [])
@@ -438,19 +438,19 @@ def topic_context_keywords(docs: List[str], model_name: str, umap_neighbors: int
 # Main
 # -------------------------
 def main():
-    cfg = load_json("config.json", {})
-    weights = cfg.get("weights", {}) or {}
+    CFG = load_json("config.json", {})
+    weights = CFG.get("weights", {}) or {}
 
     # Merge config + data/dictionaries resources
-    defaults = cfg.get("keyword_extraction_defaults", {}) or {}
+    defaults = CFG.get("keyword_extraction_defaults", {}) or {}
 
     phrase_stop = sorted(
-        set(cfg.get("phrase_stop", []) or [])
+        set(CFG.get("phrase_stop", []) or [])
         | set(load_lines("data/dictionaries/phrase_stopwords.txt"))
     )
 
     stopwords = sorted(
-        set(cfg.get("stopwords", []) or [])
+        set(CFG.get("stopwords", []) or [])
         | set(load_lines("data/dictionaries/stopwords_ext.txt"))
         | set(defaults.get("MORE_STOP", []))
         | set(defaults.get("EN_STOP", []))
@@ -458,16 +458,16 @@ def main():
 
     alias_seed = {}
     alias_seed.update(defaults.get("FIX_MAP", {}) or {})
-    alias_seed.update(cfg.get("alias", {}) or {})
+    alias_seed.update(CFG.get("alias", {}) or {})
     alias_map = build_alias_map(alias_seed, product_alias_path="data/dictionaries/product_alias.json")
 
     brands, entities = load_brand_entity_lists()
 
     # Patterns
-    patterns = compile_patterns(cfg)
+    patterns = compile_patterns(CFG)
 
-    topn_keywords = int(cfg.get("top_n_keywords", 50))
-    use_pro = os.environ.get("USE_PRO", "").lower() in ("1","true","yes","y") or bool(cfg.get("use_pro", False))
+    topn_keywords = int(CFG.get("top_n_keywords", 50))
+    use_pro = os.environ.get("USE_PRO", "").lower() in ("1","true","yes","y") or bool(CFG.get("use_pro", False))
 
     meta_path = latest_file("data/news_meta_*.json")
     if not meta_path:
@@ -502,9 +502,9 @@ def main():
     # Pro: per-document KeyBERT MMR reranking and aggregation
     if use_pro and KeyBERT is not None and combined:
         cand = list(combined.keys())
-        model_name = cfg.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-        diversity = float(cfg.get("mmr_diversity", 0.5))
-        max_docs_rerank = int(cfg.get("max_docs_rerank", 80))
+        model_name = CFG.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        diversity = float(CFG.get("mmr_diversity", 0.5))
+        max_docs_rerank = int(CFG.get("max_docs_rerank", 80))
         sel_docs = pre_docs[:max_docs_rerank]
 
         agg, cnt = defaultdict(float), defaultdict(int)
@@ -536,9 +536,9 @@ def main():
 
     # Optional: topic context boost (Pro)
     if use_pro and BERTopic is not None and len(pre_docs) >= 20:
-        model_name = cfg.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-        umap_neighbors = int(cfg.get("umap_neighbors", 15))
-        min_cluster_size = int(cfg.get("min_cluster_size", 12))
+        model_name = CFG.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        umap_neighbors = int(CFG.get("umap_neighbors", 15))
+        min_cluster_size = int(CFG.get("min_cluster_size", 12))
         topic_kw = topic_context_keywords(pre_docs, model_name=model_name,
                                           umap_neighbors=umap_neighbors,
                                           min_cluster_size=min_cluster_size,
@@ -551,10 +551,10 @@ def main():
     # Domain/alias/brand/entity weights + debuffs
     combined = apply_domain_weights(
         combined,
-        domain_hints=cfg.get("domain_hints", []),
-        common_debuff=cfg.get("common_debuff", []),
+        domain_hints=CFG.get("domain_hints", []),
+        common_debuff=CFG.get("common_debuff", []),
         alias_map=alias_map,
-        weight_cfg=weights,
+        weight_CFG=weights,
         brands=brands,
         entities=entities,
         patterns=patterns
