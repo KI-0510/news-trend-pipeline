@@ -560,12 +560,21 @@ def main():
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
     # 인사이트
+    # keywords.json 파일을 읽어오는 코드를 추가합니다.
+    try:
+        with open("outputs/keywords.json", "r", encoding="utf-8") as f:
+            keywords_obj = json.load(f)
+    except Exception:
+        keywords_obj = {"keywords": []}
+    top_keywords = [k.get("keyword") for k in keywords_obj.get("keywords", [])[:10]]
+
     api_key = os.getenv("GEMINI_API_KEY", "")
     model_name = str(LLM.get("model", "gemini-1.5-flash"))
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
-        context={"topics": topics_obj.get("topics", []), "timeseries": ts_obj.get("daily", [])},
+        # context에 top_keywords를 추가로 전달합니다.
+        context={"topics": topics_obj.get("topics", []), "timeseries": ts_obj.get("daily", []), "keywords": top_keywords},
         max_tokens=int(LLM.get("max_output_tokens", 2048)),
         temperature=float(LLM.get("temperature", 0.3)),
     )
