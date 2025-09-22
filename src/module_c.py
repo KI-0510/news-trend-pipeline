@@ -35,7 +35,7 @@ def _log_mode(prefix="Module C"):
     print(f"[INFO] USE_PRO={str(is_pro).lower()} → {prefix} ({mode}) 시작")
 
 # ================= 설정 로드 =================
-from config import load_config, llm_config
+from src.config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
