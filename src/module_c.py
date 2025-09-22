@@ -188,28 +188,51 @@ def _ensure_prob_payload(obj: dict, topn: int = 10, decay: float = 0.95, floor: 
 # ================= Lite 토픽(LDA) — prob 포함 =================
 def build_topics_lite(docs: List[str],
                       max_features=8000,
-                      min_df=6,
                       topn=10) -> Dict[str, Any]:
-    k_candidates = CFG.get("topic_k_candidates", [7, 8, 9, 10, 11])
-    # config.json에서 max_df 값을 읽어옵니다.
-    max_df_val = float(CFG.get("topic_max_df", 0.90))
+    # --- 제안 내용 반영 시작 ---
+    # 1. config.json에서 파라미터 읽어오기
+    k_candidates = CFG.get("topic_k_candidates", [8, 10, 12, 14])
+    min_df_val = int(CFG.get("topic_min_df", 7))
+    max_df_val = float(CFG.get("topic_max_df", 0.85))
 
-    print(f"[DEBUG][C] LITE builder 진입 | k_candidates={k_candidates} max_df={max_df_val}")
-    if not docs:
+    # 2. config.json 및 사전의 불용어 목록 통합
+    phrase_stop_cfg = set(CFG.get("phrase_stop", []) or [])
+    stopwords_cfg = set(CFG.get("stopwords", []) or [])
+    
+    # phrase_stop은 텍스트에서 먼저 제거 (코드는 함수 후반부에 이미 존재)
+    
+    # CountVectorizer에 적용할 최종 불용어 목록
+    final_stopwords = list(set(EN_STOP) | set(KO_FUNC) | stopwords_cfg)
+    
+    print(f"[DEBUG][C] LITE builder 진입 | k_candidates={k_candidates} min_df={min_df_val} max_df={max_df_val}")
+    
+    # 3. 문서 리스트에서 phrase_stop 먼저 제거
+    processed_docs = []
+    if docs:
+        for doc in docs:
+            temp_doc = doc
+            for phrase in phrase_stop_cfg:
+                temp_doc = temp_doc.replace(phrase, " ")
+            processed_docs.append(temp_doc)
+    else:
         return {"topics": []}
+
     vec = CountVectorizer(
-        ngram_range=(1,2),
+        ngram_range=(1, 3), # 3-gram(tri-gram) 포함
         max_features=max_features,
-        min_df=min_df,
-        max_df=max_df_val, # <--- 여기에 적용!
+        min_df=min_df_val, # 상향된 min_df 적용
+        max_df=max_df_val,
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
-        stop_words=list(set(EN_STOP)|set(KO_FUNC))
+        stop_words=final_stopwords # 통합된 불용어 목록 적용
     )
-    X = vec.fit_transform(docs)
+    # --- 제안 내용 반영 끝 ---
+
+    X = vec.fit_transform(processed_docs)
     vocab = vec.get_feature_names_out()
     if X.shape[1] == 0:
         return {"topics": []}
 
+    # 이하 로직은 동일
     def topic_pairs(lda, n_top=topn):
         comps = lda.components_
         topics = []
@@ -264,9 +287,10 @@ def build_topics_lite(docs: List[str],
                 prob = max(0.2, decay**rank)
                 payload.append({"word": w, "prob": prob})
 
-        topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
+        topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload})
     print(f"[DEBUG][C] LITE 생성 완료 | topics={len(topics_obj.get('topics', []))}")
     return topics_obj
+
 
 # ================= Pro 토픽(BERTopic) — prob 포함 =================
 def pro_build_topics_bertopic(docs, topn=10):
