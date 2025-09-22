@@ -481,7 +481,7 @@ def main():
         raise SystemExit("no documents")
 
     # Dedup (optional)
-    raw_docs = dedup_docs_by_cosine(raw_docs, threshold=0.90)
+    raw_docs = dedup_docs_by_cosine(raw_docs, threshold=0.93)
 
     # Preprocess with strict filters
     pre_docs = preprocess_docs(raw_docs, phrase_stop=phrase_stop, stopwords=stopwords,
