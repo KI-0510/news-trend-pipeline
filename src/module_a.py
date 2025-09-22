@@ -9,8 +9,6 @@ from bs4 import BeautifulSoup
 from config import load_config
 CFG = load_config()
 
-from utils import log_info, log_warn, log_error
-
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
 
@@ -147,7 +145,7 @@ def main():
     os.makedirs("data", exist_ok=True)
     ts = int(time.time())
     raw_path = f"data/news_clean_{ts}.json"
-    meta_path = f"data/news_meta_{ts}.json"  # 언더스코어 추가
+    meta_path = f"data/news_meta_{ts}.json"
     with open(raw_path, "w", encoding="utf-8") as f:
         json.dump(clean_items, f, ensure_ascii=False, indent=2)
     with open(meta_path, "w", encoding="utf-8") as f:
