@@ -128,7 +128,7 @@
     "temperature": 0.3
   },
 
-  "topic_k_candidates": [7, 8, 9, 10, 11],
+  "topic_k_candidates": [8, 10, 12, 14],
 
   "timezone": "Asia/Seoul"
 }
