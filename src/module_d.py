@@ -411,7 +411,7 @@ def normalize_item(it: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 # ========== LLM 호출 ==========
-from config import load_config, llm_config
+from src.config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
