@@ -1,4 +1,14 @@
 {
   "아이폰 17": ["아이폰17", "iPhone 17", "iphone17", "IPhone 17"],
-  "올레드": ["OLED", "oled", "올레드", "유기발광다이오드"]
+  "올레드": ["OLED", "oled", "올레드", "유기발광다이오드"],
+  "OLED": ["oled","올레드","유기발광다이오드"],
+  "MicroLED": ["microled","마이크로 led","마이크로led","uLED","µLED"],
+  "MiniLED": ["mini led","miniled","미니led","미니 LED"],
+  "QD-OLED": ["qd oled","qdoled","QD OLED"],
+  "WOLED": ["w oled","w-oled"],
+  "Oxide": ["oxide tft","산화물 tft","igzo","IGZO"],
+  "LTPO": ["ltpo"],
+  "LTPS": ["ltps"],
+  "TADF": ["tadf"],
+  "PHOLED": ["pholed","인광 oled"]
 }
