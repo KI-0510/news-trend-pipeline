@@ -411,23 +411,9 @@ def normalize_item(it: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 # ========== LLM 호출 ==========
-def load_config2():
-    try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def llm_config2(cfg: dict) -> dict:
-    llm = cfg.get("llm") or {}
-    return {
-        "model": llm.get("model", "gemini-1.5-flash"),
-        "max_output_tokens": int(llm.get("max_output_tokens", 2048)),
-        "temperature": float(llm.get("temperature", 0.3)),
-    }
-
-CFG2 = load_config2()
-LLM2 = llm_config2(CFG2)
+from config import load_config, llm_config
+CFG = load_config()
+LLM = llm_config(CFG)
 
 def load_context_for_prompt() -> Dict[str, Any]:
     keywords = load_json("outputs/keywords.json", default={"keywords": []}) or {"keywords": []}
@@ -479,9 +465,9 @@ def call_gemini(prompt: str) -> str:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY 환경 변수가 없습니다.")
     genai.configure(api_key=api_key)
-    model_name = str(LLM2.get("model", "gemini-1.5-flash"))
-    max_tokens = int(LLM2.get("max_output_tokens", 2048))
-    temperature = float(LLM2.get("temperature", 0.3))
+    model_name = str(LLM.get("model", "gemini-2.0-flash-001"))
+    max_tokens = int(LLM.get("max_output_tokens", 2048))
+    temperature = float(LLM.get("temperature", 0.3))
     model = genai.GenerativeModel(model_name)
     resp = model.generate_content(
         prompt,
