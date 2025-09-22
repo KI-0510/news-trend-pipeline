@@ -35,16 +35,7 @@ def _log_mode(prefix="Module C"):
     print(f"[INFO] USE_PRO={str(is_pro).lower()} → {prefix} ({mode}) 시작")
 
 # ================= 설정 로드 =================
-try:
-    from config import load_config, llm_config
-except Exception:
-    def load_config() -> dict:
-        return {}
-    def llm_config(cfg: dict) -> dict:
-        llm = cfg.get("llm") or {}
-        return {"model": llm.get("model", "gemini-1.5-flash"),
-                "max_output_tokens": int(llm.get("max_output_tokens", 2048)),
-                "temperature": float(llm.get("temperature", 0.3))}
+from config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
