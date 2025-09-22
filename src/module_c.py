@@ -185,11 +185,13 @@ def _ensure_prob_payload(obj: dict, topn: int = 10, decay: float = 0.95, floor: 
 
 # ================= Lite 토픽(LDA) — prob 포함 =================
 def build_topics_lite(docs: List[str],
-                      k_candidates=(7,8,9,10,11),
                       max_features=8000,
                       min_df=6,
                       topn=10) -> Dict[str, Any]:
-    print("[DEBUG][C] LITE builder 진입")
+    # config.json에서 토픽 후보 개수를 읽어오도록 수정합니다.
+    k_candidates = CFG.get("topic_k_candidates", [7, 8, 9, 10, 11])
+    
+    print(f"[DEBUG][C] LITE builder 진입 | k_candidates={k_candidates}")
     if not docs:
         return {"topics": []}
     vec = CountVectorizer(
