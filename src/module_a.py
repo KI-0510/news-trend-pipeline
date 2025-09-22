@@ -7,7 +7,7 @@ import html
 import requests
 from bs4 import BeautifulSoup
 from config import load_config
-cfg = load_config()
+CFG = load_config()
 
 NAVER_API = "https://openapi.naver.com/v1/search/news.json"
 
@@ -105,19 +105,19 @@ def clean_html(s):
 def main():
     t0 = time.time()
     
-    # dry_run: 환경 변수가 우선시되며, 없을 경우 cfg 값 사용. 기본값은 True
-    dry_run = (os.getenv("DRY_RUN", str(cfg.get("dry_run", True))).lower() == "true")
+    # dry_run: 환경 변수가 우선시되며, 없을 경우 CFG 값 사용. 기본값은 True
+    dry_run = (os.getenv("DRY_RUN", str(CFG.get("dry_run", True))).lower() == "true")
     
     # queries: 반드시 비어있지 않은 리스트여야 함. 기본값은 ["unknown"]
-    q_raw = cfg.get("queries", ["unknown"])
+    q_raw = CFG.get("queries", ["unknown"])
     queries = q_raw if isinstance(q_raw, list) and q_raw else ["unknown"]
     
     # display: 1~100 사이로 제한. 기본값 10
-    display = int(cfg.get("per_query_display", 10))
+    display = int(CFG.get("per_query_display", 10))
     display = max(1, min(display, 100))
     
     # pages: 최소 1, dry_run=False일 경우 최소 2
-    pages = int(cfg.get("pages", 1))
+    pages = int(CFG.get("pages", 1))
     pages = max(1, pages)
     if not dry_run:
         pages = max(2, pages)
