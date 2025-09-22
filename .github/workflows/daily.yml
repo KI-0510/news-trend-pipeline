@@ -25,10 +25,9 @@ jobs:
   pipeline:
     runs-on: ubuntu-latest
     env:
-      # 수동 실행 시 입력값(pro_mode) 사용, 스케줄/기타 이벤트는 기본 false(Lite)
       USE_PRO: ${{ github.event_name == 'workflow_dispatch' && inputs.pro_mode || 'false' }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      HF_HOME: ~/.cache/huggingface # 임베딩 모델 캐시 디렉터리
+      HF_HOME: ~/.cache/huggingface
 
     steps:
       - name: Checkout
@@ -36,7 +35,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Python 3.11 고정 + pip 캐시
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -44,7 +42,6 @@ jobs:
           cache: "pip"
           cache-dependency-path: "requirements.txt"
 
-      # 의존성 설치 (venv 사용)
       - name: Install dependencies
         shell: bash
         run: |
@@ -53,41 +50,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      # Pro 모드용 모델 캐시 (선택) - 캐시가 없으면 그냥 건너뜀
       - name: Prepare HuggingFace cache (optional)
         if: env.USE_PRO == 'true'
         shell: bash
         run: |
           mkdir -p "${HF_HOME}"
           echo "HF_HOME=${HF_HOME}"
-
-      # trafilatura 임포트 확인(같은 파이썬 보장)
-      - name: Verify deps (quick)
-        shell: bash
-        run: |
-          source .venv/bin/activate
-          python - <<'PY'
-          import sys
-          print("PY:", sys.executable)
-          try:
-              import trafilatura
-              print("trafilatura:", trafilatura.__version__)
-          except Exception as e:
-              print("trafilatura import failed:", repr(e))
-              raise
-          PY
-
-      # 폰트 설치
+      
       - name: Install viz deps
         shell: bash
         run: |
           source .venv/bin/activate
           sudo apt-get update
           sudo apt-get install -y fonts-nanum fonts-noto-cjk
-          fc-list | grep -i -E "Nanum|Noto|CJK" || true
           fc-cache -f -v
 
-      # 시크릿 체크
       - name: Preflight | Check secrets
         shell: bash
         run: |
@@ -96,7 +73,6 @@ jobs:
             echo "[WARN] NAVER API 키가 없습니다(옵션?)."
           fi
 
-      # Module A
       - name: Module A - Fetch & Preprocess
         shell: bash
         env:
@@ -105,121 +81,41 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         run: |
           source .venv/bin/activate
-          python src/module_a.py
+          python -m src.module_a
 
-      # Check A
       - name: Check A - Validate Output
         shell: bash
         run: |
           source .venv/bin/activate
-          if ! ls data/news_clean_*.json 1> /dev/null 2>&1 || ! ls data/news_meta_*.json 1> /dev/null 2>&1; then
-            echo "필수 파일이 생성되지 않았습니다."
-            exit 1
-          fi
-          ls data/
-          python src/check_a.py
+          python -m src.check_a
 
-      # Warehouse Append
       - name: Warehouse Append
         shell: bash
         run: |
           source .venv/bin/activate
-          python src/warehouse_append.py
+          python -m src.warehouse_append
 
-      # Warehouse Commit & Push
-      - name: Commit & Push Warehouse (main only)
-        # if: github.ref_name == 'main'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/warehouse
-          git commit -m "chore: warehouse append $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "no changes"
-          git pull --rebase --autostash origin ${{ github.ref_name }} || true
-          git push origin HEAD:${{ github.ref_name }} || true
-
-      # 본문 수집(본문→body, description 동기화)
       - name: Enrich meta with article bodies
         shell: bash
         env:
           BODY_MIN_LEN: "200"
         run: |
           source .venv/bin/activate
-          python - <<'PY'
-          import sys, subprocess
-          try:
-              import trafilatura  # noqa
-          except Exception:
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "trafilatura"])
-          PY
-          python scripts/fetch_article_bodies.py
+          python -m scripts.fetch_article_bodies
 
-      - name: Dump B inputs (debug, post-enrich)
-        shell: bash
-        run: |
-          source .venv/bin/activate
-          mkdir -p outputs/debug
-          python - <<'PY'
-          import glob, json, os, shutil
-          files = sorted(glob.glob("data/news_meta_*.json"))
-          if not files:
-              raise SystemExit("no news_meta_* found")
-          meta_path = files[-1]
-
-          # 본문 주입 이후의 최신 메타를 복사
-          shutil.copy2(meta_path, "outputs/debug/news_meta_latest.json")
-
-          # 본문/설명 길이 통계
-          with open(meta_path, "r", encoding="utf-8") as f:
-              items = json.load(f)
-
-          def strlen(x): return len((x or "").strip())
-
-          body_lens = [strlen(it.get("body")) for it in items]
-          desc_lens = [strlen(it.get("description")) for it in items]
-          n_body_ge_120 = sum(1 for v in body_lens if v >= 120)
-          n_desc_ge_120 = sum(1 for v in desc_lens if v >= 120)
-
-          # Module B가 실제로 사용할 문서 미리보기
-          from src.module_b import build_docs
-          docs = build_docs(items)
-          sample = docs[:200]
-          lens = [len(d) for d in sample]
-
-          out = {
-              "source_meta": os.path.basename(meta_path),
-              "items": len(items),
-              "body_len_ge_120": n_body_ge_120,
-              "desc_len_ge_120": n_desc_ge_120,
-              "docs_count": len(docs),
-              "sample_count": len(sample),
-              "length_stats": {
-                  "min": min(lens) if lens else 0,
-                  "max": max(lens) if lens else 0,
-                  "avg": (sum(lens)/len(lens)) if lens else 0,
-              },
-              "docs_sample": sample
-          }
-          with open("outputs/debug/b_docs.json", "w", encoding="utf-8") as f:
-              json.dump(out, f, ensure_ascii=False, indent=2)
-          print("[DEBUG] post-enrich | body>=120:", n_body_ge_120, "desc>=120:", n_desc_ge_120, "docs:", len(docs))
-          PY
-
-      # Module B
       - name: Module B - Keywords
         shell: bash
         run: |
           source .venv/bin/activate
           echo "[INFO] USE_PRO=${USE_PRO} → Module B 실행(워크플로우)"
-          python src/module_b.py
+          python -m src.module_b
 
       - name: Check B - Validate Keywords
         shell: bash
         run: |
           source .venv/bin/activate
-          python src/check_b.py
+          python -m src.check_b
 
-      # Module C
       - name: Module C - Topics/Timeseries/Insight
         shell: bash
         env:
@@ -227,59 +123,34 @@ jobs:
         run: |
           source .venv/bin/activate
           echo "[INFO] USE_PRO=${USE_PRO} → Module C 실행(워크플로우)"
-          python src/module_c.py
+          python -m src.module_c
 
       - name: Check C - Validate Insights
         shell: bash
         run: |
           source .venv/bin/activate
-          python src/check_c.py
+          python -m src.check_c
 
       - name: Export signals (trend strength & weak signals)
         shell: bash
         run: |
           source .venv/bin/activate
-          python scripts/signal_export.py
+          python -m scripts.signal_export
 
-    
-      # C 컨텍스트 덤프(topics+timeseries)
-      - name: Dump C context (debug)
-        shell: bash
-        run: |
-          source .venv/bin/activate
-          mkdir -p outputs/debug
-          python - <<'PY'
-          import json
-          def load(p, default):
-              try:
-                  with open(p, encoding="utf-8") as f:
-                      return json.load(f)
-              except Exception:
-                  return default
-          topics = load("outputs/topics.json", {"topics":[]}).get("topics", [])
-          ts = load("outputs/trend_timeseries.json", {"daily":[]}).get("daily", [])
-          ctx = {"topics": topics, "timeseries": ts}
-          with open("outputs/debug/c_context.json", "w", encoding="utf-8") as f:
-              json.dump(ctx, f, ensure_ascii=False, indent=2)
-          print("[DEBUG] Dumped c_context: topics=", len(topics), "days=", len(ts))
-          PY
-
-      # Module D
       - name: Module D - Biz Opportunities
         shell: bash
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           source .venv/bin/activate
-          python src/module_d.py
+          python -m src.module_d
 
       - name: Check D - Validate Biz Opportunities
         shell: bash
         run: |
           source .venv/bin/activate
-          python src/check_d.py
+          python -m src.check_d
 
-      # Preflight
       - name: Preflight Checks
         shell: bash
         env:
@@ -289,21 +160,20 @@ jobs:
         run: |
           set -e
           source .venv/bin/activate
-          python scripts/preflight.py
+          python -m scripts.preflight
 
-      # Module E
       - name: Module E - Build Report
         shell: bash
         run: |
           source .venv/bin/activate
-          python src/module_e.py
+          python -m src.module_e
           
       - name: Check E - Validate Report
         shell: bash
         run: |
           source .venv/bin/activate
-          python src/check_e.py
-          
+          python -m src.check_e
+      
       # Job Summary
       - name: Build Job Summary
         shell: bash
