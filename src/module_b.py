@@ -351,7 +351,7 @@ def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20, min_
 def tfidf_weights(docs: List[str], vocab: List[str]) -> Dict[str, float]:
     if TfidfVectorizer is None or not docs:
         return {v: 1.0 for v in vocab}
-    vec = TfidfVectorizer(ngram_range=(1,3), min_df=2, max_df=0.9)
+    vec = TfidfVectorizer(ngram_range=(1,3), min_df=3, max_df=0.9)
     X = vec.fit_transform(docs)
     idf = dict(zip(vec.get_feature_names_out(), vec.idf_))
     return {v: float(idf.get(v, 1.0)) for v in vocab}
@@ -378,7 +378,7 @@ def hybrid_rank(docs: List[str], beta: float=0.85, max_iter: int=20, topk: int=2
 def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
     if TfidfVectorizer is None or not docs:
         return {}
-    vec = TfidfVectorizer(ngram_range=(1,3), min_df=2, max_df=0.9)
+    vec = TfidfVectorizer(ngram_range=(1,3), min_df=3, max_df=0.9)
     X = vec.fit_transform(docs)
     terms = vec.get_feature_names_out()
     avg = np.asarray(X.mean(axis=0)).ravel()
