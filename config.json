@@ -130,8 +130,9 @@
   },
 
   "topic_k_candidates": [8, 10, 12, 14],
-  "topic_min_df": 7,                    
+  "topic_min_df": 7,
   "topic_max_df": 0.85,
+  "pro_topic_min_size": 8,
   
   "timezone": "Asia/Seoul"
 }
