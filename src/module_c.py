@@ -315,13 +315,15 @@ def pro_build_topics_bertopic(docs, topn=10):
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(set(EN_STOP)|set(KO_FUNC))
     )
+    
     rep = [KeyBERTInspired(top_n_words=15), MaximalMarginalRelevance(diversity=0.5)]
+    min_topic_size_pro = int(CFG.get("pro_topic_min_size", 8))
 
     model = BERTopic(
         embedding_model=emb,
         vectorizer_model=vectorizer_model,
         representation_model=rep,
-        min_topic_size=15,
+        min_topic_size=min_topic_size_pro, # <--- 여기에 적용!
         nr_topics=None,
         calculate_probabilities=False,
         verbose=False
