@@ -311,7 +311,7 @@ def pro_build_topics_bertopic(docs, topn=10):
     emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
     vectorizer_model = CountVectorizer(
         ngram_range=(1,3),
-        min_df=6,
+        min_df=2,
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(set(EN_STOP)|set(KO_FUNC))
     )
