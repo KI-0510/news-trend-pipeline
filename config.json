@@ -47,6 +47,7 @@
   ],
 
   "alias": {
+    "디스플": "디스플레이",
     "디스플레": "디스플레이",
     "oled":"OLED", "올레드":"OLED", "유기발광다이오드":"OLED",
     "microled":"MicroLED","마이크로 led":"MicroLED","마이크로led":"MicroLED","uLED":"MicroLED","µLED":"MicroLED",
