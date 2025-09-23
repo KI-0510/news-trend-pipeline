@@ -297,7 +297,7 @@ def pro_build_topics_bertopic(docs, topn=10):
     print("[DEBUG][C] PRO builder 진입")
     try:
         from bertopic import BERTopic
-        from bertopic.representation import KeyBERTInspired, MaximaarginalRelevance
+        from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance
         from sentence_transformers import SentenceTransformer
         from sklearn.feature_extraction.text import CountVectorizer
         import numpy as np
