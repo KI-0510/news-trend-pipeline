@@ -317,14 +317,15 @@ def pro_build_topics_bertopic(docs, topn=10):
     )
     
     rep = [KeyBERTInspired(top_n_words=15), MaximalMarginalRelevance(diversity=0.5)]
-    min_topic_size_pro = int(CFG.get("pro_topic_min_size", 8))
+    min_topic_size_pro = int(CFG.get("pro_topic_min_size", 5))
+    nr_topics_pro = CFG.get("pro_nr_topics", None)
 
     model = BERTopic(
         embedding_model=emb,
         vectorizer_model=vectorizer_model,
         representation_model=rep,
-        min_topic_size=min_topic_size_pro, # <--- 여기에 적용!
-        nr_topics=None,
+        min_topic_size=min_topic_size_pro,
+        nr_topics=nr_topics_pro, # <--- 여기에 적용!
         calculate_probabilities=False,
         verbose=False
     )
