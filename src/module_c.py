@@ -297,7 +297,7 @@ def pro_build_topics_bertopic(docs, topn=10):
     print("[DEBUG][C] PRO builder 진입")
     try:
         from bertopic import BERTopic
-        from bertopic.representation import KeyBERTInspired
+        from bertopic.representation import KeyBERTInspired, MaximaarginalRelevance
         from sentence_transformers import SentenceTransformer
         from sklearn.feature_extraction.text import CountVectorizer
         import numpy as np
@@ -315,7 +315,7 @@ def pro_build_topics_bertopic(docs, topn=10):
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(set(EN_STOP)|set(KO_FUNC))
     )
-    rep = KeyBERTInspired(top_n_words=15, diversity=0.75)
+    rep = [KeyBERTInspired(top_n_words=15), MaximalMarginalRelevance(diversity=0.5)]
 
     model = BERTopic(
         embedding_model=emb,
