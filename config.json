@@ -7,7 +7,7 @@
     "삼성디스플레이", "LG디스플레이", "애플", "삼성", "LG",
     "OLED", "LCD", "TV", "스마트폰", "노트북", "모니터"
   ],
-  "per_query_display": 10,
+  "per_query_display": 30,
   "pages": 1,
   "top_n_keywords": 20,
 
