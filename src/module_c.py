@@ -315,7 +315,7 @@ def pro_build_topics_bertopic(docs, topn=10):
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(set(EN_STOP)|set(KO_FUNC))
     )
-    rep = KeyBERTInspired(top_n_words=15, use_mmr=true, diversity=0.75)
+    rep = KeyBERTInspired(top_n_words=15, use_mmr=True, diversity=0.75)
 
     model = BERTopic(
         embedding_model=emb,
