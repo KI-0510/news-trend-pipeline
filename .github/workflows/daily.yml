@@ -101,20 +101,19 @@ jobs:
           BODY_MIN_LEN: "200"
         run: |
           source .venv/bin/activate
-          # python -m scripts.fetch_article_bodies
-          python scripts/fetch_article_bodies.py
-
+          python -m scripts.fetch_article_bodies
+          
       - name: Copy latest meta file for debugging
         shell: bash
         run: |
           set -e
           mkdir -p outputs/debug
-          LATEST\_META=$(ls -t data/news\_meta\_\*.json | head -n 1)
-          if \[ -f "$LATEST\_META" \]; then
-            echo "Copying $LATEST\_META to outputs/debug/news\_meta\_latest.json"
-            cp "$LATEST\_META" outputs/debug/news\_meta\_latest.json
+          LATEST_META=$(ls -t data/news_meta_*.json | head -n 1)
+          if [ -f "$LATEST_META" ]; then
+            echo "Copying $LATEST_META to outputs/debug/news_meta_latest.json"
+            cp "$LATEST_META" outputs/debug/news_meta_latest.json
           else
-            echo "WARN: No news\_meta\_\*.json file found to copy."
+            echo "WARN: No news_meta_*.json file found to copy."
           fi
 
       - name: Module B - Keywords
@@ -149,9 +148,8 @@ jobs:
         shell: bash
         run: |
           source .venv/bin/activate
-          # python -m scripts.signal_export
-          python scripts/signal_export.py
-
+          python -m scripts.signal_export
+          
       - name: Module D - Biz Opportunities
         shell: bash
         env:
@@ -175,9 +173,8 @@ jobs:
         run: |
           set -e
           source .venv/bin/activate
-          # python -m scripts.preflight
-          python scripts/preflight.py
-
+          python -m scripts.preflight
+          
       - name: Module E - Build Report
         shell: bash
         run: |
