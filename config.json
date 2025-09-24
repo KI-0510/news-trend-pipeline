@@ -135,6 +135,14 @@
   "topic_max_df": 0.85,
   "pro_topic_min_size": 5,
   "pro_nr_topics": 10,
+
+  "pro_topic_min_size": 5,
+  "pro_nr_topics": 10,
+  "pro_topic_core_keywords": [
+    "디스플레이", "패널", "oled", "lcd", "led", "화면", "화질", "기판", 
+    "삼성", "lg", "애플", "아이폰", "갤럭시", "폴더블", "롤러블", "차량용", "스마트폰"
+  ],
+
   
   "timezone": "Asia/Seoul"
 }
