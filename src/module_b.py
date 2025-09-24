@@ -391,7 +391,7 @@ def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
 # KeyBERT MMR reranking (Pro, per-document)
 # -------------------------
 def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: int,
-                       use_mmr: bool=True, diversity: float=0.5, ngram_range: Tuple[int,int]=(1,3)) -> Dict[str,float]:
+                       use_mmr: bool=True, diversity: float=0.5, ngram_range: Tuple[int,int]=(1,3), stopwords: Optional[set]=None) -> Dict[str,float]:
     if KeyBERT is None or not doc or not candidates:
         return {}
     try:
@@ -399,7 +399,7 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
         extracted = kb.extract_keywords(
             doc,
             keyphrase_ngram_range=ngram_range,
-            stop_words=None,  # 전처리에서 불용어 제거
+            stop_words=list(stopwords) if stopwords else None,
             use_mmr=use_mmr,
             diversity=diversity,
             top_n=max(topn, len(candidates))
@@ -409,6 +409,7 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
         return dict(rer[:topn]) if rer else {}
     except Exception:
         return {}
+
 
 
 # -------------------------
@@ -513,7 +514,7 @@ def main():
         for d in sel_docs:
             rer = keybert_rerank_doc(d, candidates=cand, model_name=model_name,
                                      topn=min(len(cand), topn_keywords),
-                                     use_mmr=True, diversity=diversity, ngram_range=(1,3))
+                                     use_mmr=True, diversity=diversity, ngram_range=(1,3), stopwords=set(stopwords))
             if not rer:
                 continue
             vals = list(rer.values())
