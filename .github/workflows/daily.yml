@@ -219,6 +219,8 @@ jobs:
                   f.write(txt)
           PY
 
+      # github/workflows/daily.yml
+
       # 일자별 아카이브(KST)
       - name: Prepare outputs daily folder (KST)
         shell: bash
@@ -228,24 +230,31 @@ jobs:
           TIME_KST=$(TZ=Asia/Seoul date +'%H%M-KST')
           OUTDIR="outputs/daily/${DATE_KST}/${TIME_KST}"
           mkdir -p "${OUTDIR}/fig" "${OUTDIR}/debug" "${OUTDIR}/export"
-          cp outputs/topics.json             "${OUTDIR}/" || true
-          cp outputs/trend_timeseries.json   "${OUTDIR}/" || true
-          cp outputs/trend_insights.json     "${OUTDIR}/" || true
-          cp outputs/keywords.json           "${OUTDIR}/" || true
-          cp outputs/biz_opportunities.json  "${OUTDIR}/" || true
-          cp outputs/report.md               "${OUTDIR}/" || true
-          cp outputs/report.html             "${OUTDIR}/" || true
-          cp outputs/run_meta_b.json "${OUTDIR}/" || true
-          cp outputs/run_meta_c.json "${OUTDIR}/" || true
-          
-          
-          if [ -d outputs/export ]; then
-            cp -r outputs/export/*           "${OUTDIR}/export/" || true
+
+          # 기본 결과 파일 복사 (json, html, md)
+          cp outputs/*.json             "${OUTDIR}/" || true
+          cp outputs/*.html             "${OUTDIR}/" || true
+          cp outputs/*.md               "${OUTDIR}/" || true
+
+          # 디버그 메타 파일들을 올바른 위치(debug/)에서 상위 폴더로 복사
+          if [ -f outputs/debug/run_meta_b.json ]; then
+            cp outputs/debug/run_meta_b.json "${OUTDIR}/"
           fi
-          cp outputs/*.csv                   "${OUTDIR}/export/" || true
-          cp outputs/export/*.csv            "${OUTDIR}/export/" || true
-          cp outputs/fig/*.png               "${OUTDIR}/fig/" || true
-          cp -r outputs/debug/*              "${OUTDIR}/debug/" || true
+          if [ -f outputs/debug/run_meta_c.json ]; then
+            cp outputs/debug/run_meta_c.json "${OUTDIR}/"
+          fi
+          
+          # 서브폴더 내용 전체 복사 (export, fig, debug)
+          if [ -d outputs/export ]; then
+            cp -r outputs/export/* "${OUTDIR}/export/" || true
+          fi
+          if [ -d outputs/fig ]; then
+            cp -r outputs/fig/* "${OUTDIR}/fig/" || true
+          fi
+          if [ -d outputs/debug ]; then
+            cp -r outputs/debug/* "${OUTDIR}/debug/" || true
+          fi
+          
           echo "OUTDIR=${OUTDIR}" >> $GITHUB_ENV
 
       # outputs 커밋/푸시
