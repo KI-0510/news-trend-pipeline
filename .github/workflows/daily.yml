@@ -1,4 +1,4 @@
-name: Daily Pipeline
+name: Daily Pipelinea
 
 permissions:
   contents: write
