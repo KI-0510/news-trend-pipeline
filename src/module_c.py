@@ -304,9 +304,27 @@ def pro_build_topics_bertopic(docs, topn=10):
     except Exception as e:
         raise RuntimeError(f"Pro 토픽 모드 준비 실패(패키지 없음): {e}")
 
-    if not docs:
-        print("[DEBUG][C] PRO 생성 완료 | topics=0 (docs empty)")
+    # --- 주제 필터링 로직 시작 ---
+    core_keywords = set(CFG.get("pro_topic_core_keywords", []))
+    min_core_keyword_match = 2
+
+    if not docs or not core_keywords:
+        print("[DEBUG][C] PRO 생성 완료 | topics=0 (docs or core_keywords empty)")
         return {"topics": []}
+
+    filtered_docs = []
+    for doc in docs:
+        doc_lower = doc.lower()
+        match_count = sum(1 for keyword in core_keywords if keyword in doc_lower)
+        if match_count >= min_core_keyword_match:
+            filtered_docs.append(doc)
+    
+    print(f"[DEBUG][C] Core Keyword Filtering: {len(docs)} -> {len(filtered_docs)} docs")
+
+    if len(filtered_docs) < 10:
+        print(f"[WARN] Pro 토픽 분석을 위한 문서 수가 부족하여({len(filtered_docs)}개), Lite로 폴백합니다.")
+        return build_topics_lite(docs, topn=topn)
+    # --- 주제 필터링 로직 끝 ---
 
     emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
     vectorizer_model = CountVectorizer(
@@ -315,8 +333,8 @@ def pro_build_topics_bertopic(docs, topn=10):
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(set(EN_STOP)|set(KO_FUNC))
     )
-    
     rep = [KeyBERTInspired(top_n_words=15), MaximalMarginalRelevance(diversity=0.5)]
+    
     min_topic_size_pro = int(CFG.get("pro_topic_min_size", 5))
     nr_topics_pro = CFG.get("pro_nr_topics", None)
 
@@ -325,21 +343,23 @@ def pro_build_topics_bertopic(docs, topn=10):
         vectorizer_model=vectorizer_model,
         representation_model=rep,
         min_topic_size=min_topic_size_pro,
-        nr_topics=nr_topics_pro, # <--- 여기에 적용!
+        nr_topics=nr_topics_pro,
         calculate_probabilities=False,
         verbose=False
     )
-    topics, probs = model.fit_transform(docs)
-
+    topics, probs = model.fit_transform(filtered_docs)
+    
     try:
-        model.reduce_outliers(docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.08)
+        # 아래 docs를 filtered_docs로 수정
+        model.reduce_outliers(filtered_docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.08)
     except Exception:
         pass
     try:
-        model.merge_topics(docs, topics, threshold=0.88)
+        # 아래 docs를 filtered_docs로 수정
+        model.merge_topics(filtered_docs, topics, threshold=0.88)
     except Exception:
         pass
-
+        
     topics_obj = {"topics": []}
     try:
         ctfidf = model.c_tf_idf_
