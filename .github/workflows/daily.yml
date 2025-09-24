@@ -101,7 +101,21 @@ jobs:
           BODY_MIN_LEN: "200"
         run: |
           source .venv/bin/activate
-          python -m scripts.fetch_article_bodies
+          # python -m scripts.fetch_article_bodies
+          python scripts/fetch_article_bodies.py
+
+      - name: Copy latest meta file for debugging
+        shell: bash
+        run: |
+          set -e
+          mkdir -p outputs/debug
+          LATEST\_META=$(ls -t data/news\_meta\_\*.json | head -n 1)
+          if \[ -f "$LATEST\_META" \]; then
+            echo "Copying $LATEST\_META to outputs/debug/news\_meta\_latest.json"
+            cp "$LATEST\_META" outputs/debug/news\_meta\_latest.json
+          else
+            echo "WARN: No news\_meta\_\*.json file found to copy."
+          fi
 
       - name: Module B - Keywords
         shell: bash
@@ -135,7 +149,8 @@ jobs:
         shell: bash
         run: |
           source .venv/bin/activate
-          python -m scripts.signal_export
+          # python -m scripts.signal_export
+          python scripts/signal_export.py
 
       - name: Module D - Biz Opportunities
         shell: bash
@@ -160,7 +175,8 @@ jobs:
         run: |
           set -e
           source .venv/bin/activate
-          python -m scripts.preflight
+          # python -m scripts.preflight
+          python scripts/preflight.py
 
       - name: Module E - Build Report
         shell: bash
@@ -219,8 +235,6 @@ jobs:
                   f.write(txt)
           PY
 
-      # github/workflows/daily.yml
-
       # 일자별 아카이브(KST)
       - name: Prepare outputs daily folder (KST)
         shell: bash
@@ -258,8 +272,7 @@ jobs:
           echo "OUTDIR=${OUTDIR}" >> $GITHUB_ENV
 
       # outputs 커밋/푸시
-      - name: Commit & Push outputs (main only)
-        # if: github.ref_name == 'main'
+      - name: Commit & Push outputs
         shell: bash
         run: |
           set -e
