@@ -5,7 +5,7 @@ import re
 import sys
 import datetime
 from email.utils import parsedate_to_datetime
-from timeutil import now_kst, kst_date_str, kst_run_suffix
+from src.timeutil import now_kst, kst_date_str, kst_run_suffix
 
 def latest(globpat):
     files = sorted(glob.glob(globpat))

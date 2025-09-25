@@ -1,8 +1,67 @@
 아이폰
+iPhone
 갤럭시
+Galaxy
 맥북
+MacBook
 아이패드
+iPad
 애플워치
+Apple Watch
 올레드
+OLED
 마그니트
+Magnit
 사이니지
+Signage
+갤럭시탭
+Galaxy Tab
+갤럭시북
+Galaxy Book
+갤럭시워치
+Galaxy Watch
+Z폴드
+Galaxy Z Fold
+Z플립
+Galaxy Z Flip
+서피스
+Surface
+씽크패드
+ThinkPad
+비보북
+VivoBook
+그램
+Gram
+아이맥
+iMac
+애플비전프로
+Apple Vision Pro
+OLED evo
+QNED
+Neo QLED
+Micro LED
+더 월
+The Wall
+프레임TV
+The Frame
+로이드TV
+LOID TV
+스마트 사이니지
+Smart Signage
+뷰소닉
+ViewSonic
+벤큐
+BenQ
+울트라샤프
+UltraSharp
+프로아트
+ProArt
+스펙터
+Spectre
+요가
+Yoga
+패드
+Pad
+메이트북
+MateBook
+ULED

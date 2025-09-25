@@ -35,16 +35,7 @@ def _log_mode(prefix="Module C"):
     print(f"[INFO] USE_PRO={str(is_pro).lower()} → {prefix} ({mode}) 시작")
 
 # ================= 설정 로드 =================
-try:
-    from config import load_config, llm_config
-except Exception:
-    def load_config() -> dict:
-        return {}
-    def llm_config(cfg: dict) -> dict:
-        llm = cfg.get("llm") or {}
-        return {"model": llm.get("model", "gemini-1.5-flash"),
-                "max_output_tokens": int(llm.get("max_output_tokens", 2048)),
-                "temperature": float(llm.get("temperature", 0.3))}
+from src.config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
@@ -144,7 +135,11 @@ KO_FUNC = {
     "말했다","강조했다","대상","대상으로","최근","지난해","생활","시장","스마트","디지털","글로벌",
     "그는","그녀는","이어","한편","또한","이날","이라며","이라고","모델을","성과를","받았다","서울","기반으로",
     "있는","있으며","있다는","이후","설명했다","전했다","계획이다","관계자는","따르면",
-    "올해","내년","최대","신규","기존","국제","국내","세계","오전","오후"
+    "올해","내년","최대","신규","기존","국제","국내","세계","오전","오후",
+    "등을", "따라", "있도록", "지난", "특히", "대비", "아니라", "만에", "의원은", "라고",
+    "있습니다", "관련", "한다", "진행한다", "예정이다", "가능하다", "있었다",
+    "이상", "넘어", "제공한다", "같은", "했다", "많은", "그리고", "같다", "우리", "하고",
+    "때문에", "이렇게", "이런", "등이", "각각"
 }
 
 def is_bad_token(base: str) -> bool:
@@ -192,25 +187,52 @@ def _ensure_prob_payload(obj: dict, topn: int = 10, decay: float = 0.95, floor: 
 
 # ================= Lite 토픽(LDA) — prob 포함 =================
 def build_topics_lite(docs: List[str],
-                      k_candidates=(7,8,9,10,11),
                       max_features=8000,
-                      min_df=6,
                       topn=10) -> Dict[str, Any]:
-    print("[DEBUG][C] LITE builder 진입")
-    if not docs:
+    # --- 제안 내용 반영 시작 ---
+    # 1. config.json에서 파라미터 읽어오기
+    k_candidates = CFG.get("topic_k_candidates", [8, 10, 12, 14])
+    min_df_val = int(CFG.get("topic_min_df", 7))
+    max_df_val = float(CFG.get("topic_max_df", 0.85))
+
+    # 2. config.json 및 사전의 불용어 목록 통합
+    phrase_stop_cfg = set(CFG.get("phrase_stop", []) or [])
+    stopwords_cfg = set(CFG.get("stopwords", []) or [])
+    
+    # phrase_stop은 텍스트에서 먼저 제거 (코드는 함수 후반부에 이미 존재)
+    
+    # CountVectorizer에 적용할 최종 불용어 목록
+    final_stopwords = list(set(EN_STOP) | set(KO_FUNC) | stopwords_cfg)
+    
+    print(f"[DEBUG][C] LITE builder 진입 | k_candidates={k_candidates} min_df={min_df_val} max_df={max_df_val}")
+    
+    # 3. 문서 리스트에서 phrase_stop 먼저 제거
+    processed_docs = []
+    if docs:
+        for doc in docs:
+            temp_doc = doc
+            for phrase in phrase_stop_cfg:
+                temp_doc = temp_doc.replace(phrase, " ")
+            processed_docs.append(temp_doc)
+    else:
         return {"topics": []}
+
     vec = CountVectorizer(
-        ngram_range=(1,2),
+        ngram_range=(1, 3), # 3-gram(tri-gram) 포함
         max_features=max_features,
-        min_df=min_df,
+        min_df=min_df_val, # 상향된 min_df 적용
+        max_df=max_df_val,
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
-        stop_words=list(set(EN_STOP)|set(KO_FUNC))
+        stop_words=final_stopwords # 통합된 불용어 목록 적용
     )
-    X = vec.fit_transform(docs)
+    # --- 제안 내용 반영 끝 ---
+
+    X = vec.fit_transform(processed_docs)
     vocab = vec.get_feature_names_out()
     if X.shape[1] == 0:
         return {"topics": []}
 
+    # 이하 로직은 동일
     def topic_pairs(lda, n_top=topn):
         comps = lda.components_
         topics = []
@@ -265,55 +287,79 @@ def build_topics_lite(docs: List[str],
                 prob = max(0.2, decay**rank)
                 payload.append({"word": w, "prob": prob})
 
-        topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload[:topn]})
+        topics_obj["topics"].append({"topic_id": int(tid), "top_words": payload})
     print(f"[DEBUG][C] LITE 생성 완료 | topics={len(topics_obj.get('topics', []))}")
     return topics_obj
+
 
 # ================= Pro 토픽(BERTopic) — prob 포함 =================
 def pro_build_topics_bertopic(docs, topn=10):
     print("[DEBUG][C] PRO builder 진입")
     try:
         from bertopic import BERTopic
-        from bertopic.representation import KeyBERTInspired
+        from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance
         from sentence_transformers import SentenceTransformer
         from sklearn.feature_extraction.text import CountVectorizer
         import numpy as np
     except Exception as e:
         raise RuntimeError(f"Pro 토픽 모드 준비 실패(패키지 없음): {e}")
 
-    if not docs:
-        print("[DEBUG][C] PRO 생성 완료 | topics=0 (docs empty)")
+    # --- 주제 필터링 로직 시작 ---
+    core_keywords = set(CFG.get("pro_topic_core_keywords", []))
+    min_core_keyword_match = 2
+
+    if not docs or not core_keywords:
+        print("[DEBUG][C] PRO 생성 완료 | topics=0 (docs or core_keywords empty)")
         return {"topics": []}
+
+    filtered_docs = []
+    for doc in docs:
+        doc_lower = doc.lower()
+        match_count = sum(1 for keyword in core_keywords if keyword in doc_lower)
+        if match_count >= min_core_keyword_match:
+            filtered_docs.append(doc)
+    
+    print(f"[DEBUG][C] Core Keyword Filtering: {len(docs)} -> {len(filtered_docs)} docs")
+
+    if len(filtered_docs) < 10:
+        print(f"[WARN] Pro 토픽 분석을 위한 문서 수가 부족하여({len(filtered_docs)}개), Lite로 폴백합니다.")
+        return build_topics_lite(docs, topn=topn)
+    # --- 주제 필터링 로직 끝 ---
 
     emb = SentenceTransformer("jhgan/ko-sroberta-multitask")
     vectorizer_model = CountVectorizer(
         ngram_range=(1,3),
-        min_df=6,
+        min_df=2,
         token_pattern=r"[가-힣A-Za-z0-9_]{2,}",
         stop_words=list(set(EN_STOP)|set(KO_FUNC))
     )
-    rep = KeyBERTInspired(top_n_words=15, mmr=True, diversity=0.75)
+    rep = [KeyBERTInspired(top_n_words=15), MaximalMarginalRelevance(diversity=0.5)]
+    
+    min_topic_size_pro = int(CFG.get("pro_topic_min_size", 5))
+    nr_topics_pro = CFG.get("pro_nr_topics", None)
 
     model = BERTopic(
         embedding_model=emb,
         vectorizer_model=vectorizer_model,
         representation_model=rep,
-        min_topic_size=15,
-        nr_topics=None,
+        min_topic_size=min_topic_size_pro,
+        nr_topics=nr_topics_pro,
         calculate_probabilities=False,
         verbose=False
     )
-    topics, probs = model.fit_transform(docs)
-
+    topics, probs = model.fit_transform(filtered_docs)
+    
     try:
-        model.reduce_outliers(docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.08)
+        # 아래 docs를 filtered_docs로 수정
+        model.reduce_outliers(filtered_docs, topics, probabilities=probs, strategy="c-tf-idf", threshold=0.08)
     except Exception:
         pass
     try:
-        model.merge_topics(docs, topics, threshold=0.88)
+        # 아래 docs를 filtered_docs로 수정
+        model.merge_topics(filtered_docs, topics, threshold=0.88)
     except Exception:
         pass
-
+        
     topics_obj = {"topics": []}
     try:
         ctfidf = model.c_tf_idf_
@@ -385,13 +431,15 @@ def pro_build_topics_bertopic(docs, topn=10):
 # ================= 인사이트 요약 =================
 def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
                    max_tokens: int = 2048, temperature: float = 0.3) -> str:
+    # prompt 부분을 수정하여 keywords 정보를 활용하도록 합니다.
     prompt = (
-        "아래는 한국어 뉴스에서 추출한 토픽과 날짜별 기사 수 요약입니다.\n"
+        "아래는 한국어 기술/시장 뉴스에서 추출한 데이터입니다: (1) 주요 토픽, (2) 날짜별 기사 수, (3) 최상위 키워드.\n"
+        "당신은 디스플레이 산업의 사업 전략 전문가입니다. 이 데이터를 종합하여 '데일리 인텔리전스 브리핑'을 생성해주세요.\n"
         "요청:\n"
-        "1) 상위 토픽을 3~5개 주제로 묶어 핵심 맥락 설명(2~3문장)\n"
-        "2) 최근 변화/스파이크가 있으면 2문장으로 짚기\n"
-        "3) 실무 인사이트 3가지 bullet(구체적 액션)\n"
-        "주의: 문장 중간에 끊지 말고 완결된 문장으로 끝내세요.\n"
+        "1. 핵심 맥락: 토픽과 키워드를 연결하여, 시장의 가장 중요한 흐름 2~3가지를 설명하세요.\n"
+        "2. 최근 변화/스파이크: 시계열 데이터의 급증 지점을 언급하고, 그 원인을 키워드와 토픽을 근거로 추론하세요.\n"
+        "3. 실무 인사이트: 분석 결과를 바탕으로 사업 개발, 기술 기획 담당자가 실행할 수 있는 구체적인 액션 아이템 3가지를 제안하세요.\n"
+        "주의: 문장 중간에 끊지 말고 완결된 문장으로 간결하게 작성하세요.\n\n"
         f"데이터: {json.dumps(context, ensure_ascii=False)}"
     )
     if not api_key:
@@ -521,6 +569,8 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         w.writeheader(); [w.writerow(r) for r in weak]
 
 # ================= 메인 =================
+# src/module_c.py (main 함수 부분을 찾아 전체 덮어쓰기)
+
 def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
@@ -541,10 +591,12 @@ def main():
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
         else:
-            topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
+            # 아래 줄에서 min_df 인수를 삭제했습니다.
+            topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
     except Exception as e:
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
-        topics_obj = build_topics_lite(docs_today or [], k_candidates=(7,8,9,10,11), max_features=8000, min_df=6, topn=10)
+        # 아래 줄에서도 min_df 인수를 삭제했습니다.
+        topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
 
     # 저장 직전 prob 강제 주입 + 샘플 로그
     topics_obj = _ensure_prob_payload(topics_obj, topn=10, decay=0.95, floor=0.2)
@@ -559,12 +611,19 @@ def main():
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
     # 인사이트
+    try:
+        with open("outputs/keywords.json", "r", encoding="utf-8") as f:
+            keywords_obj = json.load(f)
+    except Exception:
+        keywords_obj = {"keywords": []}
+    top_keywords = [k.get("keyword") for k in keywords_obj.get("keywords", [])[:10]]
+
     api_key = os.getenv("GEMINI_API_KEY", "")
     model_name = str(LLM.get("model", "gemini-1.5-flash"))
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
-        context={"topics": topics_obj.get("topics", []), "timeseries": ts_obj.get("daily", [])},
+        context={"topics": topics_obj.get("topics", []), "timeseries": ts_obj.get("daily", []), "keywords": top_keywords},
         max_tokens=int(LLM.get("max_output_tokens", 2048)),
         temperature=float(LLM.get("temperature", 0.3)),
     )
@@ -581,11 +640,6 @@ def main():
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
     # 강/약 신호 저장
-    try:
-        with open("outputs/keywords.json","r",encoding="utf-8") as f:
-            keywords_obj = json.load(f)
-    except Exception:
-        keywords_obj = {"keywords":[]}
     export_trend_and_weak_signals(docs, dates, keywords_obj)
 
     # 실행 메타

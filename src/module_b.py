@@ -13,6 +13,7 @@ import math
 import logging
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
+from src.config import load_config
 
 import numpy as np
 from operator import itemgetter  # 값 정렬 키
@@ -118,8 +119,9 @@ def basic_normalize(txt: str) -> str:
     toks = _HANGUL_ALNUM.findall(t)
     return " ".join(toks)
 
-_JOSA = ("은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐")
-_EOMI = ("했다","하였다","한다","했다가","하며","해서","하는","되다","되면","되었","된다","되니","되어","됐다","됐다가","했다며")
+
+_JOSA = ("은","는","이","가","을","를","에","에서","으로","로","과","와","에게","한테","께","이나","나","든지","까지","부터","라도","마저","밖에","뿐","의","처럼","만큼","보다")
+_EOMI = ("했다","하였다","한다","했다가","하며","해서","하는","되다","되면","되었","된다","되니","되어","됐다","됐다가","했다며","이다","였다","이다가","이며","이어서","인","일","입니다","습니다","으니까","으니까요","는데요","고요","구요","네요","군요","시오","십시오")
 
 def nounish_strip(sentence: str) -> str:
     toks = sentence.split()
@@ -142,8 +144,8 @@ def nounish_strip(sentence: str) -> str:
 # -------------------------
 # Patterns / Locations
 # -------------------------
-def compile_patterns(cfg: dict):
-    rp = cfg.get("regex_patterns", {}) or {}
+def compile_patterns(CFG: dict):
+    rp = CFG.get("regex_patterns", {}) or {}
     def _comp(key, default):
         try:
             return re.compile(rp.get(key, default))
@@ -162,7 +164,7 @@ def compile_patterns(cfg: dict):
 _LOCATION_CORE = {
     "서울","부산","대구","인천","광주","대전","울산","세종",
     "경기","경기도","강원","강원도","충북","충남","전북","전남","경북","경남",
-    "제주","제주도","수원","용인","성남","고양","화성","부천","안산","안양","남양주",
+    "제주","제주도","수원","용인","성남","고양","화성","부천","안산","안양","남양주"
 }
 _LOCATION_SUFFIX = {"도","시","군","구","읍","면","동","리"}
 
@@ -257,7 +259,7 @@ def apply_domain_weights(scores: Dict[str, float],
                          domain_hints: List[str],
                          common_debuff: List[str],
                          alias_map: Dict[str, str],
-                         weight_cfg: Dict[str, float],
+                         weight_CFG: Dict[str, float],
                          brands: Optional[set]=None,
                          entities: Optional[set]=None,
                          patterns: Optional[dict]=None) -> Dict[str, float]:
@@ -265,13 +267,13 @@ def apply_domain_weights(scores: Dict[str, float],
         return {}
     P = patterns or {}
     boosted = {}
-    db = float(weight_cfg.get("domain_hint_boost", 1.0))
-    cd = float(weight_cfg.get("common_debuff", 1.0))
-    entity_boost = float(weight_cfg.get("entity_boost", 1.35))
-    brand_boost  = float(weight_cfg.get("brand_boost", 1.2))
-    person_debuf = float(weight_cfg.get("person_name_debuff", 0.8))
-    loc_debuf    = float(weight_cfg.get("location_debuff", 0.6))
-    num_debuf    = float(weight_cfg.get("number_debuff", 0.5))
+    db = float(weight_CFG.get("domain_hint_boost", 1.0))
+    cd = float(weight_CFG.get("common_debuff", 1.0))
+    entity_boost = float(weight_CFG.get("entity_boost", 1.35))
+    brand_boost  = float(weight_CFG.get("brand_boost", 1.2))
+    person_debuf = float(weight_CFG.get("person_name_debuff", 0.8))
+    loc_debuf    = float(weight_CFG.get("location_debuff", 0.6))
+    num_debuf    = float(weight_CFG.get("number_debuff", 0.5))
 
     dh = set(domain_hints or [])
     cm = set(common_debuff or [])
@@ -349,7 +351,7 @@ def extract_krwordrank(docs: List[str], beta: float=0.85, max_iter: int=20, min_
 def tfidf_weights(docs: List[str], vocab: List[str]) -> Dict[str, float]:
     if TfidfVectorizer is None or not docs:
         return {v: 1.0 for v in vocab}
-    vec = TfidfVectorizer(ngram_range=(1,3), min_df=2, max_df=0.9)
+    vec = TfidfVectorizer(ngram_range=(1,3), min_df=3, max_df=0.9)
     X = vec.fit_transform(docs)
     idf = dict(zip(vec.get_feature_names_out(), vec.idf_))
     return {v: float(idf.get(v, 1.0)) for v in vocab}
@@ -376,7 +378,7 @@ def hybrid_rank(docs: List[str], beta: float=0.85, max_iter: int=20, topk: int=2
 def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
     if TfidfVectorizer is None or not docs:
         return {}
-    vec = TfidfVectorizer(ngram_range=(1,3), min_df=2, max_df=0.9)
+    vec = TfidfVectorizer(ngram_range=(1,3), min_df=3, max_df=0.9)
     X = vec.fit_transform(docs)
     terms = vec.get_feature_names_out()
     avg = np.asarray(X.mean(axis=0)).ravel()
@@ -389,7 +391,7 @@ def tfidf_only(docs: List[str], topk: int=200) -> Dict[str, float]:
 # KeyBERT MMR reranking (Pro, per-document)
 # -------------------------
 def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: int,
-                       use_mmr: bool=True, diversity: float=0.5, ngram_range: Tuple[int,int]=(1,3)) -> Dict[str,float]:
+                       use_mmr: bool=True, diversity: float=0.5, ngram_range: Tuple[int,int]=(1,3), stopwords: Optional[set]=None) -> Dict[str,float]:
     if KeyBERT is None or not doc or not candidates:
         return {}
     try:
@@ -397,7 +399,7 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
         extracted = kb.extract_keywords(
             doc,
             keyphrase_ngram_range=ngram_range,
-            stop_words=None,  # 전처리에서 불용어 제거
+            stop_words=list(stopwords) if stopwords else None,
             use_mmr=use_mmr,
             diversity=diversity,
             top_n=max(topn, len(candidates))
@@ -407,6 +409,7 @@ def keybert_rerank_doc(doc: str, candidates: List[str], model_name: str, topn: i
         return dict(rer[:topn]) if rer else {}
     except Exception:
         return {}
+
 
 
 # -------------------------
@@ -438,19 +441,19 @@ def topic_context_keywords(docs: List[str], model_name: str, umap_neighbors: int
 # Main
 # -------------------------
 def main():
-    cfg = load_json("config.json", {})
-    weights = cfg.get("weights", {}) or {}
+    CFG = load_config()
+    weights = CFG.get("weights", {}) or {}
 
     # Merge config + data/dictionaries resources
-    defaults = cfg.get("keyword_extraction_defaults", {}) or {}
+    defaults = CFG.get("keyword_extraction_defaults", {}) or {}
 
     phrase_stop = sorted(
-        set(cfg.get("phrase_stop", []) or [])
+        set(CFG.get("phrase_stop", []) or [])
         | set(load_lines("data/dictionaries/phrase_stopwords.txt"))
     )
 
     stopwords = sorted(
-        set(cfg.get("stopwords", []) or [])
+        set(CFG.get("stopwords", []) or [])
         | set(load_lines("data/dictionaries/stopwords_ext.txt"))
         | set(defaults.get("MORE_STOP", []))
         | set(defaults.get("EN_STOP", []))
@@ -458,16 +461,16 @@ def main():
 
     alias_seed = {}
     alias_seed.update(defaults.get("FIX_MAP", {}) or {})
-    alias_seed.update(cfg.get("alias", {}) or {})
+    alias_seed.update(CFG.get("alias", {}) or {})
     alias_map = build_alias_map(alias_seed, product_alias_path="data/dictionaries/product_alias.json")
 
     brands, entities = load_brand_entity_lists()
 
     # Patterns
-    patterns = compile_patterns(cfg)
+    patterns = compile_patterns(CFG)
 
-    topn_keywords = int(cfg.get("top_n_keywords", 50))
-    use_pro = os.environ.get("USE_PRO", "").lower() in ("1","true","yes","y") or bool(cfg.get("use_pro", False))
+    topn_keywords = int(CFG.get("top_n_keywords", 50))
+    use_pro = os.environ.get("USE_PRO", "").lower() in ("1","true","yes","y") or bool(CFG.get("use_pro", False))
 
     meta_path = latest_file("data/news_meta_*.json")
     if not meta_path:
@@ -480,7 +483,7 @@ def main():
         raise SystemExit("no documents")
 
     # Dedup (optional)
-    raw_docs = dedup_docs_by_cosine(raw_docs, threshold=0.90)
+    raw_docs = dedup_docs_by_cosine(raw_docs, threshold=0.93)
 
     # Preprocess with strict filters
     pre_docs = preprocess_docs(raw_docs, phrase_stop=phrase_stop, stopwords=stopwords,
@@ -502,16 +505,16 @@ def main():
     # Pro: per-document KeyBERT MMR reranking and aggregation
     if use_pro and KeyBERT is not None and combined:
         cand = list(combined.keys())
-        model_name = cfg.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-        diversity = float(cfg.get("mmr_diversity", 0.5))
-        max_docs_rerank = int(cfg.get("max_docs_rerank", 80))
+        model_name = CFG.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        diversity = float(CFG.get("mmr_diversity", 0.5))
+        max_docs_rerank = int(CFG.get("max_docs_rerank", 80))
         sel_docs = pre_docs[:max_docs_rerank]
 
         agg, cnt = defaultdict(float), defaultdict(int)
         for d in sel_docs:
             rer = keybert_rerank_doc(d, candidates=cand, model_name=model_name,
                                      topn=min(len(cand), topn_keywords),
-                                     use_mmr=True, diversity=diversity, ngram_range=(1,3))
+                                     use_mmr=True, diversity=diversity, ngram_range=(1,3), stopwords=set(stopwords))
             if not rer:
                 continue
             vals = list(rer.values())
@@ -536,9 +539,9 @@ def main():
 
     # Optional: topic context boost (Pro)
     if use_pro and BERTopic is not None and len(pre_docs) >= 20:
-        model_name = cfg.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-        umap_neighbors = int(cfg.get("umap_neighbors", 15))
-        min_cluster_size = int(cfg.get("min_cluster_size", 12))
+        model_name = CFG.get("keybert_model", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        umap_neighbors = int(CFG.get("umap_neighbors", 15))
+        min_cluster_size = int(CFG.get("min_cluster_size", 12))
         topic_kw = topic_context_keywords(pre_docs, model_name=model_name,
                                           umap_neighbors=umap_neighbors,
                                           min_cluster_size=min_cluster_size,
@@ -551,10 +554,10 @@ def main():
     # Domain/alias/brand/entity weights + debuffs
     combined = apply_domain_weights(
         combined,
-        domain_hints=cfg.get("domain_hints", []),
-        common_debuff=cfg.get("common_debuff", []),
+        domain_hints=CFG.get("domain_hints", []),
+        common_debuff=CFG.get("common_debuff", []),
         alias_map=alias_map,
-        weight_cfg=weights,
+        weight_CFG=weights,
         brands=brands,
         entities=entities,
         patterns=patterns

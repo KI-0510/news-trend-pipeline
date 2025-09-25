@@ -218,20 +218,17 @@ def build_schema_hint() -> Dict[str, Any]:
 def build_prompt(context: Dict[str, Any], want: int = 5) -> str:
     schema = build_schema_hint()
     return (
-        "다음 컨텍스트(키워드/토픽/요약/스파이크/이벤트)를 기반으로 B2B에 유의미한 신사업 아이디어를 제안해 주세요.\n"
-        f"- 아이디어 개수: 정확히 {want}개(반드시 5개)\n"
-        "- JSON 배열 형식만 출력하세요. 배열 이외의 텍스트를 출력하지 마세요.\n"
-        "- 각 아이템은 아래 스키마 키를 정확히 사용하세요.\n"
-        f"스키마: {json.dumps(schema, ensure_ascii=False)}\n"
-        "- 제약:\n"
-        "  1) 서로 유사한 테마/표현 금지(중복 금지). 각 아이디어의 '차별화 포인트'를 1문장 포함.\n"
-        "  2) 카테고리 분산: [제품/서비스/플랫폼/파트너십(조달)/데이터·분석] 중 서로 다른 카테고리에서 최소 3개 이상 포함.\n"
-        "  3) 산업 맥락: 디스플레이/사이니지/전자 제조·조달/모빌리티-디스플레이 접점을 최소 2개 아이디어에 반영.\n"
-        "  4) 지역 명시: KR/JP/EU 중 하나를 각 아이디어에 1개 이상 명시.\n"
-        "  5) 'Why now'를 각 아이디어에 1문장으로 포함(최근 스파이크/이벤트/정책을 근거로).\n"
-        "- solution, risks는 리스트로 주세요.\n"
-        "- priority_score는 0.0~5.0의 숫자(float)로 주세요.\n"
-        "컨텍스트:\n"
+        f"당신은 최상위 디스플레이 제조 기업의 '사업 전략 전문가'입니다. "
+        f"아래 컨텍스트(최신 기술 뉴스 키워드, 토픽, 트렌드)를 기반으로 우리 회사가 추진할 만한 구체적인 신사업 아이디어를 제안해 주세요.\n"
+        f"- 아이디어 개수: 정확히 {want}개\n"
+        f"- JSON 배열 형식만 출력하세요. 설명은 필요 없습니다.\n"
+        f"- 각 아이템은 아래 스키마 키를 정확히 사용하세요: {json.dumps(schema, ensure_ascii=False)}\n"
+        f"- 제약 조건:\n"
+        f"  1) 아이디어는 반드시 '차량용 디스플레이', 'AR/VR/XR용 마이크로디스플레이', 'IT용 차세대 패널(OLED, MicroLED)', '신소재/부품', '공정 자동화/수율 개선' 중 최소 3개 이상의 카테고리를 포함해야 합니다.\n"
+        f"  2) 각 아이디어의 'problem' 항목에는 반드시 최신 트렌드나 'Why now' 관점을 1문장 이상 포함하여 문제의 시의성을 강조하세요.\n"
+        f"  3) 'target_customer'는 '글로벌 완성차 OEM', '북미 빅테크 기업'처럼 구체적으로 명시하세요.\n"
+        f"  4) 'priority_score'는 시장 잠재력, 기술 실현 가능성, 경쟁 강도를 고려하여 객관적으로 평가해주세요.\n"
+        f"컨텍스트:\n"
         f"{json.dumps(context, ensure_ascii=False)}"
     )
 
@@ -411,23 +408,9 @@ def normalize_item(it: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 # ========== LLM 호출 ==========
-def load_config2():
-    try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def llm_config2(cfg: dict) -> dict:
-    llm = cfg.get("llm") or {}
-    return {
-        "model": llm.get("model", "gemini-1.5-flash"),
-        "max_output_tokens": int(llm.get("max_output_tokens", 2048)),
-        "temperature": float(llm.get("temperature", 0.3)),
-    }
-
-CFG2 = load_config2()
-LLM2 = llm_config2(CFG2)
+from src.config import load_config, llm_config
+CFG = load_config()
+LLM = llm_config(CFG)
 
 def load_context_for_prompt() -> Dict[str, Any]:
     keywords = load_json("outputs/keywords.json", default={"keywords": []}) or {"keywords": []}
@@ -479,9 +462,9 @@ def call_gemini(prompt: str) -> str:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY 환경 변수가 없습니다.")
     genai.configure(api_key=api_key)
-    model_name = str(LLM2.get("model", "gemini-1.5-flash"))
-    max_tokens = int(LLM2.get("max_output_tokens", 2048))
-    temperature = float(LLM2.get("temperature", 0.3))
+    model_name = str(LLM.get("model", "gemini-2.0-flash-001"))
+    max_tokens = int(LLM.get("max_output_tokens", 2048))
+    temperature = float(LLM.get("temperature", 0.3))
     model = genai.GenerativeModel(model_name)
     resp = model.generate_content(
         prompt,
