@@ -7,7 +7,7 @@ import unicodedata
 import datetime
 from typing import List, Dict, Any, Tuple, Optional
 from email.utils import parsedate_to_datetime
-from collections import Counter
+from collections import Counter, defaultdict
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
