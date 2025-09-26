@@ -9,6 +9,7 @@ import datetime
 import time
 from typing import List, Dict, Any, Tuple, Optional
 from collections import defaultdict, Counter
+from src.config import load_config, llm_config
 
 # ========== 공통 로드/유틸 ==========
 def latest(globpat: str):
@@ -133,14 +134,10 @@ def extract_orgs(text: str) -> List[str]:
 def load_topic_labels(topics_obj: dict, topn: int = 5) -> list[dict]:
     labels = []
     for t in (topics_obj.get("topics") or []):
-        name = (t.get("topic_name") or "").strip()
-        if name:
-            labels.append({"topic_id": int(t.get("topic_id", 0)), "label": name})
-        else:
-            words = [w.get("word","") for w in (t.get("top_words") or [])][:topn]
-            labels.append({"topic_id": int(t.get("topic_id", 0)), "label": " / ".join(words)})
+        words = [w.get("word","") for w in (t.get("top_words") or []) if w.get("word")][:topn]
+        labels.append({"topic_id": int(t.get("topic_id", 0)), "words": words})
     return labels
-
+#
 def export_company_topic_matrix(meta_items: List[Dict[str,Any]], topic_labels: List[Dict[str,Any]]) -> None:
     os.makedirs("outputs/export", exist_ok=True)
     topic_wordsets = []
@@ -408,7 +405,6 @@ def normalize_item(it: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 # ========== LLM 호출 ==========
-from src.config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
 
@@ -424,8 +420,9 @@ def load_context_for_prompt() -> Dict[str, Any]:
         summary = summary[:1200] + "…"
 
     kw_simple = [{"keyword": k.get("keyword",""), "score": k.get("score",0)} for k in (keywords.get("keywords") or [])[:20]]
+    max_topics = int(CFG.get("llm_context_max_topics", 12))
     tp_simple = []
-    for t in (topics.get("topics") or [])[:6]:
+    for t in (topics.get("topics") or [])[:max_topics]:
         words = [w.get("word","") for w in (t.get("top_words") or [])][:6]
         tp_simple.append({"topic_id": t.get("topic_id"), "words": words})
 
@@ -527,14 +524,22 @@ def load_events_csv(path: str) -> List[Dict[str,str]]:
 def enrich_with_signals(ideas: List[Dict[str,Any]],
                         meta_items: List[Dict[str,Any]],
                         trend_rows: List[Dict[str,Any]],
-                        events_rows: List[Dict[str,str]]) -> List[Dict[str,Any]]:
+                        events_rows: List[Dict[str,str]],
+                        cfg: Dict[str, Any]) -> List[Dict[str,Any]]:
+    
+    weights = cfg.get("score_weights", {})
+    prio_w = float(weights.get("priority_llm_weight", 0.25))
+    mkt_w = float(weights.get("market_weight", 0.40))
+    urg_w = float(weights.get("urgency_weight", 0.35))
+    feas_w = float(weights.get("feasibility_weight", 0.25))
+    risk_p = float(weights.get("risk_penalty", 1.0))
+    
     trend_idx = {r.get("term",""): r for r in trend_rows}
     event_hit = defaultdict(int)
     for r in events_rows:
-        et = r.get("type")
-        if et:
-            event_hit[et] += 1
-
+        et = r.get("type");
+        if et: event_hit[et] += 1
+    
     ts_cur_vals, ts_z_vals = [], []
     for it in ideas:
         term = it.get("idea","")
@@ -544,6 +549,7 @@ def enrich_with_signals(ideas: List[Dict[str,Any]],
             ts_z_vals.append(float(tr.get("z_like",0.0)))
         except Exception:
             ts_z_vals.append(0.0)
+            
     cur_hi = max([1] + ts_cur_vals) if ts_cur_vals else 1
     cur_lo = min([0] + ts_cur_vals) if ts_cur_vals else 0
     z_hi  = max([0.0] + ts_z_vals) if ts_z_vals else 0.0
@@ -555,8 +561,9 @@ def enrich_with_signals(ideas: List[Dict[str,Any]],
         tr = trend_idx.get(term, {})
         cur = int(tr.get("cur", 0))
         z   = float(tr.get("z_like", 0.0) or 0.0)
-
-        s_market = 0.75 * normalize_score(cur, cur_lo, cur_hi) + 0.25 * normalize_score(it.get("priority_score",0.0), 0.0, 5.0)
+        
+        s_trend = 1.0 - prio_w
+        s_market = (s_trend * normalize_score(cur, cur_lo, cur_hi)) + (prio_w * normalize_score(it.get("priority_score",0.0), 0.0, 5.0))
         s_urg = normalize_score(z, z_lo, z_hi)
         evt_boost = 0.0
         if event_hit.get("LAUNCH",0)>0: evt_boost += 0.10
@@ -566,17 +573,12 @@ def enrich_with_signals(ideas: List[Dict[str,Any]],
         if event_hit.get("CERT",0)>0: evt_boost += 0.05
         if event_hit.get("REGUL",0)>0: evt_boost += 0.04
         s_urg = clamp01(s_urg + evt_boost)
-
         s_feas = 0.6
-
         evid = pick_evidence(term, meta_items, limit=3)
-        risk = 0.0
-        for e in evid:
-            if any(nw in (e.get("sentence") or "") for nw in NEG_WORDS):
-                risk += 0.10
+        risk = sum(0.10 for e in evid if any(nw in (e.get("sentence") or "") for nw in NEG_WORDS))
         risk = clamp01(risk)
-
-        score100 = 100.0 * (0.40 * s_market + 0.35 * s_urg + 0.25 * s_feas) - 100.0 * risk
+        
+        score100 = 100.0 * (mkt_w * s_market + urg_w * s_urg + feas_w * s_feas) - (100.0 * risk_p * risk)
         score100 = max(0.0, min(100.0, score100))
 
         it["score"] = round(score100, 2)
@@ -588,16 +590,8 @@ def enrich_with_signals(ideas: List[Dict[str,Any]],
             "notes": {"cur": cur, "z_like": round(z,3), "events_any": sum(event_hit.values())}
         }
         it["evidence"] = evid if isinstance(evid, list) else []
-        it["title"] = it.get("title") or it["idea"]
-        it["problem"] = it.get("problem") or f"{it['idea']} 관련 과제가 상존함."
-        it["target_customer"] = it.get("target_customer") or "기업(B2B)"
-        it["value_prop"] = it.get("value_prop") or f"{it['idea']} 도입 가치(비용/품질/경험 개선)."
-        it["solution"] = it.get("solution") or ["파일럿→제휴→인증 확보"]
-        it["risks"] = it.get("risks") or ["규제/표준 불확실성", "비용/ROI 불확실성"]
-        it["priority_score"] = it.get("priority_score", 0.0)
         out.append(it)
-
-    out.sort(key=lambda x: (x.get("priority_score",0.0), x.get("score",0.0)), reverse=True)
+        
     return out
 
 # ========== Top5 보장 ==========
@@ -655,10 +649,9 @@ def main():
     os.makedirs("outputs/export", exist_ok=True)
 
     meta_path = latest("data/news_meta_*.json")
-    meta_items = load_json(meta_path, [])
+    meta_items = load_json(latest("data/news_meta_*.json"), [])
     keywords_obj = load_json("outputs/keywords.json", {"keywords":[]})
     topics_obj   = load_json("outputs/topics.json", {"topics":[]})
-
     trend_rows = load_trend_strength_csv("outputs/export/trend_strength.csv")
     events_rows = load_events_csv("outputs/export/events.csv")
 
@@ -675,10 +668,11 @@ def main():
         print("[ERROR] LLM stage failed:", repr(e))
         ideas_llm = []
 
-    ideas_final = enrich_with_signals(ideas_llm, meta_items, trend_rows, events_rows)
-
-    # Top5 보장
-    ideas_final = fill_opportunities_to_five(ideas_final, keywords_obj, want=5)
+    # main 함수에서 enrich_with_signals 호출 시 cfg 전달 및 최종 정렬 수정
+    ideas_with_scores = enrich_with_signals(ideas_llm, meta_items, trend_rows, events_rows, CFG)
+    ideas_with_scores.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+    
+    ideas_final = fill_opportunities_to_five(ideas_with_scores, keywords_obj, want=5)
 
     save_json("outputs/biz_opportunities.json", {"ideas": ideas_final})
     print("[INFO] Module D done | ideas=%d" % len(ideas_final))
