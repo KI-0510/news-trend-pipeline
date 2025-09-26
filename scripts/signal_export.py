@@ -78,7 +78,8 @@ def load_warehouse_unique_per_day(days=30, strategy="latest"):
                         continue
                     title = (obj.get("title") or "").strip()
                     toks = tokenize(title)
-                    rows.append((d, " ".join(toks)))
+                    # 아래 줄에서 " ".join(toks)를 toks로 수정합니다.
+                    rows.append((d, toks)) 
         except Exception:
             continue
     return rows
