@@ -190,12 +190,89 @@ def export_weak_signals(rows):
         for r in sorted(cand, key=lambda x: (x["z_like"], x["cur"]), reverse=True)[:200]:
             w.writerow([r["term"], r["cur"], r["prev"], r["diff"], round(r["ma7"],3), round(r["z_like"],3), r["total"]])
 
+
+# ===== 이벤트 추출/저장 =====
+EVENT_MAP = {
+    "LAUNCH":      [r"출시", r"론칭", r"발표", r"선보이", r"공개"],
+    "PARTNERSHIP": [r"제휴", r"파트너십", r"업무협약", r"\bMOU\b", r"맞손"],
+    "INVEST":      [r"투자", r"유치", r"라운드", r"시리즈 [ABCD]"],
+    "ORDER":       [r"수주", r"계약 체결", r"납품 계약", r"공급 계약", r"수의 계약"],
+    "CERT":        [r"인증", r"허가", r"승인", r"적합성 평가", r"CE ?인증", r"FDA ?승인"],
+    "REGUL":       [r"규제", r"가이드라인", r"행정예고", r"고시", r"지침", r"제정", r"개정"],
+}
+
+def _latest(path_glob: str):
+    files = sorted(glob.glob(path_glob))
+    return files[-1] if files else None
+
+def _pick_meta_path():
+    p1 = "outputs/debug/news_meta_latest.json"
+    if os.path.exists(p1):
+        return p1
+    return _latest("data/news_meta_*.json")
+
+def _detect_events_from_items(items: list) -> list:
+    rows = []
+    for it in items:
+        title = (it.get("title") or it.get("title_og") or "").strip()
+        body  = (it.get("body") or it.get("description") or it.get("description_og") or "").strip()
+        text  = f"{title}\n{body}"
+        date  = (it.get("date") or it.get("pubDate") or "")[:10]
+        url   = it.get("url") or ""
+        src   = it.get("source") or it.get("press") or ""
+        for etype, pats in EVENT_MAP.items():
+            for pat in pats:
+                if re.search(pat, text, flags=re.IGNORECASE):
+                    rows.append({
+                        "date": date or "",
+                        "type": etype,
+                        "title": title[:300],
+                        "url": url,
+                        "source": src
+                    })
+                    break
+    return rows
+
+def _dedup_events(rows: list) -> list:
+    seen, out = set(), []
+    for r in rows:
+        key = (r.get("date",""), r.get("type",""), r.get("title",""))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+def export_events(out_path="outputs/export/events.csv"):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    meta_path = _pick_meta_path()
+    if not meta_path:
+        print("[INFO] events.csv skipped (no meta)")
+        return
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            items = json.load(f)
+    except Exception as e:
+        print("[WARN] events: meta load failed:", repr(e))
+        items = []
+    rows = _detect_events_from_items(items)
+    rows = _dedup_events(rows)
+    with open(out_path, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["date","type","title","url","source"])
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+    print(f"[INFO] events.csv exported | rows={len(rows)}")
+
+
 def main():
-    rows = load_warehouse(days=30)
+    # 하루 1파일 정책 반영
+    rows = load_warehouse_unique_per_day(days=30, strategy="latest")
     dc = daily_counts(rows)
     rows2 = to_rows(dc)
     export_trend_strength(rows2)
     export_weak_signals(rows2)
+    export_events()  # 추가
     print("[INFO] signal_export | terms=", len(rows2))
 
 if __name__ == "__main__":
