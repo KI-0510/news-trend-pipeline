@@ -74,6 +74,24 @@ def to_date(s: str) -> str:
     return d.strftime("%Y-%m-%d")
 
 # ================= 데이터 로더 =================
+def select_latest_files_per_day(glob_pattern: str, days: int) -> List[str]:
+    """
+    glob 패턴과 일치하는 파일들을 스캔하여, 각 날짜별로 가장 최신 파일 하나만 선택합니다.
+    그 후, 가장 최근 N일치의 파일 목록을 반환합니다.
+    """
+    all_files = sorted(glob.glob(glob_pattern))
+    daily_files = defaultdict(list)
+    for f in all_files:
+        date_key = os.path.basename(f)[:10]
+        daily_files[date_key].append(f)
+    
+    latest_daily_files = []
+    for date_key in sorted(daily_files.keys()):
+        latest_file_for_day = sorted(daily_files[date_key])[-1]
+        latest_daily_files.append(latest_file_for_day)
+    
+    return latest_daily_files[-days:]
+
 def load_today_meta() -> Tuple[List[str], List[str]]:
     meta_path = latest("data/news_meta_*.json")
     if not meta_path: return [], []
@@ -95,7 +113,9 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
     return docs, dates
 
 def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
-    files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
+    # 새로 추가한 헬퍼 함수를 사용하여 하루 1개의 파일만 선택하도록 수정
+    files = select_latest_files_per_day("data/warehouse/*.jsonl", days=days)
+    
     docs, dates = [], []
     for fp in files:
         try:
@@ -112,7 +132,8 @@ def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
                     if not title: continue
                     d_raw = obj.get("published") or obj.get("created_at") or file_day
                     d_std = to_date(d_raw)
-                    docs.append(title); dates.append(d_std)
+                    docs.append(title)
+                    dates.append(d_std)
         except Exception:
             continue
     return docs, dates
