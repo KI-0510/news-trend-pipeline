@@ -101,6 +101,7 @@ def to_date_from_name(fp):
     d = base[:10]
     return d
 
+'''
 def load_warehouse(days=30):
     files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
     rows = []
@@ -119,6 +120,7 @@ def load_warehouse(days=30):
         except Exception:
             continue
     return rows
+'''
 
 def daily_counts(rows):
     # rows: list of (date, tokens)
