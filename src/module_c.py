@@ -74,26 +74,20 @@ def to_date(s: str) -> str:
     return d.strftime("%Y-%m-%d")
 
 # ================= 데이터 로더 =================
+# src/module_c.py
+
+# ================= 데이터 로더 =================
 def select_latest_files_per_day(glob_pattern: str, days: int) -> List[str]:
-    """
-    과거 데이터 동결 정책 적용: 오늘 날짜를 제외하고, 각 날짜별 최신 파일 하나만 선택하여
-    가장 최근 N일치의 파일 목록을 반환합니다.
-    """
     all_files = sorted(glob.glob(glob_pattern))
     daily_files = defaultdict(list)
     for f in all_files:
         date_key = os.path.basename(f)[:10]
         daily_files[date_key].append(f)
-    
     latest_daily_files = []
     for date_key in sorted(daily_files.keys()):
         latest_file_for_day = sorted(daily_files[date_key])[-1]
         latest_daily_files.append(latest_file_for_day)
-
-    today_kst_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d')
-    past_files = [f for f in latest_daily_files if os.path.basename(f)[:10] < today_kst_str]
-    
-    return past_files[-days:]
+    return latest_daily_files
 
 def load_today_meta() -> Tuple[List[str], List[str]]:
     meta_path = latest("data/news_meta_*.json")
@@ -104,45 +98,70 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
             items = json.load(f) or []
     except Exception:
         return [], []
-    docs, dates = [], []
     for it in items:
         title = clean_text((it.get("title") or it.get("title_og") or "").strip())
         desc  = clean_text((it.get("body") or it.get("description") or it.get("description_og") or "").strip())
-        if not title and not desc: continue
         doc = (title + " " + desc).strip()
         if not doc: continue
-        docs.append(doc)
         d_raw = it.get("published_time") or it.get("pubDate_raw") or ""
+        docs.append(doc)
         dates.append(to_date(d_raw))
     return docs, dates
 
-def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
-    # 안정성 정책(하루 1파일, 과거 데이터 동결)이 적용된 헬퍼 함수를 사용합니다.
-    files = select_latest_files_per_day("data/warehouse/*.jsonl", days=days)
-    docs, dates = [], []
-    for fp in files:
-        try:
-            file_day = os.path.basename(fp)[:10]
-            with open(fp, "r", encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        obj = json.loads(line)
-                        d_raw = obj.get("published") or obj.get("created_at") or file_day
-                        title = clean_text(obj.get("title") or "")
-                        if not title: continue
-                        docs.append(title)
-                        dates.append(to_date(d_raw))
-                    except Exception:
-                        continue
-        except Exception:
-            continue
-    return docs, dates
+# load_warehouse 함수는 이제 파일 경로 목록만 반환하도록 단순화합니다.
+def load_warehouse_paths(days: int = 30) -> List[str]:
+    # 하루치 여유분을 포함하여 D+1일자 파일을 가져올 수 있도록 합니다.
+    return select_latest_files_per_day("data/warehouse/*.jsonl", days=(days + 1))
 
 # ================= 시계열 =================
-def timeseries_by_date(dates: List[str]) -> Dict[str, Any]:
-    cnt = Counter(dates or [])
-    daily = [{"date": d, "count": int(cnt[d])} for d in sorted(cnt.keys())]
-    return {"daily": daily}
+def calculate_stable_timeseries(warehouse_files: List[str]) -> Dict[str, Any]:
+    """
+    D일자와 D+1일자 파일을 기반으로 D일의 최종 기사 수를 계산하는 안정적인 시계열 분석 함수
+    """
+    file_map = {os.path.basename(f)[:10]: f for f in warehouse_files}
+    if not file_map:
+        return {"daily": []}
+    
+    sorted_dates = sorted(file_map.keys())
+    start_date = datetime.datetime.strptime(sorted_dates[0], "%Y-%m-%d").date()
+    # 마지막 날짜는 D+1일이 없으므로, 그 전날까지만 계산합니다.
+    end_date = datetime.datetime.strptime(sorted_dates[-1], "%Y-%m-%d").date() - datetime.timedelta(days=1)
+    
+    daily_counts = []
+    current_date = start_date
+
+    while current_date <= end_date:
+        date_str_d = current_date.strftime("%Y-%m-%d")
+        date_str_d_plus_1 = (current_date + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        count = 0
+        
+        files_to_check = []
+        if date_str_d in file_map:
+            files_to_check.append(file_map[date_str_d])
+        if date_str_d_plus_1 in file_map:
+            files_to_check.append(file_map[date_str_d_plus_1])
+            
+        for fp in files_to_check:
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            obj = json.loads(line)
+                            d_raw = obj.get("published") or obj.get("created_at") or os.path.basename(fp)[:10]
+                            published_date = to_date(d_raw)
+                            
+                            if published_date == date_str_d:
+                                count += 1
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+                
+        daily_counts.append({"date": date_str_d, "count": count})
+        current_date += datetime.timedelta(days=1)
+        
+    return {"daily": daily_counts}
 
 # ================= 불용/컷(토픽 공통) =================
 EN_STOP = {
@@ -589,21 +608,19 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         w = csv.DictWriter(f, fieldnames=["term","cur","prev","diff","ma7","z_like","total","slope"])
         w.writeheader(); [w.writerow(r) for r in weak]
 
-# ================= 메인 =================#
+# ================= 메인 =================
+# ================= 메인 =================
 def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
 
-    # 1. 역할에 맞게 데이터 분리 로드 (wh_docs 변수 복원)
     docs_today, _ = load_today_meta()
-    wh_docs, wh_dates = load_warehouse(days=30) 
-
-    # 2. 시계열은 warehouse의 날짜 데이터만 사용
-    ts_obj = timeseries_by_date(wh_dates)
+    warehouse_paths = load_warehouse_paths(days=30) 
+    
+    ts_obj = calculate_stable_timeseries(warehouse_paths)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 3. 토픽 분석은 오늘 수집한 데이터만 사용
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
