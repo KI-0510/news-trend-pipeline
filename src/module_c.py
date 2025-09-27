@@ -76,8 +76,8 @@ def to_date(s: str) -> str:
 # ================= 데이터 로더 =================
 def select_latest_files_per_day(glob_pattern: str, days: int) -> List[str]:
     """
-    glob 패턴과 일치하는 파일들을 스캔하여, 각 날짜별로 가장 최신 파일 하나만 선택합니다.
-    그 후, 가장 최근 N일치의 파일 목록을 반환합니다.
+    과거 데이터 동결 정책 적용: 오늘 날짜를 제외하고, 각 날짜별 최신 파일 하나만 선택하여
+    가장 최근 N일치의 파일 목록을 반환합니다.
     """
     all_files = sorted(glob.glob(glob_pattern))
     daily_files = defaultdict(list)
@@ -89,12 +89,16 @@ def select_latest_files_per_day(glob_pattern: str, days: int) -> List[str]:
     for date_key in sorted(daily_files.keys()):
         latest_file_for_day = sorted(daily_files[date_key])[-1]
         latest_daily_files.append(latest_file_for_day)
+
+    today_kst_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d')
+    past_files = [f for f in latest_daily_files if os.path.basename(f)[:10] < today_kst_str]
     
-    return latest_daily_files[-days:]
+    return past_files[-days:]
 
 def load_today_meta() -> Tuple[List[str], List[str]]:
     meta_path = latest("data/news_meta_*.json")
     if not meta_path: return [], []
+    docs, dates = [], []
     try:
         with open(meta_path, "r", encoding="utf-8") as f:
             items = json.load(f) or []
@@ -113,27 +117,23 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
     return docs, dates
 
 def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
-    # 새로 추가한 헬퍼 함수를 사용하여 하루 1개의 파일만 선택하도록 수정
+    # 안정성 정책(하루 1파일, 과거 데이터 동결)이 적용된 헬퍼 함수를 사용합니다.
     files = select_latest_files_per_day("data/warehouse/*.jsonl", days=days)
-    
     docs, dates = [], []
     for fp in files:
         try:
             file_day = os.path.basename(fp)[:10]
             with open(fp, "r", encoding="utf-8") as f:
                 for line in f:
-                    line = (line or "").strip()
-                    if not line: continue
                     try:
                         obj = json.loads(line)
+                        d_raw = obj.get("published") or obj.get("created_at") or file_day
+                        title = clean_text(obj.get("title") or "")
+                        if not title: continue
+                        docs.append(title)
+                        dates.append(to_date(d_raw))
                     except Exception:
                         continue
-                    title = clean_text(obj.get("title") or "")
-                    if not title: continue
-                    d_raw = obj.get("published") or obj.get("created_at") or file_day
-                    d_std = to_date(d_raw)
-                    docs.append(title)
-                    dates.append(d_std)
         except Exception:
             continue
     return docs, dates
@@ -596,14 +596,14 @@ def main():
 
     # 1. 역할에 맞게 데이터 분리 로드
     docs_today, _ = load_today_meta()           # 오늘 수집분 -> 최신 토픽 분석용
-    wh_docs, wh_dates = load_warehouse(days=30) # 창고 데이터 -> 시계열 분석용
+    _, wh_dates = load_warehouse(days=30)       # 창고 데이터 -> 시계열 분석용
 
-    # 2. 시계열은 warehouse 데이터만 사용하도록 수정
+    # 2. 시계열은 오직 warehouse 데이터만 사용하여 중복 집계 및 과거값 변경 문제 해결
     ts_obj = timeseries_by_date(wh_dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 3. 토픽 분석은 오늘 수집한 데이터만 사용 (기존과 동일)
+    # 3. 토픽 분석은 오늘 수집한 데이터만 사용
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
