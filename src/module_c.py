@@ -7,7 +7,7 @@ import unicodedata
 import datetime
 from typing import List, Dict, Any, Tuple, Optional
 from email.utils import parsedate_to_datetime
-from collections import Counter
+from collections import Counter, defaultdict
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -74,9 +74,31 @@ def to_date(s: str) -> str:
     return d.strftime("%Y-%m-%d")
 
 # ================= 데이터 로더 =================
+def select_latest_files_per_day(glob_pattern: str, days: int) -> List[str]:
+    """
+    과거 데이터 동결 정책 적용: 오늘 날짜를 제외하고, 각 날짜별 최신 파일 하나만 선택하여
+    가장 최근 N일치의 파일 목록을 반환합니다.
+    """
+    all_files = sorted(glob.glob(glob_pattern))
+    daily_files = defaultdict(list)
+    for f in all_files:
+        date_key = os.path.basename(f)[:10]
+        daily_files[date_key].append(f)
+    
+    latest_daily_files = []
+    for date_key in sorted(daily_files.keys()):
+        latest_file_for_day = sorted(daily_files[date_key])[-1]
+        latest_daily_files.append(latest_file_for_day)
+
+    today_kst_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d')
+    past_files = [f for f in latest_daily_files if os.path.basename(f)[:10] < today_kst_str]
+    
+    return past_files[-days:]
+
 def load_today_meta() -> Tuple[List[str], List[str]]:
     meta_path = latest("data/news_meta_*.json")
     if not meta_path: return [], []
+    docs, dates = [], []
     try:
         with open(meta_path, "r", encoding="utf-8") as f:
             items = json.load(f) or []
@@ -95,24 +117,23 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
     return docs, dates
 
 def load_warehouse(days: int = 30) -> Tuple[List[str], List[str]]:
-    files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
+    # 안정성 정책(하루 1파일, 과거 데이터 동결)이 적용된 헬퍼 함수를 사용합니다.
+    files = select_latest_files_per_day("data/warehouse/*.jsonl", days=days)
     docs, dates = [], []
     for fp in files:
         try:
             file_day = os.path.basename(fp)[:10]
             with open(fp, "r", encoding="utf-8") as f:
                 for line in f:
-                    line = (line or "").strip()
-                    if not line: continue
                     try:
                         obj = json.loads(line)
+                        d_raw = obj.get("published") or obj.get("created_at") or file_day
+                        title = clean_text(obj.get("title") or "")
+                        if not title: continue
+                        docs.append(title)
+                        dates.append(to_date(d_raw))
                     except Exception:
                         continue
-                    title = clean_text(obj.get("title") or "")
-                    if not title: continue
-                    d_raw = obj.get("published") or obj.get("created_at") or file_day
-                    d_std = to_date(d_raw)
-                    docs.append(title); dates.append(d_std)
         except Exception:
             continue
     return docs, dates
@@ -632,6 +653,6 @@ def main():
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
-
+    
 if __name__ == "__main__":
     main()
