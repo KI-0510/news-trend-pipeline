@@ -226,13 +226,21 @@ def export_events(out_path="outputs/export/events.csv"):
 
 
 def main():
-    # 하루 1파일 정책 반영
+    # signal_export.py main 안에서 rows 만든 직후 필터링
+    import datetime
+    
+    KST = datetime.timezone(datetime.timedelta(hours=9))
+    today_kst = datetime.datetime.now(KST).strftime("%Y-%m-%d")
+    
     rows = load_warehouse_unique_per_day(days=30, strategy="latest")
+    # rows: list[(date, tokens)]
+    rows = [(d, toks) for (d, toks) in rows if d != today_kst]  # 오늘 제외
+    
     dc = daily_counts(rows)
     rows2 = to_rows(dc)
     export_trend_strength(rows2)
     export_weak_signals(rows2)
-    export_events()  # 추가
+    export_events()
     print("[INFO] signal_export | terms=", len(rows2))
 
 if __name__ == "__main__":
