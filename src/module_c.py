@@ -609,18 +609,20 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         w.writeheader(); [w.writerow(r) for r in weak]
 
 # ================= 메인 =================
-# ================= 메인 =================
 def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
 
+    # 1. 역할에 맞게 데이터 분리 로드 (wh_docs 변수 복원)
     docs_today, _ = load_today_meta()
-    warehouse_paths = load_warehouse_paths(days=30) 
-    
-    ts_obj = calculate_stable_timeseries(warehouse_paths)
+    wh_docs, wh_dates = load_warehouse(days=30) 
+
+    # 2. 시계열은 warehouse의 날짜 데이터만 사용
+    ts_obj = timeseries_by_date(wh_dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
+    # 3. 토픽 분석은 오늘 수집한 데이터만 사용
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
@@ -643,7 +645,7 @@ def main():
     top_keywords = [k.get("keyword") for k in keywords_obj.get("keywords", [])[:10]]
 
     api_key = os.getenv("GEMINI_API_KEY", "")
-    model_name = str(LLM.get("model", "gemini-2.0-flash"))
+    model_name = str(LLM.get("model", "gemini-1.5-flash"))
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
@@ -670,6 +672,6 @@ def main():
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
-    
+
 if __name__ == "__main__":
     main()
