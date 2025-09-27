@@ -5,7 +5,7 @@
     "OLED 패널", "QD-OLED", "MicroLED", "폴더블 디스플레이",
     "차량용 디스플레이", "AR VR 디스플레이", "LTPO",
     "삼성디스플레이", "LG디스플레이", "애플", "삼성", "LG",
-    "OLED", "LCD", "TV", "스마트폰", "노트북", "모니터"
+    "OLED", "LCD"
   ],
   "per_query_display": 10,
   "pages": 1,
