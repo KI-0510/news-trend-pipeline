@@ -589,16 +589,16 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         w = csv.DictWriter(f, fieldnames=["term","cur","prev","diff","ma7","z_like","total","slope"])
         w.writeheader(); [w.writerow(r) for r in weak]
 
-# ================= 메인 =================
+# ================= 메인 =================#
 def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
 
-    # 1. 역할에 맞게 데이터 분리 로드
-    docs_today, _ = load_today_meta()           # 오늘 수집분 -> 최신 토픽 분석용
-    _, wh_dates = load_warehouse(days=30)       # 창고 데이터 -> 시계열 분석용
+    # 1. 역할에 맞게 데이터 분리 로드 (wh_docs 변수 복원)
+    docs_today, _ = load_today_meta()
+    wh_docs, wh_dates = load_warehouse(days=30) 
 
-    # 2. 시계열은 오직 warehouse 데이터만 사용하여 중복 집계 및 과거값 변경 문제 해결
+    # 2. 시계열은 warehouse의 날짜 데이터만 사용
     ts_obj = timeseries_by_date(wh_dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
@@ -612,12 +612,12 @@ def main():
     except Exception as e:
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
         topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
-
+    
     topics_obj = _ensure_prob_payload(topics_obj, topn=10, decay=0.95, floor=0.2)
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
-    # 4. 인사이트 생성 (기존과 동일)
+    # 4. 인사이트 생성
     try:
         with open("outputs/keywords.json", "r", encoding="utf-8") as f:
             keywords_obj = json.load(f)
@@ -626,7 +626,7 @@ def main():
     top_keywords = [k.get("keyword") for k in keywords_obj.get("keywords", [])[:10]]
 
     api_key = os.getenv("GEMINI_API_KEY", "")
-    model_name = str(LLM.get("model", "gemini-1.5-flash"))
+    model_name = str(LLM.get("model", "gemini-2.0-flash"))
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
@@ -644,8 +644,7 @@ def main():
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
-    # 5. 강/약 신호 분석도 warehouse 데이터만 사용하도록 수정
-    # (참고: 이 함수는 module_c 내부에만 존재하며, 실제 csv파일은 signal_export.py가 생성)
+    # 5. 강/약 신호 분석 (wh_docs가 필요)
     export_trend_and_weak_signals(wh_docs, wh_dates, keywords_obj)
 
     import datetime
@@ -654,6 +653,6 @@ def main():
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
-
+    
 if __name__ == "__main__":
     main()
