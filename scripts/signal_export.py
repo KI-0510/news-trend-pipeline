@@ -12,46 +12,36 @@ def _load_lines(p):
 STOP_EXT = set(_load_lines(os.path.join(DICT_DIR, "stopwords_ext.txt")))
 
 # ===== 하루 1파일 선택 유틸 =====
-def _date_from_name(fp: str) -> str:
-    # 파일명 앞 10자 기준(YYYY-MM-DD)
-    base = os.path.basename(fp)
-    return base[:10]
-
-def _list_warehouse_files(pattern="data/warehouse/*.jsonl"):
-    return sorted(glob.glob(pattern))
-
-def _pick_one_per_day(files: list, strategy="latest") -> list:
-    from collections import defaultdict
-    by_day = defaultdict(list)
-    for fp in files:
-        d = _date_from_name(fp)
-        by_day[d].append(fp)
-    picked = []
-    for d, fps in by_day.items():
-        fps.sort()  # 시간 포함 파일명은 사전순=시간순
-        if strategy == "latest":
-            picked.append(fps[-1])
-        elif strategy == "earliest":
-            picked.append(fps[0])
-        elif strategy == "random":
-            import random
-            picked.append(random.choice(fps))
-        else:
-            picked.append(fps[-1])
-    return sorted(picked)
+def select_latest_files_per_day(glob_pattern: str, days: int):
+    """
+    과거 데이터 동결 정책 적용: 오늘 날짜를 제외하고, 각 날짜별 최신 파일 하나만 선택하여
+    가장 최근 N일치의 파일 목록을 반환합니다.
+    """
+    all_files = sorted(glob.glob(glob_pattern))
+    daily_files = defaultdict(list)
+    for f in all_files:
+        date_key = os.path.basename(f)[:10]
+        daily_files[date_key].append(f)
+    latest_daily_files = []
+    for date_key in sorted(daily_files.keys()):
+        latest_file_for_day = sorted(daily_files[date_key])[-1]
+        latest_daily_files.append(latest_file_for_day)
     
+    today_kst_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d')
+    past_files = [f for f in latest_daily_files if os.path.basename(f)[:10] < today_kst_str]
+    
+    return past_files[-days:]
+
 def load_warehouse_unique_per_day(days=30, strategy="latest"):
     """
     하루 1파일 정책 및 기사 실제 발행일 기준으로 데이터를 로드합니다.
     """
-    files = _pick_one_per_day(_list_warehouse_files(), strategy=strategy)
-    
-    if len(files) > days:
-        files = files[-days:]
+    # 안정성 정책이 적용된 헬퍼 함수를 사용합니다.
+    files = select_latest_files_per_day("data/warehouse/*.jsonl", days=days)
         
     rows = []
     for fp in files:
-        file_day = _date_from_name(fp)
+        file_day = os.path.basename(fp)[:10]
         try:
             with open(fp, "r", encoding="utf-8") as f:
                 for line in f:
@@ -62,7 +52,7 @@ def load_warehouse_unique_per_day(days=30, strategy="latest"):
                     
                     # 모듈 C와 동일한 날짜 결정 로직 적용
                     d_raw = obj.get("published") or obj.get("created_at") or file_day
-                    d_std = d_raw[:10]  # YYYY-MM-DD 형식으로 표준화
+                    d_std = d_raw[:10]
                     
                     title = (obj.get("title") or "").strip()
                     toks = tokenize(title)
@@ -88,26 +78,6 @@ def to_date_from_name(fp):
     d = base[:10]
     return d
 
-'''
-def load_warehouse(days=30):
-    files = sorted(glob.glob("data/warehouse/*.jsonl"))[-days:]
-    rows = []
-    for fp in files:
-        d = to_date_from_name(fp)
-        try:
-            with open(fp, "r", encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        obj = json.loads(line)
-                    except Exception:
-                        continue
-                    title = obj.get("title") or ""
-                    toks = tokenize(title)
-                    rows.append((d, toks))
-        except Exception:
-            continue
-    return rows
-'''
 
 def daily_counts(rows):
     # rows: list of (date, tokens)
