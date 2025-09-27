@@ -42,33 +42,16 @@ def _pick_one_per_day(files: list, strategy="latest") -> list:
 
 def load_warehouse_unique_per_day(days=30, strategy="latest"):
     """
-    기존 load_warehouse 대체: 같은 날짜 파일이 여러 개여도 하루 1개만 로드.
+    하루 1파일 정책 및 기사 실제 발행일 기준으로 데이터를 로드합니다.
     """
+    files = _pick_one_per_day(_list_warehouse_files(), strategy=strategy)
+    
+    if len(files) > days:
+        files = files[-days:]
+        
     rows = []
-    files = _list_warehouse_files()
-    # days 윈도 적용: 뒤에서부터 days일의 고유 날짜만 남기기
-    # 1) 우선 전체를 날짜 그룹핑 후 날짜 정렬
-    from collections import defaultdict
-    by_day = defaultdict(list)
     for fp in files:
-        by_day[_date_from_name(fp)].append(fp)
-    days_sorted = sorted(by_day.keys())[-max(1, days):]  # 최근 days일만
-    # 2) 해당 날짜들에서 전략대로 1개씩 선택
-    pick_pool = []
-    for d in days_sorted:
-        fps = sorted(by_day[d])
-        if strategy == "latest":
-            pick_pool.append(fps[-1])
-        elif strategy == "earliest":
-            pick_pool.append(fps[0])
-        elif strategy == "random":
-            import random
-            pick_pool.append(random.choice(fps))
-        else:
-            pick_pool.append(fps[-1])
-    # 3) 파일 로드
-    for fp in pick_pool:
-        d = _date_from_name(fp)
+        file_day = _date_from_name(fp)
         try:
             with open(fp, "r", encoding="utf-8") as f:
                 for line in f:
@@ -76,13 +59,18 @@ def load_warehouse_unique_per_day(days=30, strategy="latest"):
                         obj = json.loads(line)
                     except Exception:
                         continue
+                    
+                    # 모듈 C와 동일한 날짜 결정 로직 적용
+                    d_raw = obj.get("published") or obj.get("created_at") or file_day
+                    d_std = d_raw[:10]  # YYYY-MM-DD 형식으로 표준화
+                    
                     title = (obj.get("title") or "").strip()
                     toks = tokenize(title)
-                    # 아래 줄에서 " ".join(toks)를 toks로 수정합니다.
-                    rows.append((d, toks)) 
+                    rows.append((d_std, toks))
         except Exception:
             continue
     return rows
+
     
 def norm_tok(s):
     s = unicodedata.normalize("NFKC", s or "")
