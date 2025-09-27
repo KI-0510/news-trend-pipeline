@@ -39,7 +39,7 @@ def _pick_one_per_day(files: list, strategy="latest") -> list:
         else:
             picked.append(fps[-1])
     return sorted(picked)
-
+    
 def load_warehouse_unique_per_day(days=30, strategy="latest"):
     """
     하루 1파일 정책 및 기사 실제 발행일 기준으로 데이터를 로드합니다.
@@ -70,7 +70,6 @@ def load_warehouse_unique_per_day(days=30, strategy="latest"):
         except Exception:
             continue
     return rows
-
     
 def norm_tok(s):
     s = unicodedata.normalize("NFKC", s or "")
