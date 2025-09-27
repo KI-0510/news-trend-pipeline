@@ -613,12 +613,12 @@ def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
 
-    # 1. 역할에 맞게 데이터 분리 로드 (wh_docs 변수 복원)
+    # 1. 데이터 로드 (변경된 함수 이름으로 호출)
     docs_today, _ = load_today_meta()
-    wh_docs, wh_dates = load_warehouse(days=30) 
-
-    # 2. 시계열은 warehouse의 날짜 데이터만 사용
-    ts_obj = timeseries_by_date(wh_dates)
+    warehouse_paths = load_warehouse_paths(days=30) 
+    
+    # 2. 새로운 방식으로 시계열 계산
+    ts_obj = calculate_stable_timeseries(warehouse_paths)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
@@ -645,7 +645,7 @@ def main():
     top_keywords = [k.get("keyword") for k in keywords_obj.get("keywords", [])[:10]]
 
     api_key = os.getenv("GEMINI_API_KEY", "")
-    model_name = str(LLM.get("model", "gemini-1.5-flash"))
+    model_name = str(LLM.get("model", "gemini-2.0-flash"))
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
@@ -662,9 +662,8 @@ def main():
     insights_obj = {"summary": summary, "top_topics": top_topics, "evidence": {"timeseries": tail_14}}
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
-
-    # 5. 강/약 신호 분석 (wh_docs가 필요)
-    export_trend_and_weak_signals(wh_docs, wh_dates, keywords_obj)
+    
+    # 5. 강/약 신호 분석은 이제 signal_export.py에서 독립적으로 수행되므로 여기서 호출하지 않습니다.
 
     import datetime
     meta = {"module": "C", "mode": "PRO" if use_pro_mode() else "LITE", "time_utc": datetime.datetime.utcnow().isoformat() + "Z"}
@@ -672,6 +671,7 @@ def main():
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
+    
 
 if __name__ == "__main__":
     main()
