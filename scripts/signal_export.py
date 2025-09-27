@@ -1,5 +1,10 @@
-# -*- coding: utf-8 -*-
-import os, re, glob, json, csv, datetime, unicodedata
+import os
+import re
+import glob
+import json
+import csv
+import datetime
+import unicodedata
 from collections import defaultdict, Counter
 
 DICT_DIR = "data/dictionaries"
@@ -11,56 +16,6 @@ def _load_lines(p):
         return []
 STOP_EXT = set(_load_lines(os.path.join(DICT_DIR, "stopwords_ext.txt")))
 
-# ===== 하루 1파일 선택 유틸 =====
-def select_latest_files_per_day(glob_pattern: str, days: int):
-    """
-    과거 데이터 동결 정책 적용: 오늘 날짜를 제외하고, 각 날짜별 최신 파일 하나만 선택하여
-    가장 최근 N일치의 파일 목록을 반환합니다.
-    """
-    all_files = sorted(glob.glob(glob_pattern))
-    daily_files = defaultdict(list)
-    for f in all_files:
-        date_key = os.path.basename(f)[:10]
-        daily_files[date_key].append(f)
-    latest_daily_files = []
-    for date_key in sorted(daily_files.keys()):
-        latest_file_for_day = sorted(daily_files[date_key])[-1]
-        latest_daily_files.append(latest_file_for_day)
-    
-    today_kst_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d')
-    past_files = [f for f in latest_daily_files if os.path.basename(f)[:10] < today_kst_str]
-    
-    return past_files[-days:]
-
-def load_warehouse_unique_per_day(days=30, strategy="latest"):
-    """
-    하루 1파일 정책 및 기사 실제 발행일 기준으로 데이터를 로드합니다.
-    """
-    # 안정성 정책이 적용된 헬퍼 함수를 사용합니다.
-    files = select_latest_files_per_day("data/warehouse/*.jsonl", days=days)
-        
-    rows = []
-    for fp in files:
-        file_day = os.path.basename(fp)[:10]
-        try:
-            with open(fp, "r", encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        obj = json.loads(line)
-                    except Exception:
-                        continue
-                    
-                    # 모듈 C와 동일한 날짜 결정 로직 적용
-                    d_raw = obj.get("published") or obj.get("created_at") or file_day
-                    d_std = d_raw[:10]
-                    
-                    title = (obj.get("title") or "").strip()
-                    toks = tokenize(title)
-                    rows.append((d_std, toks))
-        except Exception:
-            continue
-    return rows
-    
 def norm_tok(s):
     s = unicodedata.normalize("NFKC", s or "")
     s = s.lower().strip()
@@ -72,15 +27,72 @@ def tokenize(t):
     toks = [norm_tok(x) for x in toks if x and x not in STOP_EXT]
     return toks
 
-def to_date_from_name(fp):
-    # 파일명: YYYY-MM-DD-hhmm-KST.jsonl
-    base = os.path.basename(fp)
-    d = base[:10]
-    return d
+# ================= 데이터 로더 (모듈 C와 로직 통일) =================
+def select_latest_files_per_day(glob_pattern: str):
+    all_files = sorted(glob.glob(glob_pattern))
+    daily_files = defaultdict(list)
+    for f in all_files:
+        date_key = os.path.basename(f)[:10]
+        daily_files[date_key].append(f)
+    
+    latest_daily_files = []
+    for date_key in sorted(daily_files.keys()):
+        latest_file_for_day = sorted(daily_files[date_key])[-1]
+        latest_daily_files.append(latest_file_for_day)
+    return latest_daily_files
 
+def load_stable_warehouse_data(days: int = 30):
+    """
+    D일자와 D+1일자 규칙을 적용하여 안정적인 시계열 데이터를 로드합니다.
+    """
+    warehouse_files = select_latest_files_per_day("data/warehouse/*.jsonl")
+    file_map = {os.path.basename(f)[:10]: f for f in warehouse_files}
+    
+    if not file_map:
+        return []
+    
+    sorted_dates = sorted(file_map.keys())
+    # 분석 시작일은 요청일수(days)만큼 과거로 설정
+    start_date = datetime.datetime.strptime(sorted_dates[-1], "%Y-%m-%d").date() - datetime.timedelta(days=days)
+    # 마지막 날짜는 D+1일이 없으므로, 그 전날까지만 계산합니다.
+    end_date = datetime.datetime.strptime(sorted_dates[-1], "%Y-%m-%d").date() - datetime.timedelta(days=1)
+    
+    rows = []
+    current_date = start_date
 
+    while current_date <= end_date:
+        date_str_d = current_date.strftime("%Y-%m-%d")
+        date_str_d_plus_1 = (current_date + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        files_to_check = []
+        if date_str_d in file_map:
+            files_to_check.append(file_map[date_str_d])
+        if date_str_d_plus_1 in file_map:
+            files_to_check.append(file_map[date_str_d_plus_1])
+            
+        for fp in files_to_check:
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            obj = json.loads(line)
+                            d_raw = obj.get("published") or obj.get("created_at") or os.path.basename(fp)[:10]
+                            published_date = d_raw[:10]
+                            
+                            if published_date == date_str_d:
+                                title = (obj.get("title") or "").strip()
+                                toks = tokenize(title)
+                                rows.append((date_str_d, toks))
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+        current_date += datetime.timedelta(days=1)
+        
+    return rows
+
+# ================= 통계 계산 함수들 =================
 def daily_counts(rows):
-    # rows: list of (date, tokens)
     by_day = defaultdict(Counter)
     for d, toks in rows:
         for t in toks:
@@ -224,15 +236,16 @@ def export_events(out_path="outputs/export/events.csv"):
             w.writerow(r)
     print(f"[INFO] events.csv exported | rows={len(rows)}")
 
-
+# ================= 메인 =================
 def main():
-    # 하루 1파일 정책 반영
-    rows = load_warehouse_unique_per_day(days=30, strategy="latest")
+    # 하루 1파일 및 D+D+1 안정성 정책이 적용된 함수를 호출합니다.
+    rows = load_stable_warehouse_data(days=30)
+    
     dc = daily_counts(rows)
     rows2 = to_rows(dc)
     export_trend_strength(rows2)
     export_weak_signals(rows2)
-    export_events()  # 추가
+    export_events()
     print("[INFO] signal_export | terms=", len(rows2))
 
 if __name__ == "__main__":
