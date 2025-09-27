@@ -568,49 +568,35 @@ def export_trend_and_weak_signals(docs: list, dates: list, keywords_obj: dict):
         w = csv.DictWriter(f, fieldnames=["term","cur","prev","diff","ma7","z_like","total","slope"])
         w.writeheader(); [w.writerow(r) for r in weak]
 
-# ================= 메인 =================
-# src/module_c.py (main 함수 부분을 찾아 전체 덮어쓰기)
-
+# ================= 메인 =================#
 def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
 
-    docs_today, dates_today = load_today_meta()
-    wh_docs, wh_dates = load_warehouse(days=30)
+    # 1. 역할에 맞게 데이터 분리 로드 (wh_docs 변수 복원)
+    docs_today, _ = load_today_meta()
+    wh_docs, wh_dates = load_warehouse(days=30) 
 
-    docs = (docs_today or []) + (wh_docs or [])
-    dates = (dates_today or []) + (wh_dates or [])
-
-    # 시계열
-    ts_obj = timeseries_by_date(dates)
+    # 2. 시계열은 warehouse의 날짜 데이터만 사용
+    ts_obj = timeseries_by_date(wh_dates)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 토픽(경로 로그 포함)
+    # 3. 토픽 분석은 오늘 수집한 데이터만 사용
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
         else:
-            # 아래 줄에서 min_df 인수를 삭제했습니다.
             topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
     except Exception as e:
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
-        # 아래 줄에서도 min_df 인수를 삭제했습니다.
         topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
-
-    # 저장 직전 prob 강제 주입 + 샘플 로그
+    
     topics_obj = _ensure_prob_payload(topics_obj, topn=10, decay=0.95, floor=0.2)
-    try:
-        ex = (topics_obj.get("topics") or [])[0]
-        exw = (ex.get("top_words") or [])[0] if isinstance(ex, dict) else {}
-        print("[DEBUG][C] ensure_prob sample:", exw)
-    except Exception:
-        pass
-
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
-    # 인사이트
+    # 4. 인사이트 생성
     try:
         with open("outputs/keywords.json", "r", encoding="utf-8") as f:
             keywords_obj = json.load(f)
@@ -619,7 +605,7 @@ def main():
     top_keywords = [k.get("keyword") for k in keywords_obj.get("keywords", [])[:10]]
 
     api_key = os.getenv("GEMINI_API_KEY", "")
-    model_name = str(LLM.get("model", "gemini-1.5-flash"))
+    model_name = str(LLM.get("model", "gemini-2.0-flash"))
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
@@ -628,21 +614,18 @@ def main():
         temperature=float(LLM.get("temperature", 0.3)),
     )
 
-    # 리포트용 간단 토픽 목록
     top_topics = []
     for t in topics_obj.get("topics", []):
         words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
         top_topics.append({"topic_id": t.get("topic_id"), "words": words})
-
     tail_14 = ts_obj.get("daily", [])[-14:] if isinstance(ts_obj.get("daily", []), list) else []
     insights_obj = {"summary": summary, "top_topics": top_topics, "evidence": {"timeseries": tail_14}}
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
-    # 강/약 신호 저장
-    export_trend_and_weak_signals(docs, dates, keywords_obj)
+    # 5. 강/약 신호 분석 (wh_docs가 필요)
+    export_trend_and_weak_signals(wh_docs, wh_dates, keywords_obj)
 
-    # 실행 메타
     import datetime
     meta = {"module": "C", "mode": "PRO" if use_pro_mode() else "LITE", "time_utc": datetime.datetime.utcnow().isoformat() + "Z"}
     with open("outputs/run_meta_c.json", "w", encoding="utf-8") as f:
