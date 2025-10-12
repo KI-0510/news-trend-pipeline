@@ -1,0 +1,108 @@
+{
+  "results": [
+    {
+      "technology": "애플",
+      "metrics": {
+        "frequency": 73,
+        "sentiment": 0.8216308295726776,
+        "events": {
+          "LAUNCH": 10,
+          "INVEST": 4,
+          "CERT": 3,
+          "ORDER": 2,
+          "PARTNERSHIP": 1,
+          "REGUL": 1
+        }
+      },
+      "analysis": {
+        "stage": "Maturity",
+        "reason": "높은 시장 감성 점수와 꾸준한 출시, 투자, 수주 활동은 애플 기술이 성숙기에 접어들었음을 나타낸다."
+      }
+    },
+    {
+      "technology": "메타",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8927352070808411,
+        "events": {
+          "INVEST": 1,
+          "LAUNCH": 1
+        }
+      },
+      "analysis": {
+        "stage": "Emerging",
+        "reason": "뉴스 언급은 없지만 긍정적 시장 감성과 소규모 투자 및 출시 이벤트가 있는 것으로 보아 초기 성장 단계에 진입하고 있는 기술로 판단됩니다."
+      }
+    },
+    {
+      "technology": "패널",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8520604968070984,
+        "events": {
+          "LAUNCH": 9,
+          "INVEST": 2,
+          "ORDER": 1,
+          "CERT": 1,
+          "PARTNERSHIP": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "뉴스 언급은 없지만, 긍정적인 시장 감성과 출시 이벤트가 다수 발생하여 성장기에 진입한 것으로 판단됩니다."
+      }
+    },
+    {
+      "technology": "삼성",
+      "metrics": {
+        "frequency": 342,
+        "sentiment": 0.8604994058609009,
+        "events": {
+          "LAUNCH": 36,
+          "INVEST": 19,
+          "PARTNERSHIP": 9,
+          "ORDER": 7,
+          "CERT": 4,
+          "REGUL": 2
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 시장 감성 점수와 함께 출시, 투자 이벤트가 활발하게 발생하는 것으로 보아 성장기에 있다고 판단됩니다."
+      }
+    },
+    {
+      "technology": "폴더블",
+      "metrics": {
+        "frequency": 25,
+        "sentiment": 0.8206555644671122,
+        "events": {
+          "LAUNCH": 8,
+          "INVEST": 3,
+          "CERT": 2,
+          "ORDER": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 시장 감성 점수와 함께 출시 이벤트가 다수 발생한 것으로 보아 폴더블 기술은 성장 단계에 있는 것으로 판단됩니다."
+      }
+    },
+    {
+      "technology": "양산",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8453757226467132,
+        "events": {
+          "INVEST": 1,
+          "LAUNCH": 1,
+          "ORDER": 1
+        }
+      },
+      "analysis": {
+        "stage": "Emerging",
+        "reason": "뉴스 언급은 없지만 긍정적인 시장 감성과 투자, 출시, 수주 이벤트가 소수 발생한 것으로 보아 시장 초기 단계로 판단됩니다."
+      }
+    }
+  ]
+}
