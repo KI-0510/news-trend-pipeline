@@ -1,0 +1,339 @@
+{
+  "ideas": [
+    {
+      "idea": "IT 기기용 벤더블 OLED 패널 솔루션",
+      "problem": "기존 IT 기기(노트북, 태블릿)는 폼팩터의 제약으로 휴대성과 사용성에 한계가 있습니다. 폴더블 스마트폰 시장의 성공적인 안착에 따라, IT 기기에서도 벤더블 디스플레이를 활용하여 새로운 사용자 경험을 제공하려는 시도가 증가하고 있습니다. 특히, 힌지리스 디자인 구현이 중요합니다.",
+      "target_customer": "글로벌 IT 제조사 (삼성, LG, Dell 등)",
+      "value_prop": "힌지리스 디자인 구현 가능한 고내구성 벤더블 OLED 패널 제공. 다양한 폼팩터 디자인 가능. 경쟁사 대비 우수한 화질 및 내구성.",
+      "solution": [
+        "UTG(Ultra Thin Glass) 기반 벤더블 OLED 패널",
+        "고탄성 투명 폴리이미드 기판",
+        "최적화된 벤딩 구조 설계",
+        "저전력 구동 회로"
+      ],
+      "risks": [
+        "벤더블 OLED 패널의 내구성 및 신뢰성 확보",
+        "대면적 벤더블 OLED 패널 생산 수율 확보",
+        "힌지리스 디자인 관련 특허 분쟁"
+      ],
+      "priority_score": 3.8,
+      "title": "IT 기기용 벤더블 OLED 패널 솔루션",
+      "score": 4.0,
+      "evidence": [
+        {
+          "sentence": "[뉴스토마토 안정훈 기자] 애플의 내년 폴더블폰 시장 진출 가능성이 높게 점쳐지면서, 국내 디스플레이 업계가 새로운 공급망 진입 여부에 촉각을 곤두세우고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이와 LG디스플레이는 최근 아이폰17에 OLED 패널을 공급하는 등 애플 공급망의 한 축을 담당했지만, 폴더블폰 시장에서는 상황이 조금 다르기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이는 삼성전자의 갤럭시 Z 플립·폴드에 패널을 납품하며 풍부한 경험을 쌓아온 반면, LG디스플레이는 지난 2023년 폴더블 노트북용 패널을 공급하며 기술력은 확보했지만 아직 폴더블폰용 패널의 납품 경험은 없습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "다만 기술 부족은 아니라는 점에서, 장기적으로는 LG디스플레이도 후발 주자로 애플 폴더블 공급망에 나설 수 있다는 전망이 나옵니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "(사진=뉴시스) 6일 업계에 따르면 내년 출시가 점쳐지는 아이폰 폴더블폰에 OLED 패널을 공급할 업체로 삼성디스플레이가 유력한 가운데, LG디스플레이의 추격 여부가 주목되고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "그간 폴더블폰 시장이 제한적이었던 만큼 관련 패널을 수주할 수 없었지만, 시장이 확대되면서 관련 역량을 보유한 LG디스플레이의 시장 진출 가능성도 커지고 있기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "애플은 과거 삼성·LG디스플레이 위주로 공급망을 유지했지만, 최근 몇 년 사이 중국 디스플레이 업체 BOE를 추가하는 등 의존도를 낮추고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.53,
+        "urgency": 0.395,
+        "feasibility": 0.5,
+        "risk": 0.15,
+        "notes": {
+          "cur": 3.0,
+          "z_like": 0.284
+        }
+      }
+    },
+    {
+      "idea": "AI 기반 디스플레이 공정 자동화 및 수율 개선 솔루션",
+      "problem": "디스플레이 제조 공정은 복잡하고 정밀하여 수율 관리가 어렵고, 숙련된 엔지니어의 경험에 의존하는 경우가 많습니다. AI 기술을 활용하여 공정 데이터를 분석하고 최적의 공정 조건을 자동으로 설정함으로써 수율을 극대화하고, 생산 비용을 절감할 수 있습니다. 특히 중국 디스플레이 제조사들의 생산량 증가에 대응하기 위한 경쟁력 확보가 시급합니다.",
+      "target_customer": "글로벌 디스플레이 제조사 (한국, 중국, 일본)",
+      "value_prop": "AI 기반 공정 데이터 분석 및 최적화 솔루션 제공. 디스플레이 생산 수율 향상 및 비용 절감. 경쟁사 대비 높은 정확도 및 빠른 분석 속도.",
+      "solution": [
+        "AI 기반 공정 데이터 분석 플랫폼",
+        "실시간 공정 모니터링 시스템",
+        "자동 공정 제어 알고리즘",
+        "머신러닝 기반 이상 감지 시스템"
+      ],
+      "risks": [
+        "AI 모델 학습을 위한 충분한 데이터 확보",
+        "기존 생산 시스템과의 통합 문제",
+        "데이터 보안 및 개인 정보 보호 문제"
+      ],
+      "priority_score": 4.0,
+      "title": "AI 기반 디스플레이 공정 자동화 및 수율 개선 솔루션",
+      "score": 3.4,
+      "evidence": [
+        {
+          "sentence": "[뉴스토마토 안정훈 기자] 애플의 내년 폴더블폰 시장 진출 가능성이 높게 점쳐지면서, 국내 디스플레이 업계가 새로운 공급망 진입 여부에 촉각을 곤두세우고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이와 LG디스플레이는 최근 아이폰17에 OLED 패널을 공급하는 등 애플 공급망의 한 축을 담당했지만, 폴더블폰 시장에서는 상황이 조금 다르기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이는 삼성전자의 갤럭시 Z 플립·폴드에 패널을 납품하며 풍부한 경험을 쌓아온 반면, LG디스플레이는 지난 2023년 폴더블 노트북용 패널을 공급하며 기술력은 확보했지만 아직 폴더블폰용 패널의 납품 경험은 없습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "다만 기술 부족은 아니라는 점에서, 장기적으로는 LG디스플레이도 후발 주자로 애플 폴더블 공급망에 나설 수 있다는 전망이 나옵니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "(사진=뉴시스) 6일 업계에 따르면 내년 출시가 점쳐지는 아이폰 폴더블폰에 OLED 패널을 공급할 업체로 삼성디스플레이가 유력한 가운데, LG디스플레이의 추격 여부가 주목되고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "그간 폴더블폰 시장이 제한적이었던 만큼 관련 패널을 수주할 수 없었지만, 시장이 확대되면서 관련 역량을 보유한 LG디스플레이의 시장 진출 가능성도 커지고 있기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "애플은 과거 삼성·LG디스플레이 위주로 공급망을 유지했지만, 최근 몇 년 사이 중국 디스플레이 업체 BOE를 추가하는 등 의존도를 낮추고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.4,
+        "urgency": 0.3,
+        "feasibility": 0.55,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "개인 맞춤형 XR 글래스용 초고해상도 마이크로디스플레이",
+      "problem": "기존 XR 글래스는 낮은 해상도와 부족한 몰입감으로 인해 사용자의 피로도를 높이고, 콘텐츠 경험을 제한합니다. 특히 개인의 시력 및 IPD(Interpupillary Distance)에 최적화된 디스플레이 솔루션이 부재하여 장시간 사용에 불편함이 있습니다. 북미 빅테크 기업들은 이러한 문제 해결에 적극적입니다.",
+      "target_customer": "북미 빅테크 기업 (메타, 애플 등)",
+      "value_prop": "개인 맞춤형 광학 설계 및 초고해상도 마이크로디스플레이 기술을 통해 몰입감 극대화. 시력 교정 및 IPD 자동 조절 기능 제공. 경쟁사 대비 뛰어난 화질 및 저전력 소모.",
+      "solution": [
+        "실리콘 기반 초고해상도 Micro-OLED 디스플레이",
+        "개인 맞춤형 광학 엔진 설계",
+        "시선 추적 및 포비티드 렌더링 기술",
+        "저전력 구동 회로 설계"
+      ],
+      "risks": [
+        "초고해상도 마이크로디스플레이 생산 수율 확보",
+        "개인 정보 보호 및 보안 문제",
+        "XR 글래스 디자인 및 무게 최적화"
+      ],
+      "priority_score": 4.5,
+      "title": "개인 맞춤형 XR 글래스용 초고해상도 마이크로디스플레이",
+      "score": 3.1,
+      "evidence": [
+        {
+          "sentence": "[뉴스토마토 안정훈 기자] 애플의 내년 폴더블폰 시장 진출 가능성이 높게 점쳐지면서, 국내 디스플레이 업계가 새로운 공급망 진입 여부에 촉각을 곤두세우고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이와 LG디스플레이는 최근 아이폰17에 OLED 패널을 공급하는 등 애플 공급망의 한 축을 담당했지만, 폴더블폰 시장에서는 상황이 조금 다르기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이는 삼성전자의 갤럭시 Z 플립·폴드에 패널을 납품하며 풍부한 경험을 쌓아온 반면, LG디스플레이는 지난 2023년 폴더블 노트북용 패널을 공급하며 기술력은 확보했지만 아직 폴더블폰용 패널의 납품 경험은 없습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "다만 기술 부족은 아니라는 점에서, 장기적으로는 LG디스플레이도 후발 주자로 애플 폴더블 공급망에 나설 수 있다는 전망이 나옵니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "(사진=뉴시스) 6일 업계에 따르면 내년 출시가 점쳐지는 아이폰 폴더블폰에 OLED 패널을 공급할 업체로 삼성디스플레이가 유력한 가운데, LG디스플레이의 추격 여부가 주목되고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "그간 폴더블폰 시장이 제한적이었던 만큼 관련 패널을 수주할 수 없었지만, 시장이 확대되면서 관련 역량을 보유한 LG디스플레이의 시장 진출 가능성도 커지고 있기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "애플은 과거 삼성·LG디스플레이 위주로 공급망을 유지했지만, 최근 몇 년 사이 중국 디스플레이 업체 BOE를 추가하는 등 의존도를 낮추고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.45,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "AI 기반 차량용 HUD 증강 현실 솔루션",
+      "problem": "기존 HUD는 단순 정보만 제공하여 운전 몰입도를 저해하고, 안전 운전에 대한 효용성이 제한적입니다. AI 기술 발전으로 실시간 도로 환경 분석 및 예측이 가능해짐에 따라, 운전자에게 더욱 직관적이고 안전한 운전 경험을 제공하는 HUD 솔루션에 대한 수요가 증가하고 있습니다.",
+      "target_customer": "글로벌 완성차 OEM (프리미엄 브랜드 중심)",
+      "value_prop": "AI 기반 실시간 증강 현실 정보 제공으로 운전 안전성 및 편의성 극대화. 차별화된 사용자 경험을 통해 브랜드 이미지 제고. 경쟁사 대비 월등한 시인성 및 정보 처리 속도 제공.",
+      "solution": [
+        "AI 기반 객체 인식 및 예측 알고리즘",
+        "고휘도 MicroLED 기반 AR HUD",
+        "운전자 맞춤형 정보 제공 인터페이스",
+        "ADAS 시스템 연동"
+      ],
+      "risks": [
+        "AI 알고리즘의 신뢰성 및 안전성 확보",
+        "차량용 HUD 관련 안전 규제 준수",
+        "기존 HUD 시스템과의 호환성 문제"
+      ],
+      "priority_score": 4.2,
+      "title": "AI 기반 차량용 HUD 증강 현실 솔루션",
+      "score": 3.0,
+      "evidence": [
+        {
+          "sentence": "LG디스플레이, 올해 'AX 혁신' 원년 선포 설계 AI로 소요시간 '1개월→8시간' 단축 양품 생산성 확대...연 '2000억 절감' 효과 [데일리한국 이보미 기자] 정철동 LG디스플레이 시장이 주도한 'AX(인공지능 전환) 승부수'가 의미있는 성과를 내며 회사 새 성장 동력으로 작용하고 있다.",
+          "url": "https://daily.hankooki.com/news/articleView.html?idxno=1279726",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "6일 LG디스플레이에 따르면 회사는 올해를 'AX 혁신'의 원년으로 삼고 개발과 생산, 사무에 이르는 사업 전 영역 전반에 AI 적용을 확산하고 있다.",
+          "url": "https://daily.hankooki.com/news/articleView.html?idxno=1279726",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "LG디스플레이는 개발 분야 지난 6월 이형 디스플레이 패널 '엣지 설계 AI 알고리즘' 개발에 성공하며 본격적인 도입을 시작했다.",
+          "url": "https://daily.hankooki.com/news/articleView.html?idxno=1279726",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "생산과 사무 분야에서도 AI를 활용 중이다.",
+          "url": "https://daily.hankooki.com/news/articleView.html?idxno=1279726",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "OLED(유기발광다이오드) 제조 공정엔 특화된 'AI 생산체계'를 도입했다.",
+          "url": "https://daily.hankooki.com/news/articleView.html?idxno=1279726",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "사무 영역에선 LG디스플레이가 자체 개발한 AI 어시스트인 '하이디'가 업무 생산성 향상에 크게 기여하고 있다.",
+          "url": "https://daily.hankooki.com/news/articleView.html?idxno=1279726",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "하이디는 AI 지식 검색, 화상회의 실시간 번역, 회의록 작성, 메일 AI 요약과 초안 작성 등의 서비스를 제공한다.",
+          "url": "https://daily.hankooki.com/news/articleView.html?idxno=1279726",
+          "date": "2025-10-06"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.42,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "퀀텀닷 기반 색변환 필름",
+      "problem": "기존 LCD 디스플레이는 색재현율 및 명암비가 낮아 생생한 화질을 구현하는 데 한계가 있습니다. 퀀텀닷 기술은 LCD 디스플레이의 색재현율을 향상시킬 수 있지만, 기존 퀀텀닷 필름은 균일한 코팅 및 내구성 확보에 어려움이 있습니다. OLED의 빠른 성장에 대응하기 위해 LCD의 경쟁력 강화가 필요합니다.",
+      "target_customer": "글로벌 디스플레이 제조사 (중국 BOE, CSOT 등)",
+      "value_prop": "균일한 코팅 및 높은 내구성을 가진 퀀텀닷 색변환 필름 제공. LCD 디스플레이의 색재현율 및 명암비 향상. 경쟁사 대비 낮은 생산 비용 및 높은 수율.",
+      "solution": [
+        "균일 분산 퀀텀닷 코팅 기술",
+        "고내구성 보호 필름",
+        "광학 시트 최적화 설계",
+        "친환경 퀀텀닷 소재"
+      ],
+      "risks": [
+        "퀀텀닷 소재의 카드뮴 규제 대응",
+        "퀀텀닷 필름의 장기 신뢰성 확보",
+        "경쟁사의 유사 기술 개발"
+      ],
+      "priority_score": 3.5,
+      "title": "퀀텀닷 기반 색변환 필름",
+      "score": 2.8,
+      "evidence": [
+        {
+          "sentence": "[뉴스토마토 안정훈 기자] 애플의 내년 폴더블폰 시장 진출 가능성이 높게 점쳐지면서, 국내 디스플레이 업계가 새로운 공급망 진입 여부에 촉각을 곤두세우고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이와 LG디스플레이는 최근 아이폰17에 OLED 패널을 공급하는 등 애플 공급망의 한 축을 담당했지만, 폴더블폰 시장에서는 상황이 조금 다르기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "삼성디스플레이는 삼성전자의 갤럭시 Z 플립·폴드에 패널을 납품하며 풍부한 경험을 쌓아온 반면, LG디스플레이는 지난 2023년 폴더블 노트북용 패널을 공급하며 기술력은 확보했지만 아직 폴더블폰용 패널의 납품 경험은 없습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "다만 기술 부족은 아니라는 점에서, 장기적으로는 LG디스플레이도 후발 주자로 애플 폴더블 공급망에 나설 수 있다는 전망이 나옵니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "(사진=뉴시스) 6일 업계에 따르면 내년 출시가 점쳐지는 아이폰 폴더블폰에 OLED 패널을 공급할 업체로 삼성디스플레이가 유력한 가운데, LG디스플레이의 추격 여부가 주목되고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "그간 폴더블폰 시장이 제한적이었던 만큼 관련 패널을 수주할 수 없었지만, 시장이 확대되면서 관련 역량을 보유한 LG디스플레이의 시장 진출 가능성도 커지고 있기 때문입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        },
+        {
+          "sentence": "애플은 과거 삼성·LG디스플레이 위주로 공급망을 유지했지만, 최근 몇 년 사이 중국 디스플레이 업체 BOE를 추가하는 등 의존도를 낮추고 있습니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1276897&inflow=N",
+          "date": "2025-10-06"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.35,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    }
+  ]
+}

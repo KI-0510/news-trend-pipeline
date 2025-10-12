@@ -1,0 +1,93 @@
+{
+  "results": [
+    {
+      "technology": "양산",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8946089446544647,
+        "events": {
+          "INVEST": 14,
+          "LAUNCH": 13,
+          "ORDER": 11,
+          "CERT": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 시장 감성 점수와 투자, 출시, 수주 이벤트가 꾸준히 발생하고 있는 것으로 보아 성장기에 접어든 기술로 판단됩니다."
+      }
+    },
+    {
+      "technology": "폴더블",
+      "metrics": {
+        "frequency": 20,
+        "sentiment": 0.8600522213511996,
+        "events": {
+          "LAUNCH": 30,
+          "INVEST": 13,
+          "CERT": 3,
+          "ORDER": 3
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 시장 감성 점수와 활발한 출시 및 투자 활동은 폴더블 기술이 성장기에 진입했음을 시사합니다."
+      }
+    },
+    {
+      "technology": "삼성",
+      "metrics": {
+        "frequency": 325,
+        "sentiment": 0.819717095957862,
+        "events": {
+          "LAUNCH": 368,
+          "INVEST": 190,
+          "CERT": 82,
+          "REGUL": 67,
+          "ORDER": 46,
+          "PARTNERSHIP": 46
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 뉴스 언급 빈도, 긍정적인 시장 감성, 그리고 활발한 출시와 투자 활동이 삼성 기술이 성장기에 있음을 시사합니다."
+      }
+    },
+    {
+      "technology": "애플",
+      "metrics": {
+        "frequency": 86,
+        "sentiment": 0.8365686655044555,
+        "events": {
+          "LAUNCH": 92,
+          "INVEST": 29,
+          "REGUL": 14,
+          "CERT": 11,
+          "ORDER": 6,
+          "PARTNERSHIP": 3
+        }
+      },
+      "analysis": {
+        "stage": "Maturity",
+        "reason": "높은 뉴스 언급 빈도와 긍정적인 시장 감성, 그리고 출시 이벤트의 압도적인 비율로 보아 애플 기술은 성숙 단계에 접어든 것으로 판단됩니다."
+      }
+    },
+    {
+      "technology": "패널",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8864318668842316,
+        "events": {
+          "LAUNCH": 23,
+          "INVEST": 9,
+          "ORDER": 3,
+          "CERT": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "뉴스 언급은 적지만 긍정적인 시장 감성과 출시 및 투자 이벤트가 활발한 것으로 보아 성장기에 해당한다고 판단됩니다."
+      }
+    }
+  ]
+}

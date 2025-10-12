@@ -1,0 +1,2294 @@
+{
+  "timestamp": "2025-10-09T01:07:25Z",
+  "nodes": [
+    {
+      "org": "LG전자",
+      "degree": 25
+    },
+    {
+      "org": "구글",
+      "degree": 27
+    },
+    {
+      "org": "기아",
+      "degree": 23
+    },
+    {
+      "org": "기아차",
+      "degree": 2
+    },
+    {
+      "org": "네이버",
+      "degree": 24
+    },
+    {
+      "org": "니오",
+      "degree": 0
+    },
+    {
+      "org": "도우인시스",
+      "degree": 0
+    },
+    {
+      "org": "두산로보틱스",
+      "degree": 7
+    },
+    {
+      "org": "디지타임스",
+      "degree": 2
+    },
+    {
+      "org": "레노버",
+      "degree": 7
+    },
+    {
+      "org": "리벨리온",
+      "degree": 3
+    },
+    {
+      "org": "리오토",
+      "degree": 3
+    },
+    {
+      "org": "마이크로소프트",
+      "degree": 24
+    },
+    {
+      "org": "메타",
+      "degree": 18
+    },
+    {
+      "org": "미디어텍",
+      "degree": 6
+    },
+    {
+      "org": "바이두",
+      "degree": 5
+    },
+    {
+      "org": "벤츠",
+      "degree": 11
+    },
+    {
+      "org": "비보",
+      "degree": 9
+    },
+    {
+      "org": "삼성디스플레이",
+      "degree": 28
+    },
+    {
+      "org": "삼성전자",
+      "degree": 37
+    },
+    {
+      "org": "샤오미",
+      "degree": 25
+    },
+    {
+      "org": "샤오펑",
+      "degree": 6
+    },
+    {
+      "org": "샤프",
+      "degree": 8
+    },
+    {
+      "org": "선익시스템",
+      "degree": 5
+    },
+    {
+      "org": "세미파이브",
+      "degree": 0
+    },
+    {
+      "org": "소니",
+      "degree": 14
+    },
+    {
+      "org": "아마존",
+      "degree": 15
+    },
+    {
+      "org": "아이씨디",
+      "degree": 2
+    },
+    {
+      "org": "알파벳",
+      "degree": 6
+    },
+    {
+      "org": "애플",
+      "degree": 33
+    },
+    {
+      "org": "엔비디아",
+      "degree": 23
+    },
+    {
+      "org": "오포",
+      "degree": 11
+    },
+    {
+      "org": "인텔",
+      "degree": 18
+    },
+    {
+      "org": "카카오",
+      "degree": 14
+    },
+    {
+      "org": "퀄컴",
+      "degree": 25
+    },
+    {
+      "org": "텐센트",
+      "degree": 6
+    },
+    {
+      "org": "폭스바겐",
+      "degree": 11
+    },
+    {
+      "org": "하이센스",
+      "degree": 20
+    },
+    {
+      "org": "하이얼",
+      "degree": 8
+    },
+    {
+      "org": "한미반도체",
+      "degree": 5
+    },
+    {
+      "org": "한화",
+      "degree": 16
+    },
+    {
+      "org": "한화솔루션",
+      "degree": 0
+    },
+    {
+      "org": "한화시스템",
+      "degree": 9
+    },
+    {
+      "org": "현대모비스",
+      "degree": 17
+    },
+    {
+      "org": "현대자동차",
+      "degree": 19
+    },
+    {
+      "org": "현대차",
+      "degree": 27
+    },
+    {
+      "org": "화웨이",
+      "degree": 12
+    }
+  ],
+  "edges": [
+    {
+      "source": "LG전자",
+      "target": "삼성디스플레이",
+      "weight": 46,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "삼성전자",
+      "weight": 176,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "하이센스",
+      "weight": 51,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "소니",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "엔비디아",
+      "weight": 18,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "LG전자",
+      "target": "애플",
+      "weight": 57,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "구글",
+      "weight": 11,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "LG전자",
+      "target": "기아",
+      "weight": 12,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "LG전자",
+      "target": "인텔",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "현대모비스",
+      "weight": 8,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "LG전자",
+      "target": "현대차",
+      "weight": 34,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "현대자동차",
+      "weight": 10,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "LG전자",
+      "target": "메타",
+      "weight": 6,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "하이얼",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "퀄컴",
+      "weight": 16,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "LG전자",
+      "target": "마이크로소프트",
+      "weight": 13,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "LG전자",
+      "target": "카카오",
+      "weight": 29,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "샤오미",
+      "weight": 23,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "네이버",
+      "weight": 15,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "LG전자",
+      "target": "폭스바겐",
+      "weight": 10,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "LG전자",
+      "target": "아마존",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "한화",
+      "weight": 17,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "두산로보틱스",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "LG전자",
+      "target": "샤프",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "오포",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "삼성전자",
+      "weight": 55,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "애플",
+      "weight": 90,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "퀄컴",
+      "weight": 15,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "샤오미",
+      "weight": 7,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "오포",
+      "weight": 5,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "화웨이",
+      "weight": 7,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "구글",
+      "target": "삼성디스플레이",
+      "weight": 5,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "메타",
+      "weight": 41,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "엔비디아",
+      "weight": 29,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "비보",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "소니",
+      "weight": 4,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "네이버",
+      "weight": 15,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "미디어텍",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "아마존",
+      "weight": 18,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "마이크로소프트",
+      "weight": 25,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "한화",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "기아",
+      "weight": 5,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "카카오",
+      "weight": 9,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "현대모비스",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "현대차",
+      "weight": 8,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "벤츠",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "구글",
+      "target": "인텔",
+      "weight": 5,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "구글",
+      "target": "알파벳",
+      "weight": 12,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "현대자동차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "바이두",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아",
+      "target": "삼성디스플레이",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "기아",
+      "target": "삼성전자",
+      "weight": 45,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아",
+      "target": "애플",
+      "weight": 12,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아",
+      "target": "현대차",
+      "weight": 62,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아",
+      "target": "현대자동차",
+      "weight": 17,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "엔비디아",
+      "weight": 5,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "인텔",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "현대모비스",
+      "weight": 23,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아",
+      "target": "퀄컴",
+      "weight": 3,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "한화",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아",
+      "target": "샤오펑",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "기아",
+      "target": "네이버",
+      "weight": 9,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "폭스바겐",
+      "weight": 9,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "기아",
+      "target": "카카오",
+      "weight": 7,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아",
+      "target": "기아차",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "기아",
+      "target": "한화시스템",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "마이크로소프트",
+      "weight": 3,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "벤츠",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "두산로보틱스",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "기아",
+      "target": "리오토",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "기아",
+      "target": "아마존",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "기아차",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "네이버",
+      "target": "애플",
+      "weight": 46,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "네이버",
+      "target": "삼성디스플레이",
+      "weight": 24,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "네이버",
+      "target": "삼성전자",
+      "weight": 52,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "네이버",
+      "target": "마이크로소프트",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "엔비디아",
+      "weight": 7,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "카카오",
+      "weight": 14,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "샤오미",
+      "weight": 17,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "네이버",
+      "target": "인텔",
+      "weight": 9,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "네이버",
+      "target": "아마존",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "네이버",
+      "target": "하이센스",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "네이버",
+      "target": "화웨이",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "현대차",
+      "weight": 13,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "퀄컴",
+      "weight": 11,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "네이버",
+      "target": "현대자동차",
+      "weight": 7,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "한화시스템",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "현대모비스",
+      "weight": 10,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "벤츠",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "메타",
+      "weight": 4,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "네이버",
+      "target": "한화",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "네이버",
+      "target": "두산로보틱스",
+      "weight": 7,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "네이버",
+      "target": "선익시스템",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "두산로보틱스",
+      "target": "삼성전자",
+      "weight": 17,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "두산로보틱스",
+      "target": "애플",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "두산로보틱스",
+      "target": "현대모비스",
+      "weight": 13,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "두산로보틱스",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "디지타임스",
+      "target": "삼성디스플레이",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "디지타임스",
+      "target": "애플",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "레노버",
+      "target": "삼성디스플레이",
+      "weight": 10,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "레노버",
+      "target": "삼성전자",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "레노버",
+      "target": "인텔",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "레노버",
+      "target": "오포",
+      "weight": 4,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "레노버",
+      "target": "화웨이",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "레노버",
+      "target": "애플",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "레노버",
+      "target": "퀄컴",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "리벨리온",
+      "target": "삼성전자",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "리벨리온",
+      "target": "퀄컴",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "리벨리온",
+      "target": "삼성디스플레이",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "리오토",
+      "target": "현대자동차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "리오토",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "삼성디스플레이",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "애플",
+      "weight": 48,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "엔비디아",
+      "weight": 46,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "카카오",
+      "weight": 3,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "메타",
+      "weight": 26,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "인텔",
+      "weight": 5,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "삼성전자",
+      "weight": 18,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "아마존",
+      "weight": 20,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "퀄컴",
+      "weight": 10,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "폭스바겐",
+      "weight": 8,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "현대차",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "바이두",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "비보",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "샤오미",
+      "weight": 6,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "오포",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "텐센트",
+      "weight": 6,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "알파벳",
+      "weight": 23,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "현대자동차",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "마이크로소프트",
+      "target": "소니",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "메타",
+      "target": "삼성전자",
+      "weight": 28,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "애플",
+      "weight": 53,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "퀄컴",
+      "weight": 7,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "메타",
+      "target": "삼성디스플레이",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "엔비디아",
+      "weight": 28,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "메타",
+      "target": "한미반도체",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "메타",
+      "target": "인텔",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "메타",
+      "target": "아마존",
+      "weight": 15,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "샤오미",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "알파벳",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "메타",
+      "target": "카카오",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "메타",
+      "target": "한화",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "미디어텍",
+      "target": "삼성전자",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "미디어텍",
+      "target": "퀄컴",
+      "weight": 6,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "미디어텍",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "미디어텍",
+      "target": "샤오미",
+      "weight": 6,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "미디어텍",
+      "target": "애플",
+      "weight": 5,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "바이두",
+      "target": "샤오미",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "바이두",
+      "target": "텐센트",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "바이두",
+      "target": "엔비디아",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "벤츠",
+      "target": "폭스바겐",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "벤츠",
+      "target": "현대차",
+      "weight": 5,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "벤츠",
+      "target": "현대모비스",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "벤츠",
+      "target": "삼성전자",
+      "weight": 7,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "벤츠",
+      "target": "퀄컴",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "벤츠",
+      "target": "현대자동차",
+      "weight": 3,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "벤츠",
+      "target": "샤오펑",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "벤츠",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "비보",
+      "target": "샤오미",
+      "weight": 20,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "비보",
+      "target": "애플",
+      "weight": 19,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "비보",
+      "target": "화웨이",
+      "weight": 11,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "비보",
+      "target": "오포",
+      "weight": 9,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "비보",
+      "target": "삼성디스플레이",
+      "weight": 10,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "비보",
+      "target": "삼성전자",
+      "weight": 14,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "비보",
+      "target": "퀄컴",
+      "weight": 4,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "삼성전자",
+      "weight": 228,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "애플",
+      "weight": 198,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "하이센스",
+      "weight": 15,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "샤오미",
+      "weight": 22,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "소니",
+      "weight": 9,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "현대차",
+      "weight": 21,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "샤프",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "화웨이",
+      "weight": 13,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "오포",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "현대자동차",
+      "weight": 12,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "엔비디아",
+      "weight": 11,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "카카오",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "인텔",
+      "weight": 42,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "현대모비스",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "선익시스템",
+      "weight": 6,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "퀄컴",
+      "weight": 6,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "한화",
+      "weight": 12,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "한화시스템",
+      "weight": 6,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성전자",
+      "target": "하이센스",
+      "weight": 112,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "애플",
+      "weight": 237,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "퀄컴",
+      "weight": 56,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "소니",
+      "weight": 25,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "현대차",
+      "weight": 86,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성전자",
+      "target": "샤프",
+      "weight": 11,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "엔비디아",
+      "weight": 55,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "샤오미",
+      "weight": 63,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "오포",
+      "weight": 16,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "화웨이",
+      "weight": 35,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "한미반도체",
+      "weight": 15,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성전자",
+      "target": "아이씨디",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성전자",
+      "target": "현대자동차",
+      "weight": 27,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "삼성전자",
+      "target": "인텔",
+      "weight": 21,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "현대모비스",
+      "weight": 32,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "아마존",
+      "weight": 10,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "카카오",
+      "weight": 18,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "하이얼",
+      "weight": 21,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "한화",
+      "weight": 26,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "샤오펑",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "삼성전자",
+      "target": "한화시스템",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "폭스바겐",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "선익시스템",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "텐센트",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "샤오미",
+      "target": "애플",
+      "weight": 43,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "오포",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "화웨이",
+      "weight": 15,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "샤오미",
+      "target": "퀄컴",
+      "weight": 9,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "엔비디아",
+      "weight": 6,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "샤오미",
+      "target": "인텔",
+      "weight": 10,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "아마존",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "샤오미",
+      "target": "샤프",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "소니",
+      "weight": 5,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "하이센스",
+      "weight": 29,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "하이얼",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "샤오펑",
+      "weight": 4,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "샤오미",
+      "target": "현대차",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "텐센트",
+      "weight": 5,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오미",
+      "target": "한화",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "샤오펑",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤오펑",
+      "target": "폭스바겐",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤프",
+      "target": "애플",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤프",
+      "target": "소니",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤프",
+      "target": "하이센스",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "샤프",
+      "target": "하이얼",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "선익시스템",
+      "target": "아이씨디",
+      "weight": 7,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "선익시스템",
+      "target": "애플",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "소니",
+      "target": "애플",
+      "weight": 14,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "소니",
+      "target": "하이센스",
+      "weight": 11,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "소니",
+      "target": "화웨이",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "소니",
+      "target": "하이얼",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "소니",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "소니",
+      "target": "아마존",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "소니",
+      "target": "텐센트",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "아마존",
+      "target": "애플",
+      "weight": 27,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "아마존",
+      "target": "인텔",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "아마존",
+      "target": "엔비디아",
+      "weight": 19,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "아마존",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "아마존",
+      "target": "알파벳",
+      "weight": 10,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "아마존",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "알파벳",
+      "target": "애플",
+      "weight": 26,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "알파벳",
+      "target": "엔비디아",
+      "weight": 26,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "퀄컴",
+      "weight": 31,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "현대차",
+      "weight": 19,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "화웨이",
+      "weight": 26,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "애플",
+      "target": "오포",
+      "weight": 18,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "현대자동차",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "엔비디아",
+      "weight": 68,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "카카오",
+      "weight": 9,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "애플",
+      "target": "인텔",
+      "weight": 16,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "현대모비스",
+      "weight": 3,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "애플",
+      "target": "하이센스",
+      "weight": 13,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "한미반도체",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "애플",
+      "target": "폭스바겐",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "한화",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "애플",
+      "target": "하이얼",
+      "weight": 3,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "엔비디아",
+      "target": "카카오",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "엔비디아",
+      "target": "인텔",
+      "weight": 10,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "엔비디아",
+      "target": "현대모비스",
+      "weight": 4,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "엔비디아",
+      "target": "현대차",
+      "weight": 11,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "엔비디아",
+      "target": "퀄컴",
+      "weight": 6,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "엔비디아",
+      "target": "하이센스",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "엔비디아",
+      "target": "한화",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "엔비디아",
+      "target": "한화시스템",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "엔비디아",
+      "target": "현대자동차",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "엔비디아",
+      "target": "텐센트",
+      "weight": 4,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "오포",
+      "target": "화웨이",
+      "weight": 8,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "오포",
+      "target": "퀄컴",
+      "weight": 5,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "인텔",
+      "target": "현대모비스",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "인텔",
+      "target": "현대차",
+      "weight": 4,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "인텔",
+      "target": "퀄컴",
+      "weight": 7,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "인텔",
+      "target": "한화",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "인텔",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "카카오",
+      "target": "퀄컴",
+      "weight": 2,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "카카오",
+      "target": "현대자동차",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "카카오",
+      "target": "현대차",
+      "weight": 7,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "카카오",
+      "target": "현대모비스",
+      "weight": 3,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "퀄컴",
+      "target": "하이센스",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "퀄컴",
+      "target": "한미반도체",
+      "weight": 5,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "퀄컴",
+      "target": "화웨이",
+      "weight": 9,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "퀄컴",
+      "target": "현대차",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "퀄컴",
+      "target": "폭스바겐",
+      "weight": 7,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "퀄컴",
+      "target": "현대자동차",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "폭스바겐",
+      "target": "현대차",
+      "weight": 9,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "폭스바겐",
+      "target": "현대모비스",
+      "weight": 5,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "폭스바겐",
+      "target": "현대자동차",
+      "weight": 5,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "하이센스",
+      "target": "하이얼",
+      "weight": 23,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "하이센스",
+      "target": "현대자동차",
+      "weight": 4,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "하이센스",
+      "target": "한화",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "하이얼",
+      "target": "현대자동차",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "한미반도체",
+      "target": "한화",
+      "weight": 2,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "한화",
+      "target": "현대차",
+      "weight": 12,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "한화",
+      "target": "한화시스템",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "한화",
+      "target": "현대모비스",
+      "weight": 2,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "한화시스템",
+      "target": "현대모비스",
+      "weight": 5,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "한화시스템",
+      "target": "현대차",
+      "weight": 10,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "한화시스템",
+      "target": "현대자동차",
+      "weight": 11,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "현대모비스",
+      "target": "현대차",
+      "weight": 22,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "현대모비스",
+      "target": "현대자동차",
+      "weight": 8,
+      "rel_type": "partnership"
+    },
+    {
+      "source": "현대자동차",
+      "target": "현대차",
+      "weight": 24,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "현대차",
+      "target": "화웨이",
+      "weight": 2,
+      "rel_type": "partnership"
+    }
+  ],
+  "top_pairs": [
+    {
+      "source": "삼성전자",
+      "target": "애플",
+      "weight": 237,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "삼성전자",
+      "weight": 228,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성디스플레이",
+      "target": "애플",
+      "weight": 198,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "LG전자",
+      "target": "삼성전자",
+      "weight": 176,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "하이센스",
+      "weight": 112,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "구글",
+      "target": "애플",
+      "weight": 90,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "현대차",
+      "weight": 86,
+      "rel_type": "neutral"
+    },
+    {
+      "source": "애플",
+      "target": "엔비디아",
+      "weight": 68,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "삼성전자",
+      "target": "샤오미",
+      "weight": 63,
+      "rel_type": "rivalry"
+    },
+    {
+      "source": "기아",
+      "target": "현대차",
+      "weight": 62,
+      "rel_type": "neutral"
+    }
+  ],
+  "centrality": [
+    {
+      "org": "삼성전자",
+      "degree_centrality": 0.8043
+    },
+    {
+      "org": "애플",
+      "degree_centrality": 0.7174
+    },
+    {
+      "org": "삼성디스플레이",
+      "degree_centrality": 0.6087
+    },
+    {
+      "org": "구글",
+      "degree_centrality": 0.587
+    },
+    {
+      "org": "현대차",
+      "degree_centrality": 0.587
+    },
+    {
+      "org": "LG전자",
+      "degree_centrality": 0.5435
+    },
+    {
+      "org": "샤오미",
+      "degree_centrality": 0.5435
+    },
+    {
+      "org": "퀄컴",
+      "degree_centrality": 0.5435
+    },
+    {
+      "org": "네이버",
+      "degree_centrality": 0.5217
+    },
+    {
+      "org": "마이크로소프트",
+      "degree_centrality": 0.5217
+    }
+  ],
+  "betweenness": [
+    {
+      "org": "삼성전자",
+      "betweenness": 0.1404
+    },
+    {
+      "org": "애플",
+      "betweenness": 0.0841
+    },
+    {
+      "org": "현대차",
+      "betweenness": 0.0557
+    },
+    {
+      "org": "삼성디스플레이",
+      "betweenness": 0.0524
+    },
+    {
+      "org": "기아",
+      "betweenness": 0.0383
+    },
+    {
+      "org": "샤오미",
+      "betweenness": 0.0345
+    },
+    {
+      "org": "구글",
+      "betweenness": 0.0319
+    },
+    {
+      "org": "퀄컴",
+      "betweenness": 0.031
+    },
+    {
+      "org": "마이크로소프트",
+      "betweenness": 0.0253
+    },
+    {
+      "org": "엔비디아",
+      "betweenness": 0.0216
+    }
+  ],
+  "communities": [
+    {
+      "community_id": 0,
+      "size": 20,
+      "members": [
+        "LG전자",
+        "디지타임스",
+        "레노버",
+        "리벨리온",
+        "미디어텍",
+        "비보",
+        "삼성디스플레이",
+        "삼성전자",
+        "샤오미",
+        "샤프",
+        "소니",
+        "애플",
+        "오포",
+        "인텔",
+        "퀄컴",
+        "하이센스",
+        "하이얼",
+        "한미반도체",
+        "한화",
+        "화웨이"
+      ],
+      "interpretation": ""
+    },
+    {
+      "community_id": 1,
+      "size": 13,
+      "members": [
+        "기아",
+        "기아차",
+        "네이버",
+        "두산로보틱스",
+        "리오토",
+        "벤츠",
+        "샤오펑",
+        "카카오",
+        "폭스바겐",
+        "한화시스템",
+        "현대모비스",
+        "현대자동차",
+        "현대차"
+      ],
+      "interpretation": ""
+    },
+    {
+      "community_id": 2,
+      "size": 8,
+      "members": [
+        "구글",
+        "마이크로소프트",
+        "메타",
+        "바이두",
+        "아마존",
+        "알파벳",
+        "엔비디아",
+        "텐센트"
+      ],
+      "interpretation": ""
+    },
+    {
+      "community_id": 3,
+      "size": 2,
+      "members": [
+        "선익시스템",
+        "아이씨디"
+      ],
+      "interpretation": ""
+    },
+    {
+      "community_id": 4,
+      "size": 1,
+      "members": [
+        "니오"
+      ],
+      "interpretation": ""
+    },
+    {
+      "community_id": 5,
+      "size": 1,
+      "members": [
+        "도우인시스"
+      ],
+      "interpretation": ""
+    },
+    {
+      "community_id": 6,
+      "size": 1,
+      "members": [
+        "세미파이브"
+      ],
+      "interpretation": ""
+    },
+    {
+      "community_id": 7,
+      "size": 1,
+      "members": [
+        "한화솔루션"
+      ],
+      "interpretation": ""
+    }
+  ]
+}

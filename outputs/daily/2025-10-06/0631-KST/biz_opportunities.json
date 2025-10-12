@@ -1,0 +1,339 @@
+{
+  "ideas": [
+    {
+      "idea": "AI 기반 디스플레이 공정 자동화 및 수율 예측 솔루션",
+      "problem": "디스플레이 제조 공정은 복잡하고 다양한 변수가 존재하여 수율 관리가 어렵고, 불량 발생 시 원인 분석에 많은 시간과 비용이 소요됩니다. 특히, 차세대 디스플레이 기술 (MicroLED, OLED)은 더욱 정밀한 공정 관리가 필요합니다. Why now: AI 기술 발전으로 제조 공정 데이터 분석 및 예측 정확도가 향상되어, 스마트 팩토리 구축에 대한 관심이 높아지고 있습니다.",
+      "target_customer": "디스플레이 패널 제조사",
+      "value_prop": "AI 기반의 실시간 공정 데이터 분석 및 수율 예측 솔루션을 통해 불량 발생 가능성을 사전에 감지하고, 공정 최적화를 통해 수율을 향상시킵니다. 다운타임 최소화 및 생산 비용 절감.",
+      "solution": [
+        "실시간 공정 데이터 수집 및 분석 시스템",
+        "AI 기반 수율 예측 모델",
+        "자동 공정 제어 및 최적화 알고리즘",
+        "불량 원인 분석 및 개선 방안 제시"
+      ],
+      "risks": [
+        "데이터 확보 및 AI 모델 학습",
+        "기존 설비와의 호환성 문제",
+        "데이터 보안 및 개인 정보 보호"
+      ],
+      "priority_score": 4.5,
+      "title": "AI 기반 디스플레이 공정 자동화 및 수율 예측 솔루션",
+      "score": 3.6,
+      "evidence": [
+        {
+          "sentence": "[엠투데이 최태인기자] 글로벌 시장조사업체 옴디아(Omdia)가 발표한 ‘Large-area Display Market Tracker 3Q25’ 보고서에 따르면, 9인치 이상 대면적 디스플레이(Large-area Display) 출하량이 2025년 전년 대비 2.8% 증가할 것으로 전망됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "이는 TV와 모니터 시장의 감소세에도 불구하고, 모바일 PC용 디스플레이(노트북·태블릿) 수요가 성장세를 주도한 결과로 분석된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "특히 OLED 디스플레이 부문은 19.0% 증가하며 LCD보다",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "옴디아의 피터 수(Peter Su) 수석 애널리스트는 “LCD 부문에서는 중국 패널업체들이 신규 8.6세대 IPS LCD 라인을 통해 IT 시장 점유율 확대에 나서고 있다”며, “LG디스플레이와 샤프 등은 구조조정을 통한 수익성 중심 전략을 강화하고 있다”고 분석했다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "업체별로는 삼성디스플레이가 54.3%, LG디스플레이가 29.4%, 중국 EDO가 13.9%를 기록할 것으로 예상됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "매출 기준으로는 중국이 전체 대면적 디스플레이 매출의 63.5%, 한국이 18.0%, 대만이 14.7%를 차지할 것으로 전망된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "주요 매출 기업은 BOE(29.7%), 차이나스타(20.2%), LG디스플레이(12.4%) 순이다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.45,
+        "urgency": 0.3,
+        "feasibility": 0.55,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "IT 기기용 초저전력/고화질 OLED 패널 솔루션",
+      "problem": "노트북, 태블릿 등 IT 기기에서 배터리 사용 시간은 중요한 요소이지만, 기존 LCD 패널은 전력 소모가 높고 OLED는 번인 이슈가 존재합니다. 특히, 고해상도/고주사율 디스플레이를 사용할수록 전력 소모는 더욱 증가합니다. Why now: IT 기기의 고성능화 및 휴대성 강화 추세에 따라 저전력/고화질 디스플레이에 대한 요구가 높아지고 있습니다.",
+      "target_customer": "글로벌 IT 기기 OEM (노트북, 태블릿 제조사)",
+      "value_prop": "새로운 발광 소재 및 구동 회로 기술을 적용하여 기존 OLED 대비 전력 소모를 30% 이상 절감하고, 번인 현상을 최소화한 초저전력/고화질 OLED 패널을 제공합니다. 친환경 소재 사용.",
+      "solution": [
+        "신규 발광 소재 및 저전력 구동 회로 기술",
+        "번인 방지 알고리즘 및 패널 설계",
+        "고해상도/고주사율 지원",
+        "친환경 소재 및 제조 공정 적용"
+      ],
+      "risks": [
+        "신규 소재 및 공정 기술 확보",
+        "OLED 패널 가격 경쟁 심화",
+        "LCD 패널 대비 높은 생산 비용"
+      ],
+      "priority_score": 4.0,
+      "title": "IT 기기용 초저전력/고화질 OLED 패널 솔루션",
+      "score": 3.4,
+      "evidence": [
+        {
+          "sentence": "[엠투데이 최태인기자] 글로벌 시장조사업체 옴디아(Omdia)가 발표한 ‘Large-area Display Market Tracker 3Q25’ 보고서에 따르면, 9인치 이상 대면적 디스플레이(Large-area Display) 출하량이 2025년 전년 대비 2.8% 증가할 것으로 전망됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "이는 TV와 모니터 시장의 감소세에도 불구하고, 모바일 PC용 디스플레이(노트북·태블릿) 수요가 성장세를 주도한 결과로 분석된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "특히 OLED 디스플레이 부문은 19.0% 증가하며 LCD보다",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "옴디아의 피터 수(Peter Su) 수석 애널리스트는 “LCD 부문에서는 중국 패널업체들이 신규 8.6세대 IPS LCD 라인을 통해 IT 시장 점유율 확대에 나서고 있다”며, “LG디스플레이와 샤프 등은 구조조정을 통한 수익성 중심 전략을 강화하고 있다”고 분석했다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "업체별로는 삼성디스플레이가 54.3%, LG디스플레이가 29.4%, 중국 EDO가 13.9%를 기록할 것으로 예상됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "매출 기준으로는 중국이 전체 대면적 디스플레이 매출의 63.5%, 한국이 18.0%, 대만이 14.7%를 차지할 것으로 전망된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "주요 매출 기업은 BOE(29.7%), 차이나스타(20.2%), LG디스플레이(12.4%) 순이다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.4,
+        "urgency": 0.3,
+        "feasibility": 0.55,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "메타버스 몰입형 교육/훈련용 XR 디스플레이 솔루션",
+      "problem": "기존 교육/훈련 방식은 몰입도가 낮고, 실제 환경과 유사한 경험을 제공하기 어렵습니다. 특히, 의료, 항공, 군사 등 고도의 전문성이 요구되는 분야에서는 실감나는 시뮬레이션 환경 구축이 중요합니다. Why now: 메타버스 플랫폼 확산과 XR 기술 발전으로 몰입형 교육/훈련에 대한 수요가 급증하고 있습니다.",
+      "target_customer": "글로벌 교육 기관, 항공사, 군부대, 의료기관",
+      "value_prop": "초고해상도 마이크로디스플레이 기반의 경량 XR 헤드셋을 통해 현실과 같은 몰입감을 제공하고, 실감나는 시뮬레이션 환경을 구축하여 교육/훈련 효과를 극대화합니다. 사용자 맞춤형 콘텐츠 제작 지원.",
+      "solution": [
+        "초고해상도/고주사율 마이크로디스플레이 모듈",
+        "경량/인체공학적 XR 헤드셋 디자인",
+        "실시간 3D 렌더링 및 공간 컴퓨팅 기술",
+        "사용자 인터랙션 및 콘텐츠 제작 SDK 제공"
+      ],
+      "risks": [
+        "마이크로디스플레이 기술 경쟁 심화 및 가격 경쟁",
+        "XR 헤드셋 사용으로 인한 멀미 및 피로감 문제 해결",
+        "콘텐츠 확보 및 플랫폼 연동"
+      ],
+      "priority_score": 3.9,
+      "title": "메타버스 몰입형 교육/훈련용 XR 디스플레이 솔루션",
+      "score": 3.3,
+      "evidence": [
+        {
+          "sentence": "[엠투데이 최태인기자] 글로벌 시장조사업체 옴디아(Omdia)가 발표한 ‘Large-area Display Market Tracker 3Q25’ 보고서에 따르면, 9인치 이상 대면적 디스플레이(Large-area Display) 출하량이 2025년 전년 대비 2.8% 증가할 것으로 전망됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "이는 TV와 모니터 시장의 감소세에도 불구하고, 모바일 PC용 디스플레이(노트북·태블릿) 수요가 성장세를 주도한 결과로 분석된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "특히 OLED 디스플레이 부문은 19.0% 증가하며 LCD보다",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "옴디아의 피터 수(Peter Su) 수석 애널리스트는 “LCD 부문에서는 중국 패널업체들이 신규 8.6세대 IPS LCD 라인을 통해 IT 시장 점유율 확대에 나서고 있다”며, “LG디스플레이와 샤프 등은 구조조정을 통한 수익성 중심 전략을 강화하고 있다”고 분석했다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "업체별로는 삼성디스플레이가 54.3%, LG디스플레이가 29.4%, 중국 EDO가 13.9%를 기록할 것으로 예상됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "매출 기준으로는 중국이 전체 대면적 디스플레이 매출의 63.5%, 한국이 18.0%, 대만이 14.7%를 차지할 것으로 전망된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "주요 매출 기업은 BOE(29.7%), 차이나스타(20.2%), LG디스플레이(12.4%) 순이다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.39,
+        "urgency": 0.3,
+        "feasibility": 0.5,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "차세대 QD-MicroLED 복합 소재 개발 및 상용화",
+      "problem": "기존 MicroLED는 높은 생산 비용과 낮은 수율 문제가 있으며, QD (Quantum Dot) 기술은 색재현율은 높지만 자체 발광 능력이 없어 별도의 광원이 필요합니다. Why now: 디스플레이 시장에서 고화질, 고휘도, 넓은 색 영역을 동시에 만족시키는 차세대 디스플레이 기술에 대한 요구가 증가하고 있습니다.",
+      "target_customer": "디스플레이 패널 제조사, TV 제조사",
+      "value_prop": "QD 물질을 MicroLED에 결합하여 색재현율과 휘도를 극대화하고, 생산 비용을 절감하는 차세대 디스플레이 소재를 제공합니다. 기존 MicroLED의 단점을 극복하고, QD 기술의 활용도를 높입니다.",
+      "solution": [
+        "QD 물질 코팅 기술",
+        "MicroLED 전사 기술",
+        "색 변환 및 휘도 향상 기술",
+        "대량 생산 공정 개발"
+      ],
+      "risks": [
+        "QD 물질의 안정성 및 수명 문제",
+        "MicroLED 전사 기술의 난이도",
+        "기존 디스플레이 기술과의 경쟁"
+      ],
+      "priority_score": 3.7,
+      "title": "차세대 QD-MicroLED 복합 소재 개발 및 상용화",
+      "score": 3.3,
+      "evidence": [
+        {
+          "sentence": "[엠투데이 최태인기자] 글로벌 시장조사업체 옴디아(Omdia)가 발표한 ‘Large-area Display Market Tracker 3Q25’ 보고서에 따르면, 9인치 이상 대면적 디스플레이(Large-area Display) 출하량이 2025년 전년 대비 2.8% 증가할 것으로 전망됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "이는 TV와 모니터 시장의 감소세에도 불구하고, 모바일 PC용 디스플레이(노트북·태블릿) 수요가 성장세를 주도한 결과로 분석된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "특히 OLED 디스플레이 부문은 19.0% 증가하며 LCD보다",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "옴디아의 피터 수(Peter Su) 수석 애널리스트는 “LCD 부문에서는 중국 패널업체들이 신규 8.6세대 IPS LCD 라인을 통해 IT 시장 점유율 확대에 나서고 있다”며, “LG디스플레이와 샤프 등은 구조조정을 통한 수익성 중심 전략을 강화하고 있다”고 분석했다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "업체별로는 삼성디스플레이가 54.3%, LG디스플레이가 29.4%, 중국 EDO가 13.9%를 기록할 것으로 예상됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "매출 기준으로는 중국이 전체 대면적 디스플레이 매출의 63.5%, 한국이 18.0%, 대만이 14.7%를 차지할 것으로 전망된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "주요 매출 기업은 BOE(29.7%), 차이나스타(20.2%), LG디스플레이(12.4%) 순이다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.37,
+        "urgency": 0.3,
+        "feasibility": 0.55,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "차량용 AR HUD (Augmented Reality Head-Up Display) 솔루션",
+      "problem": "자율주행 시대에 운전자에게 직관적인 정보 제공이 중요해지고 있지만, 기존 HUD는 정보량이 제한적이고 시야를 분산시켜 안전 문제를 야기합니다. 특히, 실시간 도로 상황 변화에 따른 AR 정보 제공의 부재는 운전자의 인지 과부하를 심화시킵니다. Why now: AR/VR 기술 발전과 차량용 디스플레이 수요 증가가 맞물려 고성능 AR HUD에 대한 요구가 커지고 있습니다.",
+      "target_customer": "글로벌 완성차 OEM (프리미엄/럭셔리 브랜드)",
+      "value_prop": "고휘도, 고해상도 마이크로 LED 기반의 넓은 시야각 AR HUD를 통해 운전자에게 몰입감 있고 안전한 운전 경험을 제공합니다. 실시간 도로 정보 연동 및 AI 기반 예측 기능으로 운전 편의성 극대화.",
+      "solution": [
+        "마이크로 LED 기반 고휘도/고해상도 AR HUD 모듈",
+        "AI 기반 실시간 도로 정보 분석 및 예측 알고리즘",
+        "운전자 시선 추적 기술을 통한 최적화된 AR 정보 제공",
+        "차량 내 센서 데이터 연동 및 제어 기능"
+      ],
+      "risks": [
+        "마이크로 LED 수율 확보 및 생산 비용 절감",
+        "AR HUD 관련 안전 규제 및 인증 획득",
+        "경쟁사 (기존 HUD 제조사, AR 글래스 개발사)와의 경쟁 심화"
+      ],
+      "priority_score": 4.2,
+      "title": "차량용 AR HUD (Augmented Reality Head-Up Display) 솔루션",
+      "score": 3.0,
+      "evidence": [
+        {
+          "sentence": "[엠투데이 최태인기자] 글로벌 시장조사업체 옴디아(Omdia)가 발표한 ‘Large-area Display Market Tracker 3Q25’ 보고서에 따르면, 9인치 이상 대면적 디스플레이(Large-area Display) 출하량이 2025년 전년 대비 2.8% 증가할 것으로 전망됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "이는 TV와 모니터 시장의 감소세에도 불구하고, 모바일 PC용 디스플레이(노트북·태블릿) 수요가 성장세를 주도한 결과로 분석된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "특히 OLED 디스플레이 부문은 19.0% 증가하며 LCD보다",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "옴디아의 피터 수(Peter Su) 수석 애널리스트는 “LCD 부문에서는 중국 패널업체들이 신규 8.6세대 IPS LCD 라인을 통해 IT 시장 점유율 확대에 나서고 있다”며, “LG디스플레이와 샤프 등은 구조조정을 통한 수익성 중심 전략을 강화하고 있다”고 분석했다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "업체별로는 삼성디스플레이가 54.3%, LG디스플레이가 29.4%, 중국 EDO가 13.9%를 기록할 것으로 예상됐다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "매출 기준으로는 중국이 전체 대면적 디스플레이 매출의 63.5%, 한국이 18.0%, 대만이 14.7%를 차지할 것으로 전망된다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        },
+        {
+          "sentence": "주요 매출 기업은 BOE(29.7%), 차이나스타(20.2%), LG디스플레이(12.4%) 순이다.",
+          "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=537401",
+          "date": "2025-10-05"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.42,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    }
+  ]
+}

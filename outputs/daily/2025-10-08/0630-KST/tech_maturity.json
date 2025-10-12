@@ -1,0 +1,89 @@
+{
+  "results": [
+    {
+      "technology": "폴더블",
+      "metrics": {
+        "frequency": 20,
+        "sentiment": 0.8429085943433974,
+        "events": {
+          "LAUNCH": 9,
+          "INVEST": 3,
+          "ORDER": 2,
+          "CERT": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "폴더블 기술은 비교적 높은 시장 감성 점수와 꾸준한 출시 및 투자 건수를 보이며 성장기에 진입한 것으로 판단됩니다."
+      }
+    },
+    {
+      "technology": "삼성",
+      "metrics": {
+        "frequency": 321,
+        "sentiment": 0.8295976519584656,
+        "events": {
+          "LAUNCH": 33,
+          "INVEST": 13,
+          "ORDER": 4,
+          "PARTNERSHIP": 2,
+          "REGUL": 1,
+          "CERT": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 뉴스 언급 빈도와 긍정적인 시장 감성 점수, 그리고 활발한 출시 활동은 삼성 기술이 성장 단계에 있음을 시사합니다."
+      }
+    },
+    {
+      "technology": "게이밍",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8977171116405063,
+        "events": {
+          "CERT": 1,
+          "INVEST": 1,
+          "LAUNCH": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "뉴스 언급은 없지만 높은 시장 감성 점수와 투자 및 출시 이벤트가 발생한 것으로 보아 성장기에 진입한 기술로 판단됩니다."
+      }
+    },
+    {
+      "technology": "애플",
+      "metrics": {
+        "frequency": 64,
+        "sentiment": 0.8548894855711195,
+        "events": {
+          "LAUNCH": 9,
+          "INVEST": 4,
+          "CERT": 2,
+          "ORDER": 1,
+          "REGUL": 1
+        }
+      },
+      "analysis": {
+        "stage": "Maturity",
+        "reason": "높은 시장 감성 점수와 안정적인 이벤트 발생 비율은 애플 기술이 성숙 단계에 진입했음을 시사합니다."
+      }
+    },
+    {
+      "technology": "패널",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8449368741777208,
+        "events": {
+          "INVEST": 1,
+          "LAUNCH": 1
+        }
+      },
+      "analysis": {
+        "stage": "Emerging",
+        "reason": "뉴스 언급은 없지만 긍정적 시장 감성과 소규모 투자 및 출시 이벤트가 발생한 것으로 보아 초기 시장 형성 단계로 판단됩니다."
+      }
+    }
+  ]
+}

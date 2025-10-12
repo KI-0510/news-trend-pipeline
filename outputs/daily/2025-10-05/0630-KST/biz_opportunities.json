@@ -1,0 +1,339 @@
+{
+  "ideas": [
+    {
+      "idea": "초고해상도 마이크로 LED 기반 AR/VR 글래스용 디스플레이 모듈",
+      "problem": "AR/VR 기기의 몰입감을 높이기 위해서는 고해상도, 고휘도, 저전력의 디스플레이가 필수적입니다. 하지만 기존 OLED 디스플레이는 이러한 요구를 충족시키기 어렵고, 특히 애플의 XR 헤드셋 출시를 기점으로 초고해상도 마이크로 LED 디스플레이에 대한 수요가 급증하고 있습니다. 차세대 AR/VR 경험을 위한 디스플레이 기술 혁신이 필요합니다.",
+      "target_customer": "북미 빅테크 기업 (AR/VR 디바이스 제조사), 메타버스 플랫폼 기업",
+      "value_prop": "현존 최고 수준의 해상도와 밝기를 제공하는 마이크로 LED 디스플레이 모듈. 초소형, 경량화 디자인으로 AR/VR 글래스의 착용감 향상. 저전력 설계로 배터리 사용 시간 극대화.",
+      "solution": [
+        "초고밀도 마이크로 LED 전사 기술",
+        "광학 엔진 통합 모듈 설계",
+        "저전력 구동 회로 설계",
+        "시선 추적 기술 연동"
+      ],
+      "risks": [
+        "마이크로 LED 전사 기술의 수율 확보",
+        "높은 제조 비용",
+        "경쟁사의 기술 개발 속도"
+      ],
+      "priority_score": 4.5,
+      "title": "초고해상도 마이크로 LED 기반 AR/VR 글래스용 디스플레이 모듈",
+      "score": 4.3,
+      "evidence": [
+        {
+          "sentence": "FCC 문서로 유출된 애플 M5 탑재 신형 맥북·아이패드 프로...이달 공개 임박 [MOVIEW] - 가 - 가 [디지털데일리 김문기 기자] 애플(대표 팀 쿡)이 이달 중 신제품 공개 행사를 준비 중인 것으로 관측된다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "신형 아이패드 프로, 맥북 프로, 애플TV, 비전프로 후속기 등 주요 제품군이 동시에 개편될 가능성이 제기됐다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "4일(현지시간) 톰스가이드(Tom’s Guide)와 매셔블, 나인투파이브맥 등 복수 외신에 따르면 애플은 이달 중순 ‘가을 라인업 업데이트’ 성격의 제품 발표를 계획 중이다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "아이패드 프로 역시 OLED 디스플레이 탑재가 유력하다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "애플TV 신모델도 함께 공개될 가능성이 제기됐다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "앞서 블룸버그는 애플이 비전프로 2세대 전면 개편을 중단하고, 경량화 모델과 AI 글래스로 개발 방향을 선회했다고 보도했다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "톰스가이드에 따르면 “M5 칩 탑재 기기가 FCC 인증을 통과한 만큼, 애플이 10월 중순 이벤트를 통해 신형 아이패드 프로·맥북 프로를 공개할 가능성이 높다”며 “내년부터 본격적인 M5 칩 전환이 시작될 것”이라고 전망했다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.7,
+        "urgency": 0.3,
+        "feasibility": 0.5,
+        "risk": 0.15,
+        "notes": {
+          "cur": 5.0,
+          "z_like": -0.549
+        }
+      }
+    },
+    {
+      "idea": "IT 기기용 벤더블 OLED 패널 솔루션",
+      "problem": "폴더블 스마트폰 시장이 확대되면서, 내구성과 유연성을 겸비한 벤더블 디스플레이에 대한 수요가 증가하고 있습니다. 특히, 애플의 폴더블 아이폰 출시 가능성이 높아짐에 따라, 벤더블 디스플레이 기술 경쟁이 더욱 치열해질 것으로 예상됩니다. 혁신적인 폼팩터 디자인을 위한 차세대 디스플레이 기술 확보가 중요합니다.",
+      "target_customer": "글로벌 스마트폰 제조사, 태블릿 PC 제조사",
+      "value_prop": "최고 수준의 내구성과 유연성을 제공하는 벤더블 OLED 패널. 얇고 가벼운 디자인으로 휴대성 극대화. 다양한 폼팩터 디자인 적용 가능.",
+      "solution": [
+        "UTG (Ultra Thin Glass) 기술 적용",
+        "플렉서블 기판 소재 개발",
+        "힌지 구조 최적화 설계",
+        "저전력 구동 회로 설계"
+      ],
+      "risks": [
+        "디스플레이 내구성 확보",
+        "폴딩 부위의 주름 및 변색 문제",
+        "경쟁사의 기술 우위 확보"
+      ],
+      "priority_score": 4.0,
+      "title": "IT 기기용 벤더블 OLED 패널 솔루션",
+      "score": 4.3,
+      "evidence": [
+        {
+          "sentence": "FCC 문서로 유출된 애플 M5 탑재 신형 맥북·아이패드 프로...이달 공개 임박 [MOVIEW] - 가 - 가 [디지털데일리 김문기 기자] 애플(대표 팀 쿡)이 이달 중 신제품 공개 행사를 준비 중인 것으로 관측된다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "신형 아이패드 프로, 맥북 프로, 애플TV, 비전프로 후속기 등 주요 제품군이 동시에 개편될 가능성이 제기됐다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "4일(현지시간) 톰스가이드(Tom’s Guide)와 매셔블, 나인투파이브맥 등 복수 외신에 따르면 애플은 이달 중순 ‘가을 라인업 업데이트’ 성격의 제품 발표를 계획 중이다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "올해 9월 아이폰17 시리즈 공개 이후 한 달 간격으로 맥·패드 중심의 신제품을 추가하는 형태다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "외신은 이를 근거로 아이패드 프로·맥북 프로 신형에 M5 칩이 적용될 것으로 분석했다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "아이패드 프로 역시 OLED 디스플레이 탑재가 유력하다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "12.9인치 모델은 두께가 1mm가량 얇아지고, 전력 효율을 높인 LTPO(저온 다결정 산화물) 패널이 적용될 것으로 보인다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.65,
+        "urgency": 0.3,
+        "feasibility": 0.55,
+        "risk": 0.15,
+        "notes": {
+          "cur": 5.0,
+          "z_like": -0.549
+        }
+      }
+    },
+    {
+      "idea": "AI 기반 디스플레이 공정 자동화 및 수율 개선 솔루션",
+      "problem": "디스플레이 제조 공정은 복잡하고 정밀하여, 수율 관리가 매우 중요합니다. 하지만 기존 공정 관리 시스템은 데이터 분석 및 예측 능력이 부족하여, 수율 저하 요인을 신속하게 파악하고 대응하기 어렵습니다. 특히, 중국 시장의 OLED 생산량 증가에 따라, 가격 경쟁력 확보를 위한 공정 효율성 향상이 시급합니다.",
+      "target_customer": "국내외 디스플레이 제조사",
+      "value_prop": "AI 기반 실시간 공정 데이터 분석 및 예측을 통해 수율 극대화. 자동화된 공정 제어 시스템으로 생산 효율성 향상. 불량 예측 및 원인 분석을 통한 품질 개선.",
+      "solution": [
+        "AI 기반 공정 데이터 분석 및 예측 모델",
+        "자동화된 공정 제어 시스템",
+        "머신 비전 기반 불량 검출 시스템",
+        "빅데이터 기반 공정 최적화"
+      ],
+      "risks": [
+        "AI 모델의 정확성 및 신뢰성 확보",
+        "데이터 보안 및 개인 정보 보호 문제",
+        "기존 생산 시스템과의 호환성 문제"
+      ],
+      "priority_score": 4.3,
+      "title": "AI 기반 디스플레이 공정 자동화 및 수율 개선 솔루션",
+      "score": 3.5,
+      "evidence": [
+        {
+          "sentence": "아이패드 프로 역시 OLED 디스플레이 탑재가 유력하다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "파인텍이 디스플레이 장비와 2차 전지 제조장비 분야에서 안정적인 기술력을 바탕으로 점진적 성장세를 이어가고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "교보증권은 최근 보고서에서, 파인텍은 세계 최초 공용 BONDING 장비를 개발하며 기술력을 인정받은 기업으로, 디스플레이 부품 및 장비 설계·제작과 2차전지 시장 진출을 동시에 수행하고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "2015년 코스닥에 상장했으며, 디스플레이 장비 설계 능력을 기반으로 2차전지 제조장비 시장에도 진출했다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "배터리 케이스에 장착해 폭발 위험을 방지하는 안전장치인 Cap-Assy 장비를 생산하고 있으며, 삼성SDI 협력업체로 등록되어 안정적 거래 관계를 유지하고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "디스플레이 장비 부문에서는 기존 장비의 업그레이드와 신규 장비 개발을 통해 국내외 고객사 수주를 확대하고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "OLED와 QD 디스플레이 등 고부가가치 패널용 장비 수요 증가가 실적 개선으로 이어질 가능성이 높다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.43,
+        "urgency": 0.3,
+        "feasibility": 0.55,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "AI 기반 개인 맞춤형 차량용 HUD 솔루션",
+      "problem": "차량 내 디스플레이는 운전자에게 획일화된 정보만 제공하며, 운전 집중도를 저해할 수 있습니다. 특히, AI 기술 발전으로 운전자 맞춤형 정보 제공에 대한 기대감이 높아지고 있으나, 기존 HUD는 이러한 요구를 충족시키지 못하고 있습니다. 안전 운전을 위한 최적화된 정보 제공과 사용자 경험 개선이 시급합니다.",
+      "target_customer": "글로벌 완성차 OEM, 프리미엄 자동차 브랜드",
+      "value_prop": "AI 기반 운전자 맞춤형 정보 제공으로 운전 집중도 향상 및 안전 운전 지원. 실시간 도로 상황 분석 및 예측을 통해 최적의 주행 경로 및 경고 제공. AR/VR 기술 융합으로 몰입감 있는 정보 제공.",
+      "solution": [
+        "AI 기반 운전자 행동 패턴 분석 및 맞춤형 정보 제공",
+        "AR/VR 기술 융합 HUD 인터페이스",
+        "실시간 도로 상황 분석 및 위험 예측",
+        "음성 인터페이스 연동"
+      ],
+      "risks": [
+        "AI 알고리즘의 신뢰성 및 안전성 확보",
+        "개인 정보 보호 및 데이터 보안 문제",
+        "기존 차량 시스템과의 호환성 문제"
+      ],
+      "priority_score": 4.2,
+      "title": "AI 기반 개인 맞춤형 차량용 HUD 솔루션",
+      "score": 3.0,
+      "evidence": [
+        {
+          "sentence": "아이패드 프로 역시 OLED 디스플레이 탑재가 유력하다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "파인텍이 디스플레이 장비와 2차 전지 제조장비 분야에서 안정적인 기술력을 바탕으로 점진적 성장세를 이어가고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "교보증권은 최근 보고서에서, 파인텍은 세계 최초 공용 BONDING 장비를 개발하며 기술력을 인정받은 기업으로, 디스플레이 부품 및 장비 설계·제작과 2차전지 시장 진출을 동시에 수행하고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "2015년 코스닥에 상장했으며, 디스플레이 장비 설계 능력을 기반으로 2차전지 제조장비 시장에도 진출했다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "디스플레이 장비 부문에서는 기존 장비의 업그레이드와 신규 장비 개발을 통해 국내외 고객사 수주를 확대하고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "OLED와 QD 디스플레이 등 고부가가치 패널용 장비 수요 증가가 실적 개선으로 이어질 가능성이 높다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "투자자 관점에서 기술력 기반의 장비 수주 확대, 디스플레이 및 2차전지 부문 성장, 삼성SDI 등 주요 고객사와의 안정적 협력 관계가 핵심 모멘텀으로 평가된다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.42,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "퀀텀닷 기반 색변환 필름",
+      "problem": "기존 LCD 디스플레이의 색재현율을 높이기 위해 사용되는 컬러 필터는 빛 손실이 크고 에너지 효율이 낮습니다. 퀀텀닷 기술은 높은 색재현율과 에너지 효율을 제공하지만, 기존 퀀텀닷 필름은 균일한 코팅 및 내구성 확보에 어려움이 있습니다. 고화질 디스플레이 시장 확대를 위한 고성능 색변환 필름 개발이 필요합니다.",
+      "target_customer": "글로벌 TV 제조사, 모니터 제조사",
+      "value_prop": "높은 색재현율과 에너지 효율을 제공하는 퀀텀닷 기반 색변환 필름. 균일한 코팅 기술로 뛰어난 화질 구현. 내구성 강화로 제품 수명 연장.",
+      "solution": [
+        "고분산 퀀텀닷 합성 기술",
+        "균일 코팅 기술",
+        "내구성 강화 기술",
+        "친환경 소재 적용"
+      ],
+      "risks": [
+        "퀀텀닷 소재의 안정성 및 환경 규제",
+        "높은 제조 비용",
+        "경쟁사의 기술 개발 속도"
+      ],
+      "priority_score": 3.8,
+      "title": "퀀텀닷 기반 색변환 필름",
+      "score": 2.9,
+      "evidence": [
+        {
+          "sentence": "아이패드 프로 역시 OLED 디스플레이 탑재가 유력하다.",
+          "url": "https://www.ddaily.co.kr/page/view/2025100423481128669",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "파인텍이 디스플레이 장비와 2차 전지 제조장비 분야에서 안정적인 기술력을 바탕으로 점진적 성장세를 이어가고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "교보증권은 최근 보고서에서, 파인텍은 세계 최초 공용 BONDING 장비를 개발하며 기술력을 인정받은 기업으로, 디스플레이 부품 및 장비 설계·제작과 2차전지 시장 진출을 동시에 수행하고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "2015년 코스닥에 상장했으며, 디스플레이 장비 설계 능력을 기반으로 2차전지 제조장비 시장에도 진출했다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "디스플레이 장비 부문에서는 기존 장비의 업그레이드와 신규 장비 개발을 통해 국내외 고객사 수주를 확대하고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "OLED와 QD 디스플레이 등 고부가가치 패널용 장비 수요 증가가 실적 개선으로 이어질 가능성이 높다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        },
+        {
+          "sentence": "투자자 관점에서 기술력 기반의 장비 수주 확대, 디스플레이 및 2차전지 부문 성장, 삼성SDI 등 주요 고객사와의 안정적 협력 관계가 핵심 모멘텀으로 평가된다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=382893",
+          "date": "2025-10-04"
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.38,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    }
+  ]
+}

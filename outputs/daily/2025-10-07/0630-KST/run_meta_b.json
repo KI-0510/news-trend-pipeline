@@ -1,0 +1,10 @@
+{
+  "use_pro": false,
+  "docs": 220,
+  "deps": {
+    "krwordrank": true,
+    "keybert": true,
+    "bertopic": true
+  },
+  "resources_dir": "data/dictionaries"
+}
