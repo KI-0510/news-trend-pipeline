@@ -11,5 +11,8 @@
   "LTPO": ["ltpo"],
   "LTPS": ["ltps"],
   "TADF": ["tadf"],
-  "PHOLED": ["pholed","인광 oled"]
-}
+  "PHOLED": ["pholed","인광 oled"],
+  "QLED": ["qled","퀀텀닷","quantum dot"],
+  "QNED": ["qned","퀀텀 나노 엘이디", "퀀텀 나노셀 LED"],
+  "Tandem OLED": ["tandem oled","탠덤 oled","tandem oled"]
+} 

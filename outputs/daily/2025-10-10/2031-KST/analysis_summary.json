@@ -1,0 +1,45 @@
+{
+  "timestamp": "2025-10-10T11:31:11Z",
+  "matrix_stats": {
+    "num_orgs": 37,
+    "num_topics": 8,
+    "top_org": "AUO"
+  },
+  "network_stats": {
+    "num_nodes": 21,
+    "num_edges": 6,
+    "top_pairs": [
+      {
+        "source": "삼성전자",
+        "target": "애플",
+        "weight": 5,
+        "rel_type": "rivalry"
+      },
+      {
+        "source": "삼성전자",
+        "target": "엔비디아",
+        "weight": 2,
+        "rel_type": "rivalry"
+      },
+      {
+        "source": "삼성디스플레이",
+        "target": "삼성전자",
+        "weight": 2,
+        "rel_type": "rivalry"
+      },
+      {
+        "source": "마이크로소프트",
+        "target": "엔비디아",
+        "weight": 2,
+        "rel_type": "rivalry"
+      },
+      {
+        "source": "구글",
+        "target": "삼성전자",
+        "weight": 2,
+        "rel_type": "rivalry"
+      }
+    ],
+    "top_hub": "삼성전자"
+  }
+}

@@ -1,13 +1,14 @@
-# -*- coding: utf-8 -*-
 import os
 import json
 import re
 import glob
-import unicodedata
 import datetime
 from typing import List, Dict, Any, Tuple, Optional
 from email.utils import parsedate_to_datetime
 from collections import Counter, defaultdict
+from src.config import load_config, llm_config
+from src.timeutil import to_date, kst_date_str, kst_run_suffix
+from src.utils import load_json, save_json, latest, clean_text
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -35,44 +36,8 @@ def _log_mode(prefix="Module C"):
     print(f"[INFO] USE_PRO={str(is_pro).lower()} → {prefix} ({mode}) 시작")
 
 # ================= 설정 로드 =================
-from src.config import load_config, llm_config
 CFG = load_config()
 LLM = llm_config(CFG)
-
-# ================= 공용 유틸 =================
-def latest(globpat: str) -> Optional[str]:
-    files = sorted(glob.glob(globpat))
-    return files[-1] if files else None
-
-def clean_text(t: str) -> str:
-    if not t: return ""
-    t = re.sub(r"<.+?>", " ", t)
-    t = unicodedata.normalize("NFKC", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
-
-def to_date(s: str) -> str:
-    today = datetime.date.today()
-    if not s or not isinstance(s, str): return today.strftime("%Y-%m-%d")
-    s = s.strip()
-    try:
-        iso = s.replace("Z", "+00:00")
-        dt = datetime.datetime.fromisoformat(iso)
-        d = dt.date()
-    except Exception:
-        try:
-            dt = parsedate_to_datetime(s); d = dt.date()
-        except Exception:
-            m = re.search(r"(\d{4}).*?(\d{1,2}).*?(\d{1,2})", s)
-            if m:
-                y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
-                try: d = datetime.date(y, mm, dd)
-                except Exception: d = today
-            else:
-                d = today
-    if d > today: d = today
-    return d.strftime("%Y-%m-%d")
-
 
 # ================= 데이터 로더 =================
 def select_latest_files_per_day(glob_pattern: str, days: int) -> List[str]:
@@ -106,7 +71,6 @@ def load_today_meta() -> Tuple[List[str], List[str]]:
         dates.append(to_date(d_raw))
     return docs, dates
 
-# load_warehouse 함수는 이제 파일 경로 목록만 반환하도록 단순화합니다.
 def load_warehouse_paths(days: int = 30) -> List[str]:
     # 하루치 여유분을 포함하여 D+1일자 파일을 가져올 수 있도록 합니다.
     return select_latest_files_per_day("data/warehouse/*.jsonl", days=(days + 1))
@@ -466,40 +430,80 @@ def pro_build_topics_bertopic(docs, topn=10):
         print(f"[DEBUG][C] PRO 생성 완료(폴백) | topics={len(topics_obj.get('topics', []))}")
         return topics_obj
 
+# ================= LLM 활용 토픽 보강 =================
+def enrich_topics_with_llm(topics_obj: dict, api_key: str, model: str) -> dict:
+    import google.generativeai as genai
+    import re
+
+    genai.configure(api_key=api_key)
+    gmodel = genai.GenerativeModel(model)
+
+    enriched = []
+    for t in topics_obj.get("topics", []):
+        words = [w["word"] for w in t.get("top_words", [])]
+        prompt = (
+            f"다음은 뉴스에서 추출된 키워드입니다: {', '.join(words)}\n"
+            "이 키워드들을 기반으로 이 토픽의 이름과 간단한 해석을 작성해주세요.\n"
+            "조건:\n"
+            "- topic_name은 핵심만 담아 10글자 이내로 생성하세요 (자르지 말고 처음부터 짧게)\n"
+            "- topic_summary는 이 토픽이 다루는 내용을 간결하게 설명하세요\n"
+            "형식:\n"
+            "topic_name: <이름>\n"
+            "topic_summary: <해석>"
+        )
+        try:
+            resp = gmodel.generate_content(prompt)
+            text = resp.text.strip()
+            name_match = re.search(r"topic_name:\s*(.+)", text)
+            summary_match = re.search(r"topic_summary:\s*(.+)", text)
+
+            t["topic_name"] = name_match.group(1).strip() if name_match else f"Topic #{t['topic_id']}"
+            t["topic_summary"] = summary_match.group(1).strip() if summary_match else ""
+        except Exception as e:
+            t["topic_name"] = f"Topic #{t['topic_id']}"
+            t["topic_summary"] = "(LLM 해석 실패)"
+        enriched.append(t)
+
+    return {"topics": enriched}
+
 
 # ================= 인사이트 요약 =================
 def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
                    max_tokens: int = 2048, temperature: float = 0.3) -> str:
-    # prompt 부분을 수정하여 keywords 정보를 활용하도록 합니다.
+    
     prompt = (
-        "아래는 한국어 기술/시장 뉴스에서 추출한 데이터입니다: (1) 주요 토픽, (2) 날짜별 기사 수, (3) 최상위 키워드.\n"
-        "당신은 디스플레이 산업의 사업 전략 전문가입니다. 이 데이터를 종합하여 '데일리 인텔리전스 브리핑'을 생성해주세요.\n"
-        "요청:\n"
-        "1. 핵심 맥락: 토픽과 키워드를 연결하여, 시장의 가장 중요한 흐름 2~3가지를 설명하세요.\n"
-        "2. 최근 변화/스파이크: 시계열 데이터의 급증 지점을 언급하고, 그 원인을 키워드와 토픽을 근거로 추론하세요.\n"
-        "3. 실무 인사이트: 분석 결과를 바탕으로 사업 개발, 기술 기획 담당자가 실행할 수 있는 구체적인 액션 아이템 3가지를 제안하세요.\n"
-        "주의: 문장 중간에 끊지 말고 완결된 문장으로 간결하게 작성하세요.\n\n"
-        f"데이터: {json.dumps(context, ensure_ascii=False)}"
+    "아래는 한국어 기술/시장 뉴스에서 추출한 데이터입니다: (1) 주요 토픽, (2) 최상위 키워드.\n"
+    "당신은 디스플레이 산업의 전략 분석 전문가입니다. 이 데이터를 종합하여 '데일리 인텔리전스 브리핑'을 작성해주세요.\n\n"
+    "요청:\n"
+    "1. 핵심맥락: 토픽과 키워드를 연결하여, 시장의 가장 중요한 흐름 2~3가지의 배경을 논리적으로 설명하세요.\n"
+    "2. 인사이트: 현재 산업의 전략적 시사점(기회, 위험, 경쟁 구도 등)을 도출하세요.\n"
+    "3. Action Items: 전략, 사업 개발 및 기술 기획 부서가 실행할 수 있는 구체적인 액션 아이템 3가지를 제안하세요.\n\n"
+    "주의:\n"
+    "- 각 항목은 명확한 제목과 함께 구분하여 작성하세요.\n"
+    "- 문장은 간결하고 완결성 있게 작성하세요.\n\n"
+    f"데이터: {json.dumps({'topics': context.get('topics', []), 'keywords': context.get('keywords', [])}, ensure_ascii=False)}"
     )
+
     if not api_key:
-        daily = context.get("timeseries", []) if isinstance(context, dict) else []
-        total_days = len(daily)
-        diff = 0
-        if total_days >= 2:
-            try: diff = int(daily[-1]["count"]) - int(daily[-2]["count"])
-            except Exception: diff = 0
-        return (f"(로컬 요약) 최근 {total_days}일 흐름 기준 간단 요약. 마지막 일자 증감 {diff}건. "
-                f"상위 토픽은 산업·제품·정책 축으로 분포. 액션: 1) 상위 토픽 사례 수집 2) 급증 원인 파악 3) 파트너십/조달 검토.")
+        return "(인사이트 도출 실패) API 키가 없어 Gemini 기반 인사이트를 생성할 수 없습니다."
+
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         gmodel = genai.GenerativeModel(model or "gemini-1.5-flash")
         resp = gmodel.generate_content(
             prompt,
-            generation_config={"max_output_tokens": max_tokens or 2048, "temperature": temperature if temperature is not None else 0.3, "top_p": 0.9}
+            generation_config={
+                "max_output_tokens": max_tokens or 2048,
+                "temperature": temperature if temperature is not None else 0.3,
+                "top_p": 0.9
+            }
         )
         text = (getattr(resp, "text", None) or "").strip()
-        if not text: raise RuntimeError("빈 응답")
+        if not text:
+            raise RuntimeError("빈 응답")
+
+        # 자연스러운 마무리 보완
         if not re.search(r"[\.!?]$|[다요]$", text):
             try:
                 resp2 = gmodel.generate_content(
@@ -507,12 +511,15 @@ def gemini_insight(api_key: str, model: str, context: Dict[str, Any],
                     generation_config={"max_output_tokens": 256, "temperature": temperature or 0.3, "top_p": 0.9}
                 )
                 add = (getattr(resp2, "text", None) or "").strip()
-                if add: text = (text + " " + add).strip()
+                if add:
+                    text = (text + " " + add).strip()
             except Exception:
                 pass
+
         return text
+
     except Exception as e:
-        return f"(요약 생성 실패: {e}) 최근 흐름과 상위 토픽 기준으로 우선 과제를 정리하세요."
+        return f"(요약 생성 실패: {e}) 키워드와 토픽 기반으로 우선 과제를 정리하세요."
 
 
 # ================= 메인 =================
@@ -520,16 +527,19 @@ def main():
     _log_mode("Module C")
     os.makedirs("outputs", exist_ok=True)
 
-    # 1. 데이터 로드 (변경된 함수 이름으로 호출)
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    model_name = str(LLM.get("model", "gemini-2.0-flash"))
+
+    # 1. 데이터 로드
     docs_today, _ = load_today_meta()
     warehouse_paths = load_warehouse_paths(days=30) 
-    
-    # 2. 새로운 방식으로 시계열 계산
+
+    # 2. 시계열 계산 및 저장 (인사이트에는 사용하지 않음)
     ts_obj = calculate_stable_timeseries(warehouse_paths)
     with open("outputs/trend_timeseries.json", "w", encoding="utf-8") as f:
         json.dump(ts_obj, f, ensure_ascii=False, indent=2)
 
-    # 3. 토픽 분석은 오늘 수집한 데이터만 사용
+    # 3. 토픽 분석
     try:
         if use_pro_mode():
             topics_obj = pro_build_topics_bertopic(docs_today or [], topn=10)
@@ -538,12 +548,14 @@ def main():
     except Exception as e:
         print(f"[WARN] Pro 토픽 실패, Lite로 폴백: {e}")
         topics_obj = build_topics_lite(docs_today or [], max_features=8000, topn=10)
-    
+
     topics_obj = _ensure_prob_payload(topics_obj, topn=10, decay=0.95, floor=0.2)
+    topics_obj = enrich_topics_with_llm(topics_obj, api_key=api_key, model=model_name)
+
     with open("outputs/topics.json", "w", encoding="utf-8") as f:
         json.dump(topics_obj, f, ensure_ascii=False, indent=2)
 
-    # 4. 인사이트 생성
+    # 4. 키워드 로드
     try:
         with open("outputs/keywords.json", "r", encoding="utf-8") as f:
             keywords_obj = json.load(f)
@@ -551,33 +563,45 @@ def main():
         keywords_obj = {"keywords": []}
     top_keywords = [k.get("keyword") for k in keywords_obj.get("keywords", [])[:10]]
 
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    model_name = str(LLM.get("model", "gemini-2.0-flash"))
+    # 5. 토픽 요약 구성
+    top_topics = []
+    for t in topics_obj.get("topics", []):
+        words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
+        top_topics.append({
+            "topic_id": t.get("topic_id"),
+            "topic_name": t.get("topic_name", f"Topic #{t.get('topic_id')}"),
+            "summary": t.get("topic_summary", ""),
+            "words": words
+        })
+
+    # 6. 인사이트 생성 (timeseries 제외)
     summary = gemini_insight(
         api_key=api_key,
         model=model_name,
-        context={"topics": topics_obj.get("topics", []), "timeseries": ts_obj.get("daily", []), "keywords": top_keywords},
+        context={"topics": top_topics, "keywords": top_keywords},
         max_tokens=int(LLM.get("max_output_tokens", 2048)),
         temperature=float(LLM.get("temperature", 0.3)),
     )
 
-    top_topics = []
-    for t in topics_obj.get("topics", []):
-        words = [w.get("word", "") for w in (t.get("top_words") or [])][:5]
-        top_topics.append({"topic_id": t.get("topic_id"), "words": words})
-    tail_14 = ts_obj.get("daily", [])[-14:] if isinstance(ts_obj.get("daily", []), list) else []
-    insights_obj = {"summary": summary, "top_topics": top_topics, "evidence": {"timeseries": tail_14}}
+    insights_obj = {
+        "summary": summary,
+        "top_topics": top_topics,
+        "evidence": {}  # timeseries 제거됨
+    }
     with open("outputs/trend_insights.json", "w", encoding="utf-8") as f:
         json.dump(insights_obj, f, ensure_ascii=False, indent=2)
 
-
     import datetime
-    meta = {"module": "C", "mode": "PRO" if use_pro_mode() else "LITE", "time_utc": datetime.datetime.utcnow().isoformat() + "Z"}
+    meta = {
+        "module": "C",
+        "mode": "PRO" if use_pro_mode() else "LITE",
+        "time_utc": datetime.datetime.utcnow().isoformat() + "Z"
+    }
     with open("outputs/run_meta_c.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
-    print("[INFO] Module C done | topics=%d | ts_days=%d | model=%s" % (len(topics_obj.get("topics", [])), len(ts_obj.get("daily", [])), model_name))
-    
+    print("[INFO] Module C done | topics=%d | model=%s" % (
+        len(topics_obj.get("topics", [])), model_name))    
 
 if __name__ == "__main__":
     main()

@@ -17,6 +17,8 @@ from src.config import load_config
 
 import numpy as np
 from operator import itemgetter  # 값 정렬 키
+from src.utils import load_json, save_json, latest
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -53,15 +55,6 @@ except Exception:
 # -------------------------
 # Utilities / IO
 # -------------------------
-def load_json(path: str, default=None):
-    if default is None:
-        default = {}
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
-
 def load_lines(path: str) -> List[str]:
     try:
         with open(path, encoding="utf-8") as f:
@@ -69,7 +62,7 @@ def load_lines(path: str) -> List[str]:
     except Exception:
         return []
 
-def latest_file(pattern: str) -> Optional[str]:
+def latest(pattern: str) -> Optional[str]:
     files = sorted(glob.glob(pattern))
     return files[-1] if files else None
 
@@ -472,7 +465,7 @@ def main():
     topn_keywords = int(CFG.get("top_n_keywords", 50))
     use_pro = os.environ.get("USE_PRO", "").lower() in ("1","true","yes","y") or bool(CFG.get("use_pro", False))
 
-    meta_path = latest_file("data/news_meta_*.json")
+    meta_path = latest("data/news_meta_*.json")
     if not meta_path:
         raise SystemExit("no data/news_meta_*.json found")
     with open(meta_path, encoding="utf-8") as f:

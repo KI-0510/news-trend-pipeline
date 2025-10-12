@@ -12,42 +12,13 @@ import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from collections import defaultdict, Counter
 from src.config import load_config, llm_config
+from src.utils import load_json, save_json, latest
+from src.timeutil import to_date, kst_date_str, kst_run_suffix
+
+
 
 # ========== 공통 로드/유틸 ==========
-def latest(globpat: str):
-    files = sorted(glob.glob(globpat))
-    return files[-1] if files else None
-
-def load_json(path: str, default=None):
-    if default is None:
-        default = None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
-
-def save_json(path: str, obj: Any):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
-
-def _load_lines(p: str) -> set:
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            return {x.strip() for x in f if x.strip()}
-    except Exception:
-        return set()
-
-def clean_text(t: str) -> str:
-    if not t:
-        return ""
-    t = re.sub(r"<.+?>", " ", t)
-    t = unicodedata.normalize("NFKC", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
-
-def to_kst_date_str(s: str) -> str:
+def to_date(s: str) -> str:
     from email.utils import parsedate_to_datetime
     try:
         if not s:
@@ -146,7 +117,7 @@ def pick_evidence(idea_keywords: List[str], items: List[Dict[str,Any]], limit=3)
                 candidate_sentences.append({
                     "sentence": s_strip[:400],
                     "url": it.get("url") or "",
-                    "date": to_kst_date_str(it.get("published_time") or it.get("pubDate_raw") or ""),
+                    "date": to_date(it.get("published_time") or it.get("pubDate_raw") or ""),
                     "score": score
                 })
 

@@ -12,6 +12,10 @@ try:
 except Exception:
     load_dotenv = None
 
+if load_dotenv is not None:
+    load_dotenv()
+
+
 KST = timezone(timedelta(hours=9))
 
 def log(msg: str):

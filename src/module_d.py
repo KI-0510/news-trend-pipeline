@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Module D - Company x Topic Matrix + Relationship & Competition Network
 - 기업×토픽 매트릭스 산출 (기존 로직 보강)
@@ -18,9 +17,11 @@ from collections import defaultdict, Counter
 import pandas as pd
 import numpy as np
 
-from src.config import load_config
+from src.config import load_config, llm_config
 import networkx as nx
 from networkx.algorithms import community
+from src.utils import load_json, save_json, latest
+
 
 # 선택적 의존: spaCy 한국어 NER (환경에 있을 때만 사용)
 try:
@@ -46,24 +47,6 @@ ORG_BAD_PATTERNS = [
 ]
 
 # ====== 유틸 ======
-def latest(globpat: str) -> Optional[str]:
-    files = sorted(glob.glob(globpat))
-    return files[-1] if files else None
-
-def load_json(path: str, default=None):
-    if default is None:
-        default = {}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
-
-def save_json(path: str, obj: Any):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
-
 def today_utc_iso() -> str:
     return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
@@ -299,7 +282,7 @@ def build_cooccurrence_edges(items: List[Dict[str, Any]]) -> Tuple[List[Tuple[st
     use_regex_fallback = bool(net_cfg.get("use_regex_fallback", False))
     edge_min_weight = int(net_cfg.get("edge_min_weight", 3))
     cooccur_level = str(net_cfg.get("cooccur_level", "sentence")).lower()
-    domain_hints = [s.lower() for s in net_cfg.get("domain_hints", [])]
+    domain_hints = [s.lower() for s in CFG.get("domain_hints", [])]
 
     alias_map = CFG.get("alias", {})
     brand_to_company = load_json("data/dictionaries/brand_to_company.json", {})

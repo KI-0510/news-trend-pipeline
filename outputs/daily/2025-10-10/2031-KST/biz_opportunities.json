@@ -1,0 +1,356 @@
+{
+  "ideas": [
+    {
+      "idea": "AR 글래스용 초고휘도 MicroLED 마이크로 디스플레이",
+      "problem": "AR 글래스의 몰입감 있는 사용자 경험을 위해서는 높은 밝기와 해상도를 가진 디스플레이가 필수적이지만, 기존 OLED 기술은 휘도 및 전력 효율성 측면에서 한계가 있습니다. MicroLED는 높은 휘도와 명암비, 긴 수명을 제공하여 AR 글래스에 적합하지만, 아직 양산 단가가 높고 수율 확보가 어렵습니다. 하지만 최근 MicroLED 기술이 Growth 단계에 진입하면서 상용화 가능성이 높아지고 있습니다.",
+      "target_customer": "북미 빅테크 기업 (AR/VR 기기 제조사)",
+      "value_prop": "기존 OLED 대비 5배 높은 휘도와 2배 향상된 전력 효율성을 제공하여 AR 글래스의 몰입감과 사용 시간을 극대화. 초소형, 초경량 디자인으로 편안한 착용감 제공. 경쟁사 대비 20% 낮은 전력 소비.",
+      "solution": [
+        "초고휘도 MicroLED 소자 기술",
+        "마이크로 디스플레이 제조 공정 최적화",
+        "광학 엔진 설계 및 통합 기술",
+        "저전력 구동 회로 설계"
+      ],
+      "risks": [
+        "MicroLED 소자 양산 수율 확보의 어려움",
+        "높은 제조 비용으로 인한 가격 경쟁력 약화",
+        "기존 AR 글래스 생태계와의 호환성 문제"
+      ],
+      "priority_score": 3.9,
+      "title": "AR 글래스용 초고휘도 MicroLED 마이크로 디스플레이",
+      "score": 3.5,
+      "evidence": [
+        {
+          "sentence": "AR 안경 시장의 성장은 애플의 관련 디바이스 개발과 밀접한 연관성을 가질 수 있습니다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "최근 글로벌 IT 시장의 혁신, AR·AI 기술 트렌드, 공급망 다변화 등 외부 환경 변화가 애플의 사업 구조에 영향을 주고 있으며, 지속적인 신제품 출시와 생태계 확장으로 성장세를 유지하고 있습니다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "두께를 줄이기 위한 소재·부품 기술은 향후 증강현실(AR) 글래스, 웨어러블, 롤러블 디스플레이 등으로 확산될 가능성이 크다.",
+          "url": "https://www.ziksir.com/news/articleView.html?idxno=107133",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "하지만 렌즈 양쪽에 디스플레이를 비춰 현실 세계에 겹치게 만드는 AR 안경을 위해서는 레도스 도입이 필수적이라는 것이 그의 설명이다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 2
+        },
+        {
+          "sentence": "AR 안경 등 차세대 디스플레이 시장에서 고해상도와 소형화, 낮은 전력 소비가 가능한 반도체 기술을 바탕으로 경쟁력을 갖추고 있습니다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 2
+        },
+        {
+          "sentence": "AR 디바이스 시장에서 중요한 역할을 할 수 있는 기술력을 보유하고 있으며, 특히 AR 안경에 적용되는 고성능·저전력 반도체 수요 증가는 삼성전자의 제품 포트폴리오와 연관될 수 있습니다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 2
+        },
+        {
+          "sentence": "그러나 기사에서 삼성전자가 AR 안경 시장에서 직접적인 역할을 하는 것으로 언급되지 않았습니다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 2
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.39,
+        "urgency": 0.3,
+        "feasibility": 0.6,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "폴더블 디스플레이 주름 최소화를 위한 UTG(Ultra Thin Glass) 코팅 기술",
+      "problem": "폴더블 디스플레이의 가장 큰 문제점은 접히는 부분에 발생하는 주름이며, 이는 사용자 경험 저하 및 내구성 문제를 야기합니다. UTG는 폴더블 디스플레이의 핵심 소재이지만, 반복적인 굽힘에 대한 내성이 부족하고 표면 스크래치에 취약합니다. 최근 폴더블폰 시장이 성장하면서, 주름을 최소화하고 내구성을 강화한 UTG 코팅 기술에 대한 수요가 증가하고 있습니다.",
+      "target_customer": "글로벌 스마트폰 제조사 (폴더블폰 제조사)",
+      "value_prop": "폴더블 디스플레이 주름 발생률 50% 감소, 스크래치 저항성 2배 향상, 20만회 이상의 폴딩 테스트 통과. 경쟁사 대비 10% 얇은 두께로 폴더블폰 디자인 자유도 향상.",
+      "solution": [
+        "고탄성 및 고경도 UTG 코팅 소재 개발",
+        "박막 코팅 공정 최적화",
+        "표면 처리 기술 적용",
+        "내구성 테스트 및 품질 검증"
+      ],
+      "risks": [
+        "새로운 코팅 소재의 안정성 및 내구성 검증 필요",
+        "기존 UTG 제조 공정과의 호환성 문제",
+        "코팅 공정 비용 증가로 인한 가격 경쟁력 약화"
+      ],
+      "priority_score": 4.0,
+      "title": "폴더블 디스플레이 주름 최소화를 위한 UTG(Ultra Thin Glass) 코팅 기술",
+      "score": 3.3,
+      "evidence": [
+        {
+          "sentence": "큐럭스의 소재 기술은 밝기, 에너지 효율, 친환경성 등에서 기존 OLED 소재의 한계를 극복한 차세대 기술로 평가받고 있으며, LG디스플레이의 패널 제품 품질 개선과 자동차, VR 등 신규 응용 분야 확대에 기여할 수 있습니다.",
+          "url": "https://www.mk.co.kr/article/11434555",
+          "date": "2025-10-02",
+          "score": 7
+        },
+        {
+          "sentence": "최근 반도체 산업의 공급망 안정성, 글로벌 IT 트렌드 변화, 디스플레이 기술 혁신 등 외부 환경이 삼성전자의 사업 구조에 영향을 미치고 있으며, 지속적인 R&D 투자와 대형 고객사 확보를 통해 성장세를 이어가고 있습니다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "증권가에서는 LG디스플레이의 3분기 흑자 전환 가능성을 높게 보고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "LG디스플레이는 차량용 OLED 시장을 차세대 성장 축으로 삼고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "일각에서는 내년 상반기 LG디스플레이가 LCD 패널 일부 라인을 IT용 OLED로 전환할 가능성도 제기되고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "두께를 줄이기 위한 소재·부품 기술은 향후 증강현실(AR) 글래스, 웨어러블, 롤러블 디스플레이 등으로 확산될 가능성이 크다.",
+          "url": "https://www.ziksir.com/news/articleView.html?idxno=107133",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "부품 업계 관계자는 “두께 경쟁이 배터리·디스플레이·힌지 등 전 부품의 고도화를 요구하고 있다”면서 “스마트폰 산업의 기술 방향이 전반적으로 재편되는 흐름”이라고 말했다.",
+          "url": "https://www.ziksir.com/news/articleView.html?idxno=107133",
+          "date": "2025-10-10",
+          "score": 5
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.4,
+        "urgency": 0.3,
+        "feasibility": 0.5,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "투명 디스플레이 기반의 스마트 윈도우",
+      "problem": "기존 스마트 윈도우는 단순히 빛 투과율을 조절하는 기능만 제공하지만, 투명 디스플레이 기술을 활용하면 다양한 정보 표시 및 인터랙티브 기능을 추가할 수 있습니다. 특히, 건물 에너지 효율 향상 및 사용자 경험 개선에 대한 니즈가 증가하면서, 투명 디스플레이 기반의 스마트 윈도우에 대한 수요가 높아지고 있습니다. 하지만 투명도 및 시인성 확보, 높은 제조 비용 등의 과제가 남아있습니다.",
+      "target_customer": "글로벌 건설사 및 건축 설계 회사",
+      "value_prop": "건물 에너지 효율 최대 15% 향상, 광고 및 정보 제공을 통한 새로운 수익 창출, 사용자 맞춤형 인터랙티브 경험 제공. 경쟁사 대비 30% 높은 투명도와 2배 향상된 시인성 제공.",
+      "solution": [
+        "고투명 OLED 또는 MicroLED 패널 기술",
+        "빛 제어 및 에너지 관리 시스템 통합",
+        "사용자 인터페이스 및 콘텐츠 개발",
+        "건축 디자인 통합 솔루션 제공"
+      ],
+      "risks": [
+        "높은 제조 비용으로 인한 가격 경쟁력 약화",
+        "건축 법규 및 안전 기준 충족의 어려움",
+        "내구성 및 유지 보수 문제"
+      ],
+      "priority_score": 3.5,
+      "title": "투명 디스플레이 기반의 스마트 윈도우",
+      "score": 3.2,
+      "evidence": [
+        {
+          "sentence": "큐럭스의 소재 기술은 밝기, 에너지 효율, 친환경성 등에서 기존 OLED 소재의 한계를 극복한 차세대 기술로 평가받고 있으며, LG디스플레이의 패널 제품 품질 개선과 자동차, VR 등 신규 응용 분야 확대에 기여할 수 있습니다.",
+          "url": "https://www.mk.co.kr/article/11434555",
+          "date": "2025-10-02",
+          "score": 7
+        },
+        {
+          "sentence": "최근 반도체 산업의 공급망 안정성, 글로벌 IT 트렌드 변화, 디스플레이 기술 혁신 등 외부 환경이 삼성전자의 사업 구조에 영향을 미치고 있으며, 지속적인 R&D 투자와 대형 고객사 확보를 통해 성장세를 이어가고 있습니다.",
+          "url": "https://www.mk.co.kr/article/11438672",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "증권가에서는 LG디스플레이의 3분기 흑자 전환 가능성을 높게 보고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "LG디스플레이는 차량용 OLED 시장을 차세대 성장 축으로 삼고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "일각에서는 내년 상반기 LG디스플레이가 LCD 패널 일부 라인을 IT용 OLED로 전환할 가능성도 제기되고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "단백질 상호작용 분석 기술을 보유한 바이오 기업 프로티나와 분자진단 기업 큐리옥스바이오시스템즈는 기술력 기반의 고성장 기대감으로 외국인 러브콜을 받았다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383796",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "두께를 줄이기 위한 소재·부품 기술은 향후 증강현실(AR) 글래스, 웨어러블, 롤러블 디스플레이 등으로 확산될 가능성이 크다.",
+          "url": "https://www.ziksir.com/news/articleView.html?idxno=107133",
+          "date": "2025-10-10",
+          "score": 5
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.35,
+        "urgency": 0.3,
+        "feasibility": 0.5,
+        "risk": 0.15,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "AI 기반의 능동형 번인 예측 및 보정 기술",
+      "problem": "OLED 디스플레이의 번인 현상은 수명 단축 및 사용자 경험 저하의 주요 원인이며, 특히 차량용 디스플레이처럼 장시간 사용 환경에서 더욱 심각합니다. 최근 AI 기술 발전으로 실시간 데이터 분석 및 예측 정확도가 높아짐에 따라, 능동적인 번인 관리 솔루션에 대한 수요가 증가하고 있습니다. 기존의 수동적인 보정 방식으로는 급증하는 번인 문제를 효과적으로 해결하기 어렵습니다.",
+      "target_customer": "글로벌 완성차 OEM (Tier 1 부품사 포함)",
+      "value_prop": "AI 기반의 실시간 번인 예측 및 자동 보정으로 디스플레이 수명 최대 30% 연장, 보증 비용 절감, 사용자 경험 극대화. 경쟁사 대비 2배 빠른 번인 예측 속도와 15% 향상된 보정 정확도 제공.",
+      "solution": [
+        "AI 기반의 실시간 번인 예측 알고리즘",
+        "능동형 화소별 휘도 보정 기술",
+        "사용 패턴 분석을 통한 맞춤형 번인 관리",
+        "클라우드 기반의 데이터 분석 및 업데이트"
+      ],
+      "risks": [
+        "AI 알고리즘의 데이터 의존성 및 편향 문제",
+        "차량 안전 규제 및 인증 획득의 어려움",
+        "데이터 보안 및 개인 정보 보호 문제"
+      ],
+      "priority_score": 4.2,
+      "title": "AI 기반의 능동형 번인 예측 및 보정 기술",
+      "score": 3.1,
+      "evidence": [
+        {
+          "sentence": "LG디스플레이는 차량용 OLED 시장을 차세대 성장 축으로 삼고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "업계에서는 차량용 OLED 시장 규모가 2028년까지 2배 이상 성장할 것으로 보고 있다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "기업과산업 전자·전기·정보통신 삼성·LG디스플레이 '미래 모빌리티'서 새 먹거리 찾아, '차량용 OLED' 각축전 본격화 | ▲ 삼성디스플레이와 LG디스플레이가 급성장하는 '차량용 OLED' 시장을 선점하기 위해 각축전을 벌이고 있다.",
+          "url": "https://www.businesspost.co.kr/BP?command=article_view&num=414799",
+          "date": "2025-10-09",
+          "score": 5
+        },
+        {
+          "sentence": "자율주행 시대로의 전환은 자동차의 역할을 단순한 이동 수단에서 ‘움직이는 스마트 공간’으로 재정의하는 만큼, 차량용 OLED 디스플레이 시장 성장세는 가파를 것으로 예상된다.",
+          "url": "https://www.businesspost.co.kr/BP?command=article_view&num=414799",
+          "date": "2025-10-09",
+          "score": 5
+        },
+        {
+          "sentence": "시장조사업체 옴디아는 “차량용 OLED 시장은 2024년 8억8천만 달러에서 2030년 48억6천만 달러까지 연평균 33% 성장할 것”이라고 예상했다.",
+          "url": "https://www.businesspost.co.kr/BP?command=article_view&num=414799",
+          "date": "2025-10-09",
+          "score": 5
+        },
+        {
+          "sentence": "애플 등 핵심 고객사의 OLED 출하량 확대와 함께 차량용 OLED 패널 공급도 성장세를 이어가는 중입니다.",
+          "url": "http://www.newstomato.com/ReadNews.aspx?no=1277288&inflow=N",
+          "date": "2025-10-10",
+          "score": 5
+        },
+        {
+          "sentence": "스마트폰용 패널과 차량용 OLED 수요가 빠르게 회복되면서, 공장 가동률이 90% 수준까지 올라온 것으로 알려졌다.",
+          "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=383671",
+          "date": "2025-10-10",
+          "score": 2
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.42,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    },
+    {
+      "idea": "디지털 사이니지용 키오스크",
+      "problem": "기존 키오스크는 단방향 정보 전달에 그치지만, 인터랙티브 디스플레이 기술을 적용하면 사용자 참여를 유도하고 맞춤형 정보를 제공할 수 있습니다. 팬데믹 이후 비대면 서비스에 대한 수요가 증가하면서, 인터랙티브 디스플레이 기반의 키오스크에 대한 관심이 높아지고 있습니다. 특히, 광고 효과 극대화 및 고객 경험 개선을 위한 니즈가 증가하고 있습니다.",
+      "target_customer": "글로벌 리테일 기업 및 프랜차이즈",
+      "value_prop": "고객 참여율 30% 증가, 광고 효과 2배 향상, 맞춤형 정보 제공을 통한 고객 만족도 향상. 경쟁사 대비 25% 낮은 전력 소비 및 10% 향상된 내구성 제공.",
+      "solution": [
+        "고해상도 터치스크린 디스플레이",
+        "얼굴 인식 및 제스처 인식 기술",
+        "맞춤형 콘텐츠 관리 시스템",
+        "원격 관리 및 유지 보수 서비스"
+      ],
+      "risks": [
+        "개인 정보 보호 및 보안 문제",
+        "높은 초기 투자 비용으로 인한 진입 장벽",
+        "콘텐츠 제작 및 관리의 어려움"
+      ],
+      "priority_score": 3.7,
+      "title": "디지털 사이니지용 키오스크",
+      "score": 2.9,
+      "evidence": [
+        {
+          "sentence": "디지털 헬스케어 회사 젤스(Xealth)를 지난 7월 인수해 미국에서 ‘커넥티드 케어’ 서비스 제공에 나서는 게 대표적 사례다.",
+          "url": "https://www.hankyung.com/article/2025100990161",
+          "date": "2025-10-09",
+          "score": 2
+        },
+        {
+          "sentence": "이주형 삼성디스플레이 부사장은 지난 9월 독일 뮌헨에서 열린 세계 최대 모빌리티 전시회 ‘IAA 모빌리티 2025’에서 “슬라이더블, 벤더블, 롤러블 등 미래형 OLED가 안전주행 솔루션을 제공하는 핵심 인프라가 될 것”이라며 “자율 주행하는 자동차 안에서 디스플레이는 자동차와 사람을 연결하는 접점이자 디지털 플랫폼으로 부상하고 있다”고 말했다.",
+          "url": "https://www.businesspost.co.kr/BP?command=article_view&num=414799",
+          "date": "2025-10-09",
+          "score": 2
+        },
+        {
+          "sentence": "1994년에 설립된 MDS테크는 국내 선두 임베디드 솔루션 전문 기업으로, 모바일 및 산업용 소프트웨어, 차량용 소프트웨어, IoT, 빅데이터, 디지털 트윈 등 다양한 산업 영역에 기술을 공급해왔다.",
+          "url": "http://www.finomy.com/news/articleView.html?idxno=240531",
+          "date": "2025-10-10",
+          "score": 2
+        },
+        {
+          "sentence": "참가자들은 “현장에서 활용할 수 있는 제품 설계 전략을 직접 배울 수 있는 유익한 시간이었다”며, “모듈러디자인, 로봇, AI 기술을 함께 경험할 수 있는 교육 콘텐츠가 제조업의 디지털 전환에 큰 도움이 되었다”고 소감을 전했다.",
+          "url": "https://www.tournews21.com/news/articleView.html?idxno=117288",
+          "date": "2025-10-10",
+          "score": 2
+        }
+      ],
+      "score_breakdown": {
+        "market": 0.37,
+        "urgency": 0.3,
+        "feasibility": 0.45,
+        "risk": 0.21,
+        "notes": {
+          "cur": 0.0,
+          "z_like": 0.0
+        }
+      }
+    }
+  ]
+}

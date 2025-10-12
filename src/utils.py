@@ -1,7 +1,14 @@
-# -*- coding: utf-8 -*-
 import time
 import functools
+import re
+import unicodedata
 import requests
+import os, json, glob
+from typing import Any, Optional
+
+
+
+### 재시도 관련 함수
 
 def _kv(kw):
     return " ".join(f"{k}={v}" for k, v in kw.items()) if kw else ""
@@ -49,3 +56,31 @@ def retry(max_attempts=3, backoff=0.8, exceptions=(Exception,), timeout=None, ci
 @retry(max_attempts=3, backoff=0.8, exceptions=(requests.RequestException,), timeout=10, circuit_trip=5)
 def http_get(url, **kw):
     return requests.get(url, **kw)
+
+
+### I/O 유틸리티 통합 (latest, load_json, save_json)
+def load_json(path: str, default: Optional[Any] = None) -> Any:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def save_json(path: str, obj: Any) -> None:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+def latest(path_glob: str) -> Optional[str]:
+    files = sorted(glob.glob(path_glob))
+    return files[-1] if files else None
+
+
+### 텍스트 정제 함수 통합
+def clean_text(t: str) -> str:
+    if not t:
+        return ""
+    t = re.sub(r"<.+?>", " ", t)
+    t = unicodedata.normalize("NFKC", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t

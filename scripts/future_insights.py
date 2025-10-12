@@ -4,24 +4,11 @@ import pandas as pd
 import glob
 import re
 from collections import defaultdict
-from dotenv import load_dotenv
-
-load_dotenv() # .env 파일에서 환경 변수를 로드합니다.
+from src.utils import load_json, save_json, latest
 
 
 # --- 설정 및 헬퍼 함수 ---
-def load_json(path, default=None):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return default if default is not None else {}
-
-def save_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def get_latest_file(pattern):
+def latest(pattern):
     files = glob.glob(pattern)
     return max(files, key=os.path.getctime) if files else None
 
@@ -139,7 +126,7 @@ def analyze_tech_maturity():
         print(f"[ERROR] 분석에 필요한 CSV 파일 없음: {e}")
         return
         
-    meta_data = load_json(get_latest_file("data/news_meta_*.json"), [])
+    meta_data = load_json(latest("data/news_meta_*.json"), [])
     
     sentiment_analyzer = None
     model_path = "./models/koelectra-nsmc"  # 1단계에서 만든 로컬 폴더 경로
@@ -202,7 +189,7 @@ def analyze_weak_signals():
             save_json('outputs/weak_signal_insights.json', {"results": []})
             return
 
-        meta_file = get_latest_file("data/news_meta_*.json")
+        meta_file = latest("data/news_meta_*.json")
         if not meta_file:
             print("[WARN] 참고할 뉴스 메타 파일이 없습니다.")
             save_json('outputs/weak_signal_insights.json', {"results": []})

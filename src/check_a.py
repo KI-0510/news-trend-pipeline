@@ -2,11 +2,7 @@ import json
 import glob
 import sys
 from typing import NoReturn  # NoReturn 추가 임포트
-
-def latest(path_glob: str) -> str | None:
-    """주어진 패턴에 맞는 최신 파일 경로를 반환합니다."""
-    paths = sorted(glob.glob(path_glob))
-    return paths[-1] if paths else None
+from src.utils import load_json, save_json, latest
 
 def fail(msg: str) -> NoReturn:
     """에러 메시지를 출력하고 프로그램을 종료합니다."""

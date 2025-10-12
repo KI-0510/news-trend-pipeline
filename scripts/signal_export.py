@@ -6,6 +6,7 @@ import csv
 import datetime
 import unicodedata
 from collections import defaultdict, Counter
+from src.timeutil import to_date, kst_date_str, kst_run_suffix
 
 # =================== 설정 ===================
 DICT_DIR = "data/dictionaries"
@@ -17,7 +18,6 @@ def _load_lines(p):
     except Exception:
         return []
 
-# 확장 스톱워드(있으면 적용)
 STOP_EXT = set(_load_lines(os.path.join(DICT_DIR, "stopwords_ext.txt")))
 
 # =================== 정규화/토큰화 ===================
@@ -62,31 +62,6 @@ def load_signal_vocabulary():
 
     vocab = {t for t in vocab if not _vocab_noise(t)}
     return vocab
-
-# =================== 날짜 파싱 ===================
-def to_date(s: str) -> str:
-    today = datetime.date.today()
-    if not s or not isinstance(s, str): return today.strftime("%Y-%m-%d")
-    s = s.strip()
-    try:
-        iso = s.replace("Z", "+00:00")
-        dt = datetime.datetime.fromisoformat(iso)
-        d = dt.date()
-    except Exception:
-        try:
-            from email.utils import parsedate_to_datetime
-            dt = parsedate_to_datetime(s)
-            d = dt.date()
-        except Exception:
-            m = re.search(r"(\d{4}).?(\d{1,2}).?(\d{1,2})", s)
-            if m:
-                y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
-                try: d = datetime.date(y, mm, dd)
-                except Exception: d = today
-            else:
-                d = today
-    if d > today: d = today
-    return d.strftime("%Y-%m-%d")
 
 # =================== 데이터 로딩(안정) ===================
 def select_latest_files_per_day(glob_pattern: str):

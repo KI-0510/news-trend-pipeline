@@ -1,13 +1,17 @@
 {
   "dry_run": false,
   "use_pro": false,
+  
   "queries": [
-    "OLED 패널", "QD-OLED", "MicroLED", "폴더블", "마이크로LED", "미니LED", "mini LED", "QLED", "QNED",
-    "차량용 디스플레이", "전장", "AR", "LTPO", "디스플레이 시장", "AI",
-    "삼성디스플레이", "LG디스플레이", "애플", "삼성전자", "LG전자", "TCL", "BOE", "CSOT", "8.6세대", "IT OLED",
-    "OLED", "LCD"
+  "OLED 패널", "QD-OLED", "폴더블", "마이크로LED", "미니LED", "QLED", "QNED", "OLEDoS", "LEDos",
+  "플렉서블 디스플레이", "투명 디스플레이", "AI 디스플레이", "롤러블 디스플레이", "스트레처블 디스플레이",
+  "차량용 디스플레이", "전장", "AR", "LTPO", "디스플레이 시장",
+  "삼성디스플레이", "LG디스플레이", "애플", "삼성전자", "LG전자", "TCL", "BOE", "CSOT","AUO", "Innolux", "Visionox", "Tianma", "JDI", "Sharp",
+  "8.6세대", "IT OLED", "게이밍 모니터 OLED", "노트북 OLED", "자동차 OLED",
+  "OLED", "LCD"
   ],
-  "per_query_display": 100,
+
+  "per_query_display": 10,
   "pages": 1,
   "top_n_keywords": 20,
 
@@ -34,8 +38,8 @@
   "common_debuff": [
     "지원", "사용", "분야", "첨단", "가능", "오는", "오른", "상승", "성장", "개선",
     "마련", "기능", "기여", "프로젝트", "조성", "안전", "보안", "거래일",
-    "시장", "글로벌", "생활", "기술", "최근", "지난해", "세계", "사업", "플랫폼", 
-    "전자", "제품", "개발", "제조", "투자", "제작", "차세대", "행사", "관계자", 
+    "생활", "최근", "지난해", "세계", "사업", "플랫폼", 
+    "전자", "제품", "투자", "제작", "차세대", "행사", "관계자", 
     "장관", "이미", "공개", "시리즈", "친환경", "지분", "금융", "아시아", "공급",
     "연구", "진행", "종합", "상무", "참여", "업계", "매출", "가격", "위기", "대응", "구축", "거래",
     "필요", "회사", "핵심", "평가", "경쟁력", "서비스", "기업들", "증권", "안정적",
@@ -55,14 +59,19 @@
     "ltps", "LTPS", "low temperature polysilicon", "저온 다결정 실리콘", "oxide tft", "산화물 TFT", "oxide", "산화물",
     "high resolution", "고해상도", "high brightness", "고휘도", "high speed", "고속", "high efficiency", "고효율",
     "low power", "저전력", "low cost", "저비용", "high performance", "고성능",
-    "supply chain", "공급망", "supply chains", "공급망들", "supply-demand", "수요-공급", "supply demand", "수요 공급",
+    "supply chain", "공급망", "supply chains", "supply-demand", "수요-공급", "supply demand", "수요 공급",
     "production capacity", "생산 능력", "production line", "생산 라인", "manufacturing process", "제조 공정", "manufacturing technology", "제조 기술",
     "yield rate", "수율", "defect rate", "불량률", "failure rate", "고장률", "mass production", "양산", "pilot production", "시험 생산",
     "next generation", "차세대", "next-gen", "넥스트젠", "cutting-edge", "최첨단", "state-of-the-art", "최신식",
     "디스플레이 제조", "디스플레이 제조", "공정 자동화", "공정 자동화", "AR/VR", "AR/VR",
     "롤러블", "롤러블", "스트레처블", "스트레처블", "자동차용 디스플레이", "자동차용 디스플레이",
     "게이밍", "게이밍", "비전프로", "비전프로", "FMM", "파인 메탈 마스크", "WOLED", "화이트 OLED",
-    "MLA", "마이크로 렌즈 어레이", "패널", "패널", "TADF", "삼중항 유도 발광", "PHOLED", "인광 OLED"
+    "MLA", "마이크로 렌즈 어레이", "패널", "패널", "TADF", "삼중항 유도 발광", "PHOLED", "인광 OLED", "HTL", "정공 수송층", "ETL", "전자 수송층", "EML", "발광층",
+    "ITO", "투명 전극", "편광판", "편광판", "컬러 필터", "컬러 필터", "봉지", "박막 봉지", "TFE", "박막 봉지", "CF", "컬러 필터",
+    "backplane", "백플레인", "encapsulation", "봉지", "color gamut", "색영역", "refresh rate", "주사율", "response time", "응답 속도", "contrast ratio", "명암비", "resolution", "해상도",
+    "ppi", "인치당 픽셀 수", "nit", "니트", "cd/m2", "칸델라 제곱미터", "HDR", "하이 다이내믹 레인지",
+    "FHD", "풀 HD", "UHD", "울트라 HD", "4K", "8K",
+    "VRR", "가변 주사율", "MPRT", "모션 퍼포먼스 리스폰스 타임", "HDR10+", "돌비 비전", "돌비 애트모스"
   ],
 
   "alias": {
@@ -72,23 +81,23 @@
     "microled":"MicroLED","마이크로 led":"MicroLED","마이크로led":"MicroLED","uLED":"MicroLED","µLED":"MicroLED",
     "mini led":"MiniLED","miniled":"MiniLED","미니led":"MiniLED",
     "qd oled":"QD-OLED","qdoled":"QD-OLED","QD OLED":"QD-OLED",
-    "올레도스": "OLEDos",
-    "레도스": "LEDos",
-    "samsung": "삼성전자", "samsung electronics": "삼성전자",
-    "lg": "LG전자", "lg elec": "LG전자",
-    "apple": "애플",
-    "meta": "메타", "facebook": "메타",
-    "oxide tft":"Oxide","산화물 tft":"Oxide"
+    "올레도스": "OLEDos", "레도스": "LEDos",
+    "삼성D": "삼성디스플레이", "samsung electronics": "삼성전자",
+    "엘지디스플레이": "LG디스플레이", "lgd": "LG디스플레이", "lg display": "LG디스플레이", "lg elec": "LG전자",
+    "apple": "애플", "meta": "메타", "facebook": "메타",
+    "oxide tft":"Oxide","산화물 tft":"Oxide",
+    "tandem oled": "Tandem OLED",
+    "색영역": "color gamut", "주사율": "refresh rate"
   },
 
   "weights": {
-    "entity_boost": 1.35,
+    "entity_boost": 1.4,
     "brand_boost": 1.2,
     "common_debuff": 0.55,
     "person_name_debuff": 0.8,
     "location_debuff": 0.6,
     "number_debuff": 0.5,
-    "domain_hint_boost": 1.4,
+    "domain_hint_boost": 1.6,
 
     "bigram_top30_boost": 1.35,
     "trigram_top_boost": 1.25,
@@ -97,23 +106,24 @@
     "beta": 0.92,
     "max_iter": 30,
 
-    "mmr_diversity": 0.5,
+    "mmr_diversity": 0.65,
     "title_boost": 1.6,
-    "lead_boost": 1.3,
-    "firstpara_boost": 1.2
+    "lead_boost": 1.4,
+    "firstpara_boost": 1.25
   },
 
   "keybert_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-  "max_docs_rerank": 80,
+  "max_docs_rerank": 135,
 
-  "umap_neighbors": 15,
-  "min_cluster_size": 12,
+  "umap_neighbors": 11,
+  "min_cluster_size": 10,
 
   "keyword_extraction_defaults": {
     "FIX_MAP": {
-      "디스플레": "디스플레이",
+      "디스플레": "디스플레이", "디스플": "디스플레이",
       "oled": "OLED",
-      "loT": "IoT"
+      "loT": "IoT",
+      "QD OLED": "QD-OLED", "미니 led": "MiniLED", "마이크로 led": "MicroLED"
     },
     "MORE_STOP": [
       "이날", "이라고", "이라며", "대비", "가장", "특히", "지난", "따르면", "모든",
@@ -153,10 +163,10 @@
   },
 
   "topic_k_candidates": [8, 10, 12, 14],
-  "topic_min_df": 7,
-  "topic_max_df": 0.85,
+  "topic_min_df": 5,
+  "topic_max_df": 0.9,
   "pro_topic_min_size": 5,
-  "pro_nr_topics": 10,
+  "pro_nr_topics": 12,
 
   "pro_topic_core_keywords": [
     "디스플레이", "패널", "oled", "lcd", "led", "화면", "화질", "기판", "백플레인", "수율",
@@ -167,9 +177,9 @@
 
   "llm_context_max_topics": 12,
   "score_weights": {
-    "priority_llm_weight": 0.25,
-    "market_weight": 0.40,
-    "urgency_weight": 0.35,
+    "priority_llm_weight": 0.2,
+    "market_weight": 0.42,
+    "urgency_weight": 0.33,
     "feasibility_weight": 0.25,
     "risk_penalty": 1.0
   },
@@ -179,29 +189,7 @@
     "whitelist_only": true,
     "use_regex_fallback": true,
     "edge_min_weight": 2,
-    "cooccur_level": "document",
-    "domain_hints": [
-      "oled", "올레드", "microled", "마이크로엘이디", "ltpo", "LTPO", "tft", "TFT", "igzo", "IGZO", "qd-oled", "QD-올레드", "w-oled", "W-올레드",
-      "inkjet", "잉크젯", "evaporation", "증착", "tfe", "박막봉지", "foldable", "폴더블", "polarizer", "편광판", "ito", "ITO",
-      "automotive display", "자동차 디스플레이", "vr", "가상현실", "ar", "증강현실", "metaverse", "메타버스", "glass substrate", "유리 기판",
-      "samsung", "삼성", "lg", "엘지", "apple", "애플", "meta", "메타", "google", "구글", "microsoft", "마이크로소프트",
-      "samsung electronics", "삼성전자", "lg electronics", "엘지전자",
-      "samsung display", "삼성디스플레이", "lg display", "엘지디스플레이",
-      "tft lcd", "TFT LCD", "am oled", "능동형 OLED", "pm oled", "수동형 OLED", "flexible oled", "플렉서블 OLED", "rigid oled", "리지드 OLED",
-      "transparent oled", "투명 OLED", "quantum dot", "퀀텀닷", "quantum dot oled", "퀀텀닷 OLED", "qd oled", "QD OLED",
-      "mini led", "미니 LED", "mini-led", "미니-LED", "miniled", "미니엘이디", "micro led", "마이크로 LED", "micro-led", "마이크로-LED",
-      "ltps", "LTPS", "low temperature polysilicon", "저온 다결정 실리콘", "oxide tft", "산화물 TFT", "oxide", "산화물",
-      "high resolution", "고해상도", "high brightness", "고휘도", "high speed", "고속", "high efficiency", "고효율",
-      "low power", "저전력", "low cost", "저비용", "high performance", "고성능",
-      "supply chain", "공급망", "supply chains", "공급망들", "supply-demand", "수요-공급", "supply demand", "수요 공급",
-      "production capacity", "생산 능력", "production line", "생산 라인", "manufacturing process", "제조 공정", "manufacturing technology", "제조 기술",
-      "yield rate", "수율", "defect rate", "불량률", "failure rate", "고장률", "mass production", "양산", "pilot production", "시험 생산",
-      "next generation", "차세대", "next-gen", "넥스트젠", "cutting-edge", "최첨단", "state-of-the-art", "최신식",
-      "디스플레이 제조", "디스플레이 제조", "공정 자동화", "공정 자동화", "AR/VR", "AR/VR",
-      "롤러블", "롤러블", "스트레처블", "스트레처블", "자동차용 디스플레이", "자동차용 디스플레이",
-      "게이밍", "게이밍", "비전프로", "비전프로", "FMM", "파인 메탈 마스크", "WOLED", "화이트 OLED",
-      "MLA", "마이크로 렌즈 어레이", "패널", "패널", "TADF", "삼중항 유도 발광", "PHOLED", "인광 OLED"
-    ]
+    "cooccur_level": "document"
   },
 
 

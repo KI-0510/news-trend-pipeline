@@ -1,0 +1,89 @@
+{
+  "results": [
+    {
+      "technology": "삼성",
+      "metrics": {
+        "frequency": 322,
+        "sentiment": 0.8824514746665955,
+        "events": {
+          "LAUNCH": 40,
+          "INVEST": 21,
+          "PARTNERSHIP": 16,
+          "ORDER": 9,
+          "CERT": 8,
+          "REGUL": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 시장 감성 점수와 꾸준한 출시 및 투자 이벤트 발생은 삼성이 성장 단계에 있음을 시사합니다."
+      }
+    },
+    {
+      "technology": "애플",
+      "metrics": {
+        "frequency": 65,
+        "sentiment": 0.8058797493577003,
+        "events": {
+          "LAUNCH": 13,
+          "INVEST": 5,
+          "ORDER": 5,
+          "CERT": 3,
+          "PARTNERSHIP": 2,
+          "REGUL": 1
+        }
+      },
+      "analysis": {
+        "stage": "Maturity",
+        "reason": "높은 시장 감성 점수와 꾸준한 출시 및 투자 활동은 애플 기술이 성숙기에 접어들었음을 나타낸다."
+      }
+    },
+    {
+      "technology": "패널",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.9031150341033936,
+        "events": {
+          "LAUNCH": 9,
+          "INVEST": 2,
+          "ORDER": 1,
+          "CERT": 1,
+          "PARTNERSHIP": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "뉴스 언급은 없지만 긍정적인 시장 감성과 출시 이벤트가 다수 발생한 것으로 보아 성장기에 진입한 기술로 판단됩니다."
+      }
+    },
+    {
+      "technology": "폴더블",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8150505423545837,
+        "events": {
+          "LAUNCH": 10,
+          "INVEST": 4,
+          "ORDER": 2,
+          "CERT": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "비교적 높은 시장 감성 점수와 꾸준한 출시 및 투자 이벤트 발생으로 보아 폴더블 기술은 성장기에 있다고 판단됩니다."
+      }
+    },
+    {
+      "technology": "양산",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8833451330661773,
+        "events": {}
+      },
+      "analysis": {
+        "stage": "Emerging",
+        "reason": "뉴스 언급이 없고 투자, 출시, 수주 이벤트가 없는 반면 시장 감성 점수가 높은 것은 양산 기술에 대한 관심은 잠재적으로 존재하지만 아직 시장에서 본격적인 움직임이 시작되지 않았음을 시사합니다."
+      }
+    }
+  ]
+}

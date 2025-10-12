@@ -5,26 +5,23 @@ import time
 import hashlib
 import re
 import unicodedata
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import trafilatura
 from trafilatura.settings import use_config
+from src.utils import load_json, save_json, latest, clean_text
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
+import threading
+
+
 
 # 본문 최소 길이(환경변수로 조절). 기본 120자
 MIN_LEN = int(os.environ.get("BODY_MIN_LEN", "120"))
+MAX_WORKERS = int(os.environ.get("FETCH_MAX_WORKERS", "8"))
+PER_DOMAIN_LIMIT = int(os.environ.get("FETCH_PER_DOMAIN", "3"))
 
-
-def latest(globpat: str) -> str:
-    files = sorted(glob.glob(globpat))
-    return files[-1] if files else None
-
-
-def clean_text(t: str) -> str:
-    if not t:
-        return ""
-    t = unicodedata.normalize("NFKC", t)
-    t = re.sub(r"<.+?>", " ", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
+_domain_locks: Dict[str, threading.Semaphore] = {}
+_domain_lock_global = threading.Lock()
 
 
 def sha1(s: str) -> str:
@@ -58,6 +55,15 @@ def _make_config():
     cfg.set("DEFAULT", "user_agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
     cfg.set("DEFAULT", "timeout", "12")
     return cfg
+
+def _domain_semaphore(url: str) -> threading.Semaphore:
+    host = urlparse(url).netloc
+    with _domain_lock_global:
+        sem = _domain_locks.get(host)
+        if sem is None:
+            sem = _domain_locks[host] = threading.Semaphore(PER_DOMAIN_LIMIT)
+        return sem
+
 
 
 # -------- 정제 유틸(노이즈 컷) --------
@@ -246,6 +252,38 @@ def fetch_body(url: str, timeout: int = 12) -> Tuple[str, str]:
 
     return text_san, text_raw
 
+def _process_one(it: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    개별 기사 처리.
+    성공 시 (업데이트된 item, domain) 반환, 실패/스킵 시 (None, domain) 반환.
+    """
+    url = pick_url(it)
+    domain = re.sub(r"^https?://([^/]+)/?.*$", r"\1", url) if url else "-"
+    if not url:
+        return None, domain
+    body_now = (it.get("body") or "").strip()
+    if len(body_now) >= MIN_LEN:
+        # raw_body/description_short 보강만 수행
+        if not it.get("raw_body"):
+            it["raw_body"] = it.get("raw_body") or ""
+        if not it.get("description_short"):
+            it["description_short"] = make_description_short(body_now)
+        return it, domain
+    try:
+        sem = _domain_semaphore(url)
+        with sem:
+            body_san, body_raw = fetch_body(url)
+        if len(body_san) >= MIN_LEN:
+            it["raw_body"] = body_raw or ""
+            it["body"] = body_san
+            it["description"] = body_san
+            it["description_short"] = make_description_short(body_san)
+            return it, domain
+        return None, domain
+    except Exception:
+        return None, domain
+
+
 
 def make_description_short(text: str, target_min=400, target_max=600) -> str:
     """
@@ -281,45 +319,36 @@ def main() -> int:
     with open(meta_path, "r", encoding="utf-8") as f:
         items: List[Dict[str, Any]] = json.load(f)
 
-    updated, tried = 0, 0
-    per_domain = {}
+    tried, updated = 0, 0
+    per_domain: Dict[str, Dict[str, int]] = {}
 
-    for it in items:
-        url = pick_url(it)
-        if not url:
-            continue
+    # 대상 인덱스 수집(이미 본문 있는 항목은 그대로 두고 보강만)
+    indices = list(range(len(items)))
 
-        # 이미 충분한 본문 있으면 스킵
-        body_now = (it.get("body") or "").strip()
-        if len(body_now) >= MIN_LEN:
-            # raw_body/description_short이 없으면 채움
-            if not it.get("raw_body"):
-                it["raw_body"] = it.get("raw_body") or ""
-            if not it.get("description_short"):
-                it["description_short"] = make_description_short(body_now)
-            continue
-
-        tried += 1
-        domain = re.sub(r"^https?://([^/]+)/?.*$", r"\1", url) if url else "-"
-        per_domain.setdefault(domain, {"ok": 0, "fail": 0})
-
-        body_san, body_raw = fetch_body(url)
-        if len(body_san) >= MIN_LEN:
-            it["raw_body"] = body_raw or ""                # 정제 전 원문(신호 추출용)
-            it["body"] = body_san                          # 정제 후 본문
-            it["description"] = body_san                   # 모듈 B 호환
-            it["description_short"] = make_description_short(body_san)
-            updated += 1
-            per_domain[domain]["ok"] += 1
-        else:
-            per_domain[domain]["fail"] += 1
-
-        time.sleep(0.3)  # 서버 배려
+    # 병렬 처리
+    results: Dict[int, Tuple[Optional[Dict[str, Any]], Optional[str]]] = {}
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+        fut_map = {ex.submit(_process_one, items[i]): i for i in indices}
+        for fut in as_completed(fut_map):
+            i = fut_map[fut]
+            try:
+                res_item, domain = fut.result()
+            except Exception:
+                res_item, domain = None, "-"
+            tried += 1
+            if domain not in per_domain:
+                per_domain[domain] = {"ok": 0, "fail": 0}
+            if res_item is not None:
+                items[i] = res_item
+                updated += 1
+                per_domain[domain]["ok"] += 1
+            else:
+                per_domain[domain]["fail"] += 1
 
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
-    print(f"[INFO] fetch_article_bodies | tried={tried} updated={updated} | file={os.path.basename(meta_path)}")
+    print(f"[INFO] fetch_article_bodies | tried={tried} updated={updated} | file={os.path.basename(meta_path)} | workers={MAX_WORKERS} per_domain={PER_DOMAIN_LIMIT}")
     if per_domain:
         stats = ", ".join(f"{d}: ok={v['ok']}, fail={v['fail']}" for d, v in list(per_domain.items())[:15])
         print("[DEBUG] per-domain:", stats)
