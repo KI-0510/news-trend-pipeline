@@ -7,3 +7,6 @@ data/article_cache/
 scripts/__pycache__/
 src/__pycache__/
 *.pyc
+models/
+outputs/
+data/
