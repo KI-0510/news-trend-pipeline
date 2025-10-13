@@ -1,0 +1,104 @@
+{
+  "results": [
+    {
+      "technology": "메타",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.9171092569828033,
+        "events": {
+          "INVEST": 5,
+          "PARTNERSHIP": 1
+        }
+      },
+      "analysis": {
+        "stage": "Emerging",
+        "reason": "뉴스 언급은 없지만 높은 시장 감성 점수와 투자 건수를 고려할 때, 시장의 관심은 높으나 아직 초기 단계로 판단됩니다."
+      }
+    },
+    {
+      "technology": "폴더블",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8874543607234955,
+        "events": {
+          "LAUNCH": 4,
+          "ORDER": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "뉴스 언급은 없지만 긍정적인 시장 감성 점수와 출시 및 수주 이벤트가 발생한 것으로 보아 폴더블 기술은 성장기에 있다고 판단됩니다."
+      }
+    },
+    {
+      "technology": "삼성",
+      "metrics": {
+        "frequency": 362,
+        "sentiment": 0.853295236825943,
+        "events": {
+          "LAUNCH": 27,
+          "INVEST": 17,
+          "PARTNERSHIP": 8,
+          "ORDER": 4,
+          "REGUL": 4,
+          "CERT": 2
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 뉴스 언급 빈도, 긍정적인 시장 감성 점수, 그리고 투자 및 출시 이벤트의 빈번한 발생은 삼성 기술이 시장 성장기에 있음을 시사합니다."
+      }
+    },
+    {
+      "technology": "패널",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.8693735957145691,
+        "events": {
+          "LAUNCH": 9,
+          "INVEST": 3,
+          "ORDER": 1,
+          "CERT": 1,
+          "PARTNERSHIP": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "뉴스 언급은 없지만, 긍정적인 시장 감성과 출시 이벤트가 다수 발생하여 성장 단계로 판단됩니다."
+      }
+    },
+    {
+      "technology": "고성능",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.880403584241867,
+        "events": {
+          "LAUNCH": 1
+        }
+      },
+      "analysis": {
+        "stage": "Emerging",
+        "reason": "뉴스 언급은 없지만 시장 감성 점수가 높고 출시 이벤트가 한 건 발생한 것으로 보아 시장 관심은 존재하나 아직 초기 단계로 판단됩니다."
+      }
+    },
+    {
+      "technology": "애플",
+      "metrics": {
+        "frequency": 0,
+        "sentiment": 0.9045831143856049,
+        "events": {
+          "LAUNCH": 8,
+          "INVEST": 3,
+          "ORDER": 2,
+          "CERT": 2,
+          "PARTNERSHIP": 1,
+          "REGUL": 1
+        }
+      },
+      "analysis": {
+        "stage": "Maturity",
+        "reason": "뉴스 언급 빈도가 낮고, 시장 감성 점수가 높은 반면, 출시 및 수주 이벤트 발생 빈도가 투자 이벤트 빈도보다 높아 성숙기에 접어든 것으로 판단됩니다."
+      }
+    }
+  ]
+}
