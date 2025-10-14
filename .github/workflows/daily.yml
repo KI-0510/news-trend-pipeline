@@ -329,9 +329,3 @@ jobs:
           git pull --rebase --autostash origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref_name }} || true
 
-      # 아티팩트 이름 안전화
-      - name: Sanitize artifact name
-        shell: bash
-        run: |
-          CLEAN=$(echo '${{ github.ref_name }}' | tr '/:*?"<>|\\ ' '-')
-          echo "ARTIFACT_NAME=report-${CLEAN}" >> $GITHUB_ENV
