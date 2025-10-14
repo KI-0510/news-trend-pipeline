@@ -1,5 +1,5 @@
 name: Daily Pipeline
-
+a
 permissions:
   contents: write
 
