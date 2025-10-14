@@ -1,0 +1,58 @@
+{
+  "results": [
+    {
+      "technology": "삼성",
+      "metrics": {
+        "frequency": 353,
+        "sentiment": 0.8506100535392761,
+        "events": {
+          "LAUNCH": 43,
+          "INVEST": 33,
+          "ORDER": 9,
+          "CERT": 5,
+          "PARTNERSHIP": 5,
+          "REGUL": 4
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 뉴스 언급 빈도와 긍정적인 시장 감성 점수, 그리고 활발한 투자 및 출시 이벤트 발생 비율을 고려할 때, 삼성 기술은 성장기에 있다고 판단됩니다."
+      }
+    },
+    {
+      "technology": "애플",
+      "metrics": {
+        "frequency": 76,
+        "sentiment": 0.8773392379283905,
+        "events": {
+          "LAUNCH": 10,
+          "INVEST": 4,
+          "REGUL": 4,
+          "ORDER": 2,
+          "CERT": 2,
+          "PARTNERSHIP": 1
+        }
+      },
+      "analysis": {
+        "stage": "Maturity",
+        "reason": "애플은 높은 시장 감성 점수와 지속적인 출시를 보이지만, 투자 및 수주 이벤트 비율이 상대적으로 낮아 성장 단계보다는 성숙 단계에 있다고 판단됩니다."
+      }
+    },
+    {
+      "technology": "폴더블",
+      "metrics": {
+        "frequency": 26,
+        "sentiment": 0.8947768986225129,
+        "events": {
+          "LAUNCH": 3,
+          "ORDER": 2,
+          "INVEST": 1
+        }
+      },
+      "analysis": {
+        "stage": "Growth",
+        "reason": "높은 시장 감성 점수와 꾸준한 출시 및 수주 이벤트 발생은 폴더블 기술이 성장 단계에 진입했음을 시사합니다."
+      }
+    }
+  ]
+}
