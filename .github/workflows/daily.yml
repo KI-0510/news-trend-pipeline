@@ -1,5 +1,5 @@
 name: Daily Pipeline
-a
+
 permissions:
   contents: write
 
@@ -30,6 +30,14 @@ jobs:
       HF_HOME: ~/.cache/huggingface
 
     steps:
+      - name: Cache Git LFS files
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs/objects # LFS 파일이 저장되는 경로
+          key: lfs-${{ runner.os }}-${{ hashFiles('\*\*/.gitattributes') }}
+          restore-keys: |
+            lfs-${{ runner.os }}-
+              
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -51,12 +59,28 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: \${{ env.HF_HOME }} # 설정된 환경 변수 사용
+          key: \${{ runner.os }}-hf-\${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            \${{ runner.os }}-hf-
+
       - name: Prepare HuggingFace cache (optional)
         if: env.USE_PRO == 'true'
         shell: bash
         run: |
           mkdir -p "${HF_HOME}"
           echo "HF_HOME=${HF_HOME}"
+
+      - name: Cache apt packages (fonts)
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: \${{ runner.os }}-apt-fonts-\${{ hashFiles('.github/workflows/daily.yml') }}
+          restore-keys: |
+            \${{ runner.os }}-apt-fonts-
       
       - name: Install viz deps
         shell: bash
@@ -225,51 +249,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python -m src.check_f
-      
-      # Job Summary
-      - name: Build Job Summary
-        shell: bash
-        run: |
-          source .venv/bin/activate
-          python - <<'PY'
-          import json, os
-          def load(p, default):
-              try:
-                  with open(p, encoding="utf-8") as f:
-                      return json.load(f)
-              except Exception:
-                  return default
-          ts = load("outputs/trend_timeseries.json", {"daily":[]})
-          daily = ts.get("daily", [])
-          total = sum(int(x.get("count",0)) for x in daily)
-          dr = f"{daily[0]['date']} ~ {daily[-1]['date']}" if daily else "-"
-          kw = load("outputs/keywords.json", {"keywords":[]}).get("keywords", [])
-          kw = sorted(kw, key=lambda x: x.get("score",0), reverse=True)[:10]
-          opp = load("outputs/biz_opportunities.json", {"ideas":[]}).get("ideas", [])[:5]
-          lines = []
-          lines.append("# Daily Pipeline Summary\n")
-          lines.append(f"- 기간: {dr}")
-          lines.append(f"- 총 기사 수: {total}\n")
-          lines.append("## Top 10 Keywords")
-          lines.append("| Rank | Keyword | Score |")
-          lines.append("|---:|---|---:|")
-          for i, k in enumerate(kw, 1):
-              lines.append(f"| {i} | {k.get('keyword','')} | {round(float(k.get('score',0)),3)} |")
-          lines.append("")
-          lines.append("## Opportunities (Top 5)")
-          if opp:
-              for i, it in enumerate(opp, 1):
-                  title = it.get('title') or it.get('idea') or '(no title)'
-                  lines.append(f"- {i}. {title}")
-          else:
-              lines.append("- (데이터 없음)")
-          txt = "\n".join(lines) + "\n"
-          print(txt)
-          summ = os.environ.get("GITHUB_STEP_SUMMARY")
-          if summ:
-              with open(summ, "a", encoding="utf-8") as f:
-                  f.write(txt)
-          PY
+
 
       # 일자별 아카이브(KST)
       - name: Prepare outputs daily folder (KST)
@@ -355,22 +335,3 @@ jobs:
         run: |
           CLEAN=$(echo '${{ github.ref_name }}' | tr '/:*?"<>|\\ ' '-')
           echo "ARTIFACT_NAME=report-${CLEAN}" >> $GITHUB_ENV
-
-      # 결과 아티팩트 업로드(메타/클린/디버그 포함)
-#      - name: Upload report artifacts
-#        if: success()
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: ${{ env.ARTIFACT_NAME }}
-#          retention-days: 14
-#          path: |
-#            outputs/report.html
-#            outputs/report.md
-#            outputs/fig/*.png
-#            outputs/export/*.csv
-#            outputs/debug/*.json
-#            outputs/debug/run_meta_b.json
-#            outputs/debug/run_meta_c.json
-#            data/news_meta_*.json
-#            data/news_clean_*.json
-#          if-no-files-found: warn
