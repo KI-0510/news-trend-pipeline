@@ -1,12 +1,12 @@
 {
   "daily": {
-    "2025-10-20": [
+    "2025-10-14": [
       {
-        "time": "1131-KST",
+        "time": "1904-KST",
         "reports": [
           {
             "name": "report.html",
-            "path": "outputs/daily/2025-10-20/1131-KST/report.html"
+            "path": "outputs/daily/2025-10-14/1904-KST/report.html"
           }
         ]
       }
