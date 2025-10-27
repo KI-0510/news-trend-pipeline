@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>리포트 뷰어</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>리포트 뷰어</h1>
+    <div class="controls">
+        <label for="reportType">리포트 종류:</label>
+        <select id="reportType">
+            <option value="daily">일간</option>
+            <option value="weekly">주간</option>
+            <option value="monthly">월간</option>
+        </select>
+
+        <label for="reportDate">날짜:</label>
+        <select id="reportDate"></select>
+
+        <label for="reportTime">시간:</label>
+        <select id="reportTime"></select> <label for="reportFile">리포트:</label>
+        <select id="reportFile"></select> </div>
+
+    <div class="report-view">
+        <iframe id="reportFrame" src="about:blank" frameborder="0"></iframe>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
